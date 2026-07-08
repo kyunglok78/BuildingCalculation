@@ -5,10 +5,11 @@ import webbrowser
 import threading
 import time
 import requests
+import traceback  # 에러 상세 출력을 위해 추가
 
 PORT = 8000
 HTML_FILE = "index.html" # 메인 파일 이름 지정
-ㅎ
+
 GLOBAL_KAKAO_KEY = "c48e895cae6e16bc82fc1ed089539352"
 GLOBAL_DATA_KEY = "1oOOTG+s4eO71/a5Xn4xV2l7/d+k0G8w3QZ2+29e612B1R0nOq91xH5t5WwI/n5yD9vP4o7zQ7s6+V6e+368lA=="
 
@@ -19,7 +20,7 @@ class APIProxyHandler(http.server.SimpleHTTPRequestHandler):
         if parsed_path.path == '/api/kakao':
             query = urllib.parse.parse_qs(parsed_path.query)
             addr = query.get('query', [''])[0]
-            url = "[https://dapi.kakao.com/v2/local/search/address.json](https://dapi.kakao.com/v2/local/search/address.json)"
+            url = "https://dapi.kakao.com/v2/local/search/address.json"
             headers = {"Authorization": f"KakaoAK {GLOBAL_KAKAO_KEY}"}
             try:
                 res = requests.get(url, headers=headers, params={"query": addr}, timeout=10)
@@ -27,14 +28,16 @@ class APIProxyHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Content-type', 'application/json; charset=utf-8')
                 self.end_headers()
                 self.wfile.write(res.content)
-            except Exception:
+            except Exception as e:
+                print(f"\n[❌ 카카오 API 프록시 에러 발생]")
+                traceback.print_exc()
                 self.send_response(500)
                 self.end_headers()
                 
         elif parsed_path.path == '/api/datago':
             query = urllib.parse.parse_qs(parsed_path.query)
             endpoint = query.get('endpoint', [''])[0]
-            url = f"[https://apis.data.go.kr/1613000/BldRgstService_2/](https://apis.data.go.kr/1613000/BldRgstService_2/){endpoint}"
+            url = f"https://apis.data.go.kr/1613000/BldRgstService_2/{endpoint}"
             params = {
                 "serviceKey": requests.utils.unquote(GLOBAL_DATA_KEY),
                 "_type": "xml", "numOfRows": "100", "pageNo": "1",
@@ -50,7 +53,9 @@ class APIProxyHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Content-type', 'application/xml; charset=utf-8')
                 self.end_headers()
                 self.wfile.write(res.content)
-            except Exception:
+            except Exception as e:
+                print(f"\n[❌ 공공데이터 API 프록시 에러 발생 - 엔드포인트: {endpoint}]")
+                traceback.print_exc()
                 self.send_response(500)
                 self.end_headers()
         else:
@@ -72,4 +77,3 @@ print(f"브라우저에서 시스템 창을 엽니다: {url}")
 webbrowser.open_new(url)
 
 input("\n[안내] 프로그램을 종료하시려면 이 콘솔 창을 닫거나 엔터를 누르세요.\n")
-
