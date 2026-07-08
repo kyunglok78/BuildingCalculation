@@ -15,7 +15,8 @@
 
 <div id="envWarning">
     <i class="fa-solid fa-triangle-exclamation"></i> 
-    [안내] 로컬 파이썬 서버가 아닌 환경입니다. 크로스도메인 문제로 일부 API 연동이 제한될 수 있습니다.
+    [안내] 제미나이 미리보기 창에서는 보안 정책상 실제 API 데이터 연동이 차단됩니다. (가상 데이터로 작동 중)<br>
+    <span style="font-size:12px; font-weight:normal;">실제 데이터를 불러오려면 파일을 다운로드하여 파이썬 로컬 서버(run_server.py)로 실행해 주세요.</span>
 </div>
 
 <div class="modal-overlay" id="addressModal">
@@ -42,6 +43,7 @@
             <div class="menu-container">
                 <div class="menu-l1">1. 일반정보 및 지수</div>
                 <div class="menu-l2 menu-active" onclick="goToSlide('slide2')"><span>1.1 일반정보 등록</span><span class="status-badge status-ing">진행</span></div>
+                <div class="menu-l2" onclick="goToSlide('slide2')"><span>1.2 평가지수 불러오기</span><span class="status-badge status-wait">대기</span></div>
                 
                 <div class="menu-l1" style="margin-top:25px;">2. 건축 가액평가 수행</div>
                 <div class="menu-l2" style="cursor:default;">2.1 건축물대장 평가</div>
@@ -66,7 +68,7 @@
             <div class="section-title" style="margin-top:0;">1.1 일반정보 등록</div>
             <div class="input-row mb-20">
                 <span class="input-label">보험계약자</span>
-                <input type="text" class="input-box contractor-sync" placeholder="계약자명을 입력하세요" value="" oninput="syncContractor(this.value)">
+                <input type="text" class="input-box contractor-sync" value="" placeholder="계약자명을 입력하세요" oninput="syncContractor(this.value)">
                 
                 <span class="input-label" style="margin-left: 20px;">소재지 개수</span>
                 <input type="number" id="locationCount" class="input-box" value="1" min="1" max="100" style="width: 80px;" onchange="generateLocationRows()">
@@ -81,9 +83,9 @@
             <div class="list-box" id="locationListBox">
                 <div class="list-row">
                     <input type="checkbox" class="row-checkbox"><span>소재지 1</span>
-                    <input type="text" class="input-short" placeholder="예: 공장/건물명" value="">
+                    <input type="text" class="input-short" value="" placeholder="예: 공장/지점명">
                     <button type="button" class="btn-blue" onclick="openAddressModal(this); return false;"><i class="fa-solid fa-magnifying-glass"></i> 주소 검색</button>
-                    <span>주소</span><input type="text" class="input-long addr-input" placeholder="주소 검색 버튼을 이용해 리얼 주소를 맵핑해 주세요" value="" readonly>
+                    <span>주소</span><input type="text" class="input-long addr-input" value="" placeholder="주소를 검색해 주세요" readonly>
                     <div class="check-group">
                         <label class="check-item"><input type="checkbox" class="check-ledger" checked onchange="updateMenuState()"> 건축물대장</label>
                         <label class="check-item"><input type="checkbox" class="check-kfpa" checked onchange="updateMenuState()"> 화협자료평가</label>
@@ -95,13 +97,13 @@
             <div class="list-box" style="padding: 20px; border: 1px solid #ddd;">
                 <div class="input-row mb-20" style="gap: 15px;">
                     <button type="button" class="btn-dark" style="width:180px;" onclick="document.getElementById('unitCostFile').click(); return false;">신축단가표 불러오기</button>
-                    <input type="text" id="unitCostPath" class="input-box" style="flex:1; background:#f8f9fa;" placeholder="선택된 파일 없음 (우측 버튼을 통해 로드해 주세요)" value="" readonly>
-                    <input type="file" id="unitCostFile" style="display: none;" accept=".xlsx, .xls, .csv" onchange="document.getElementById('unitCostPath').value = this.files[0] ? this.files[0].name : ''">
+                    <input type="text" id="unitCostPath" class="input-box" style="flex:1; background:#f8f9fa;" value="" placeholder="선택된 파일 없음" readonly>
+                    <input type="file" id="unitCostFile" style="display: none;" accept=".xlsx, .xls" onchange="document.getElementById('unitCostPath').value = this.files[0] ? this.files[0].name : ''">
                 </div>
                 <div class="input-row" style="margin-bottom:0; gap: 15px;">
                     <button type="button" class="btn-dark" style="width:180px;" onclick="document.getElementById('priceIndexFile').click(); return false;">물가지수 불러오기</button>
-                    <input type="text" id="priceIndexPath" class="input-box" style="flex:1; background:#f8f9fa;" placeholder="선택된 파일 없음 (우측 버튼을 통해 로드해 주세요)" value="" readonly>
-                    <input type="file" id="priceIndexFile" style="display: none;" accept=".xlsx, .xls, .csv" onchange="document.getElementById('priceIndexPath').value = this.files[0] ? this.files[0].name : ''">
+                    <input type="text" id="priceIndexPath" class="input-box" style="flex:1; background:#f8f9fa;" value="" placeholder="선택된 파일 없음" readonly>
+                    <input type="file" id="priceIndexFile" style="display: none;" accept=".xlsx, .xls" onchange="document.getElementById('priceIndexPath').value = this.files[0] ? this.files[0].name : ''">
                 </div>
             </div>
             
@@ -120,6 +122,7 @@
             <div class="menu-container">
                 <div class="menu-l1">1. 일반정보 및 지수</div>
                 <div class="menu-l2" onclick="goToSlide('slide2')"><span>1.1 일반정보 등록</span><span class="status-badge status-done">완료</span></div>
+                <div class="menu-l2" onclick="goToSlide('slide2')"><span>1.2 평가지수 불러오기</span><span class="status-badge status-done">완료</span></div>
                 
                 <div class="menu-l1" style="margin-top:25px;">2. 건축 가액평가 수행</div>
                 <div class="menu-l2" style="cursor:default;">2.1 건축물대장 평가</div>
@@ -142,7 +145,7 @@
             <div class="top-panel mb-20">
                 <div class="input-row" style="margin:0;">
                     <span class="input-label">보험계약자</span>
-                    <input type="text" class="input-box contractor-sync" value="" readonly style="background:#f8f9fa; border:none; outline:none; font-weight:bold;">
+                    <input type="text" class="input-box contractor-sync" value="" placeholder="(일반정보 동기화됨)" readonly style="background:#f8f9fa; border:none; outline:none; font-weight:bold;">
                 </div>
                 <div>
                     <button type="button" class="btn-dark" onclick="simulateApiFetch(); return false;" id="btnFetchApi">건축물대장 조회시작</button>
@@ -151,7 +154,7 @@
 
             <div class="tabs" style="margin-top:0;" id="slide3Tabs"></div>
             
-            <div class="data-area" style="border-top:none; overflow-y: auto; background: #fff; flex: 1;" id="apiDataArea">
+            <div class="data-area" style="border-top:none; overflow-y: auto; background: #fff;" id="apiDataArea">
                 <div style="text-align: center; color: #999; padding: 100px 0; font-size: 15px; display: block;" id="emptyStateMsg">
                     <i class="fa-solid fa-cloud-arrow-down" style="font-size: 40px; margin-bottom: 15px; display: block;"></i>
                     우측 상단의 '건축물대장 조회시작' 버튼을 클릭하여 공공데이터를 불러와 주세요.<br>
@@ -171,6 +174,7 @@
             <div class="menu-container">
                 <div class="menu-l1">1. 일반정보 및 지수</div>
                 <div class="menu-l2" onclick="goToSlide('slide2')"><span>1.1 일반정보 등록</span><span class="status-badge status-done">완료</span></div>
+                <div class="menu-l2" onclick="goToSlide('slide2')"><span>1.2 평가지수 불러오기</span><span class="status-badge status-done">완료</span></div>
                 
                 <div class="menu-l1" style="margin-top:25px;">2. 건축 가액평가 수행</div>
                 <div class="menu-l2" style="cursor:default;">2.1 건축물대장 평가</div>
@@ -208,13 +212,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td rowspan="3">1</td><td rowspan="3">1동</td><td>건축공사비</td><td>공장</td><td>1,633.95</td><td>일반철골</td>
-                            <td style="color:blue; font-weight:bold; cursor:pointer;">6-1-6-14-3</td><td>750,000</td><td>1.03</td><td>1,262,226,000</td><td style="color:blue; font-weight:bold; cursor:pointer;">1.78%</td><td>992,614,000</td>
-                        </tr>
-                        <tr class="highlight"><td>부속설비</td><td></td><td></td><td></td><td></td><td></td><td></td><td>20.0%</td><td>252,445,000</td><td></td><td>198,522,000</td></tr>
-                        <tr class="highlight"><td>소계</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>1,514,671,000</td><td></td><td>1,191,136,000</td></tr>
-                    </tbody>
+                        </tbody>
                 </table>
             </div>
         </div>
@@ -228,6 +226,7 @@
             <div class="menu-container">
                 <div class="menu-l1">1. 일반정보 및 지수</div>
                 <div class="menu-l2" onclick="goToSlide('slide2')"><span>1.1 일반정보 등록</span><span class="status-badge status-done">완료</span></div>
+                <div class="menu-l2" onclick="goToSlide('slide2')"><span>1.2 평가지수 불러오기</span><span class="status-badge status-done">완료</span></div>
                 
                 <div class="menu-l1" style="margin-top:25px;">2. 건축 가액평가 수행</div>
                 <div class="menu-l2" style="cursor:default;">2.1 건축물대장 평가</div>
@@ -258,10 +257,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr><td>1</td><td>1동</td><td>건축공사비</td><td>[지상 1층] 공장</td><td>544.65</td><td style="color:blue; font-weight:bold;">6-1-6-15-3</td><td>750,000</td><td>1.03</td><td>420,742,000</td><td style="color:blue; font-weight:bold;">1.78%</td><td>330,871,000</td></tr>
-                        <tr><td>2</td><td>1동</td><td>건축공사비</td><td>[지상 2층] 공장</td><td>544.65</td><td style="color:blue; font-weight:bold;">6-1-6-15-3</td><td>750,000</td><td>1.03</td><td>420,742,000</td><td style="color:blue; font-weight:bold;">1.78%</td><td>330,871,000</td></tr>
-                        <tr class="highlight"><td></td><td></td><td>[1동] 소계</td><td></td><td>1,633.95</td><td></td><td></td><td></td><td>1,514,671,000</td><td></td><td>1,191,135,000</td></tr>
-                    </tbody>
+                        </tbody>
                 </table>
             </div>
         </div>
@@ -275,6 +271,7 @@
             <div class="menu-container">
                 <div class="menu-l1">1. 일반정보 및 지수</div>
                 <div class="menu-l2" onclick="goToSlide('slide2')"><span>1.1 일반정보 등록</span><span class="status-badge status-done">완료</span></div>
+                <div class="menu-l2" onclick="goToSlide('slide2')"><span>1.2 평가지수 불러오기</span><span class="status-badge status-done">완료</span></div>
                 
                 <div class="menu-l1" style="margin-top:25px;">2. 건축 가액평가 수행</div>
                 <div class="menu-l2" style="cursor:default;">2.1 건축물대장 평가</div>
@@ -294,13 +291,14 @@
         <div class="main-content">
             <h2 class="page-title"><i class="fa-solid fa-file-excel"></i> 2.2.1 화협(KFPA) 원본 자료 불러오기</h2>
             <div class="top-panel mb-20">
-                <div class="input-row" style="margin:0;"><span class="input-label">보험계약자 (화협)</span><input type="text" class="input-box contractor-sync" value="" readonly style="background:#f8f9fa; border:none; outline:none; font-weight:bold;"></div>
+                <div class="input-row" style="margin:0;"><span class="input-label">보험계약자 (화협)</span>
+                <input type="text" class="input-box contractor-sync" value="" placeholder="(일반정보 동기화됨)" readonly style="background:#f8f9fa; border:none; outline:none; font-weight:bold;"></div>
             </div>
             <div class="toolbar"><button type="button" class="btn-yellow">+ 추가</button><button type="button" class="btn-text">- 선택삭제</button><div class="toolbar-status">각 사업장별 [화협 엑셀 매핑] 버튼을 클릭해 주세요.</div></div>
             <div class="list-box" style="margin-bottom:20px; padding:10px;">
                 <div class="list-row" style="margin:0;">
-                    <input type="checkbox" checked><span>소재지 1</span><input type="text" class="input-short" placeholder="예: 공장명" value=""><button type="button" class="btn-blue" onclick="openAddressModal(this); return false;">🔍 주소 검색</button>
-                    <span>주소</span><input type="text" class="input-long addr-input" placeholder="주소를 검색해주세요" value="" readonly>
+                    <input type="checkbox" checked><span>소재지 1</span><input type="text" class="input-short" value="" placeholder="예: 공장명"><button type="button" class="btn-blue" onclick="openAddressModal(this); return false;">🔍 주소 검색</button>
+                    <span>주소</span><input type="text" class="input-long addr-input" value="" placeholder="주소를 검색해주세요" readonly>
                     <button type="button" class="btn-dark" style="background:#1C5691;">📁 화협 엑셀 매핑</button>
                 </div>
             </div>
@@ -323,6 +321,7 @@
             <div class="menu-container">
                 <div class="menu-l1">1. 일반정보 및 지수</div>
                 <div class="menu-l2" onclick="goToSlide('slide2')"><span>1.1 일반정보 등록</span><span class="status-badge status-done">완료</span></div>
+                <div class="menu-l2" onclick="goToSlide('slide2')"><span>1.2 평가지수 불러오기</span><span class="status-badge status-done">완료</span></div>
                 
                 <div class="menu-l1" style="margin-top:25px;">2. 건축 가액평가 수행</div>
                 <div class="menu-l2" style="cursor:default;">2.1 건축물대장 평가</div>
@@ -367,6 +366,7 @@
             <div class="menu-container">
                 <div class="menu-l1">1. 일반정보 및 지수</div>
                 <div class="menu-l2" onclick="goToSlide('slide2')"><span>1.1 일반정보 등록</span><span class="status-badge status-done">완료</span></div>
+                <div class="menu-l2" onclick="goToSlide('slide2')"><span>1.2 평가지수 불러오기</span><span class="status-badge status-done">완료</span></div>
                 
                 <div class="menu-l1" style="margin-top:25px;">2. 건축 가액평가 수행</div>
                 <div class="menu-l2" style="cursor:default;">2.1 건축물대장 평가</div>
@@ -394,7 +394,7 @@
                 <table class="data-table">
                     <thead><tr><th>소재지명</th><th>동명칭</th><th>구분</th><th>연면적(㎡)</th><th>준공연도</th><th>재조달가액</th><th>현재가액</th></tr></thead>
                     <tbody>
-                        </tbody>
+                         </tbody>
                 </table>
             </div>
         </div>

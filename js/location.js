@@ -4,14 +4,14 @@ function syncContractor(val) {
     });
 }
 
-// [기능 5-5] 동적 주입 로우 내 더미 문자열 공백 초기화 처리
 function createLocationRowHTML(index) {
+    // [기능 4] 더미 데이터 문자열 제거 및 공백 placeholder 지정
     return `
         <div class="list-row">
             <input type="checkbox" class="row-checkbox"><span>소재지 ${index}</span>
-            <input type="text" class="input-short" placeholder="예: 공장명/지점명">
+            <input type="text" class="input-short" value="" placeholder="예: 공장/건물명">
             <button type="button" class="btn-blue" onclick="openAddressModal(this); return false;"><i class="fa-solid fa-magnifying-glass"></i> 주소 검색</button>
-            <span>주소</span><input type="text" class="input-long addr-input" placeholder="주소 검색 버튼을 이용해 리얼 주소를 맵핑해 주세요" value="" readonly>
+            <span>주소</span><input type="text" class="input-long addr-input" value="" placeholder="주소를 검색해주세요" readonly>
             <div class="check-group">
                 <label class="check-item"><input type="checkbox" class="check-ledger" checked onchange="updateMenuState()"> 건축물대장</label>
                 <label class="check-item"><input type="checkbox" class="check-kfpa" checked onchange="updateMenuState()"> 화협자료평가</label>
