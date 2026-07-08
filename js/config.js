@@ -1,5 +1,5 @@
 // 전역 시스템 키
-const GLOBAL_KAKAO_KEY = "c48e895cae6e16bc82fc1ed089539352";
+const GLOBAL_KAKAO_KEY = "030dc3e5950b6682f690e3cefd2d8095";
 const GLOBAL_DATA_KEY = "1oOOTG+s4eO71/a5Xn4xV2l7/d+k0G8w3QZ2+29e612B1R0nOq91xH5t5WwI/n5yD9vP4o7zQ7s6+V6e+368lA==";
 
 // 전역 상태 변수
