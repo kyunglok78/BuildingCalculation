@@ -63,7 +63,8 @@ async function simulateApiFetch() {
     dataContainer.innerHTML = ''; 
     let fetchedResults = [];
 
-    const baseUrl = 'http://localhost:8000';
+    // 로컬 주소를 지우고 상대 경로를 사용하여 Vercel 서버리스 함수를 호출하도록 변경
+    const baseUrl = '';
 
     for (let index = 0; index < rows.length; index++) {
         const row = rows[index];
