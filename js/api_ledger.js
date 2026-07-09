@@ -9,22 +9,22 @@ function getXmlText(xmlDoc, tag, defaultVal = "-") {
     return defaultVal;
 }
 
-// 8자리 숫자를 YYYY-MM-DD 날짜로 예쁘게 변환
+// [기능 추가] 8자리 숫자를 YYYY-MM-DD 날짜로 예쁘게 변환
 function formatDate(str) {
-    if (!str || str === '-' || str === '자료 없음') return '-';
+    if (!str || str === '-' || str === '자료 없음') return '자료 없음';
     const s = str.replace(/\D/g, ''); // 숫자만 추출
     if (s.length === 8) return `${s.substring(0,4)}-${s.substring(4,6)}-${s.substring(6,8)}`;
     return str;
 }
 
-// 1,000단위 콤마 포맷팅 (숫자가 아닌 문자는 그대로 반환)
+// [기능 추가] 1,000단위 콤마 포맷팅 
 function formatNumber(str) {
     if (!str || str === '-' || str.trim() === '') return '-';
     const num = parseFloat(str.replace(/,/g, ''));
     return isNaN(num) ? str : num.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
 }
 
-// 중복된 API 데이터(여러 줄) 제거 알고리즘
+// [기능 추가] 중복된 API 데이터(여러 줄) 제거 
 function removeDuplicates(arr) {
     const unique = [];
     const seen = new Set();
@@ -38,7 +38,9 @@ function removeDuplicates(arr) {
     return unique;
 }
 
-// 테이블 정렬 기능
+// ==========================================
+// 테이블 정렬 (오름차순/내림차순) 함수
+// ==========================================
 function sortTable(thElement) {
     const table = thElement.closest('table');
     const tbody = table.querySelector('tbody');
@@ -134,12 +136,11 @@ async function simulateApiFetch() {
     const tabsContainer = document.getElementById('slide3Tabs');
     const rows = document.getElementById('locationListBox').querySelectorAll('.list-row');
     
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 국토교통부 시스템 실시간 연동 중...';
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 실시간 연동 중...';
     btn.disabled = true;
     tabsContainer.innerHTML = ''; 
     dataContainer.innerHTML = ''; 
     let fetchedResults = [];
-
     const baseUrl = '';
 
     for (let index = 0; index < rows.length; index++) {
@@ -155,14 +156,12 @@ async function simulateApiFetch() {
 
             try {
                 const kakaoRes = await fetch(`${baseUrl}/api/kakao?query=${encodeURIComponent(locAddr)}`);
-                if(!kakaoRes.ok) throw new Error("카카오 주소 변환 및 행정코드 매핑 실패");
+                if(!kakaoRes.ok) throw new Error("카카오 주소 변환 실패");
                 
                 const kakaoJson = await kakaoRes.json();
-                if(!kakaoJson.documents || kakaoJson.documents.length === 0) throw new Error("건축물대장을 조회할 수 없는 주소 형식입니다.");
+                if(!kakaoJson.documents || kakaoJson.documents.length === 0) throw new Error("조회할 수 없는 주소 형식입니다.");
                 
                 const doc = kakaoJson.documents[0].address || kakaoJson.documents[0].road_address;
-                if(!doc) throw new Error("카카오 API 내에 매핑된 주소 좌표계가 기술되지 않았습니다.");
-                
                 const sigunguCd = doc.h_code ? doc.h_code.substring(0, 5) : (doc.main_address_no ? "00000" : "00000");
                 const bjdongCd = doc.b_code ? doc.b_code.substring(5) : "00000";
                 
@@ -177,27 +176,54 @@ async function simulateApiFetch() {
                 const fetchEndpoint = async (endpoint, colMap) => {
                     const url = `${baseUrl}/api/datago?endpoint=${endpoint}&sigunguCd=${codes.sigunguCd}&bjdongCd=${codes.bjdongCd}&platGbCd=${codes.platGbCd}&bun=${codes.bun}&ji=${codes.ji}`;
                     const res = await fetch(url);
-                    if(!res.ok) throw new Error(`정부 공공데이터포털 서버 통신 실패 (HTTP ${res.status})`);
+                    if(!res.ok) throw new Error(`서버 통신 실패 (HTTP ${res.status})`);
                     const xmlText = await res.text();
                     return parseXMLToJSON(xmlText, colMap);
                 };
                 
-                // 데이터 누락 방지를 위한 태그 다중 매핑 (파이썬과 동일화)
-                const totalColMap = [["platPlc", ["platPlc"]], ["bldNm", ["bldNm"]], ["mainPurpsCdNm", ["mainPurpsCdNm"]], ["mainBldCnt", ["mainBldCnt"]], ["atchBldCnt", ["atchBldCnt", "subBldCnt"]], ["totArea", ["totArea"]], ["prmDay", ["prmDay", "pmsDay"]], ["stcDay", ["stcDay", "stcnsDay"]], ["useAprvDay", ["useAprvDay", "useAprDay"]]];
-                const titleColMap = [["dongNm", ["dongNm"]], ["mainPurpsCdNm", ["mainPurpsCdNm"]], ["grndFlrCnt", ["grndFlrCnt"]], ["ugrndFlrCnt", ["ugrndFlrCnt"]], ["totArea", ["totArea"]], ["heit", ["heit"]], ["strctCdNm", ["strctCdNm"]], ["roofCdNm", ["roofCdNm"]], ["useAprvDay", ["useAprvDay", "useAprDay"]]];
-                const floorColMap = [["dongNm", ["dongNm"]], ["flrGbCdNm", ["flrGbCdNm"]], ["flrNoNm", ["flrNoNm"]], ["area", ["area"]], ["etcPurps", ["etcPurps"]], ["strctCdNm", ["strctCdNm"]], ["roofCdNm", ["roofCdNm"]]];
+                // ★ [완벽 복구] 파이썬과 100% 동일한 'getBrRecapTitleInfo' 기준 태그 매핑
+                const totalColMap = [
+                    ["platPlc", ["platPlc"]], 
+                    ["bldNm", ["bldNm"]], 
+                    ["mainPurpsCdNm", ["mainPurpsCdNm"]], 
+                    ["mainBldCnt", ["mainBldCnt"]], 
+                    ["subBldCnt", ["subBldCnt"]], 
+                    ["totArea", ["totArea"]], 
+                    ["pmsDay", ["pmsDay"]], 
+                    ["stcnsDay", ["stcnsDay"]], 
+                    ["useAprDay", ["useAprDay", "useAprvDay"]]
+                ];
+                
+                const titleColMap = [
+                    ["dongNm", ["dongNm"]], 
+                    ["mainPurpsCdNm", ["mainPurpsCdNm"]], 
+                    ["grndFlrCnt", ["grndFlrCnt"]], 
+                    ["ugrndFlrCnt", ["ugrndFlrCnt"]], 
+                    ["totArea", ["totArea"]], 
+                    ["heit", ["heit"]], 
+                    ["strctCdNm", ["strctCdNm"]], 
+                    ["roofCdNm", ["roofCdNm"]], 
+                    ["useAprDay", ["useAprDay", "useAprvDay"]]
+                ];
+                
+                const floorColMap = [
+                    ["dongNm", ["dongNm"]], 
+                    ["flrGbCdNm", ["flrGbCdNm"]], 
+                    ["flrNoNm", ["flrNoNm"]], 
+                    ["area", ["area"]], 
+                    ["etcPurps", ["etcPurps"]], 
+                    ["strctCdNm", ["strctCdNm"]], 
+                    ["roofCdNm", ["roofCdNm"]]
+                ];
 
-                totalData = await fetchEndpoint('getBrBasisOulnInfo', totalColMap);
+                // 파이썬처럼 getBrRecapTitleInfo를 정확히 호출합니다.
+                totalData = await fetchEndpoint('getBrRecapTitleInfo', totalColMap);
                 titleData = await fetchEndpoint('getBrTitleInfo', titleColMap);
                 floorData = await fetchEndpoint('getBrFlrOulnInfo', floorColMap);
                 
-                if(totalData.length > 0 || titleData.length > 0) {
-                    isSuccess = true;
-                } else {
-                    throw new Error("조회는 성공했으나 해당 지번에 등록된 건축물대장이 없습니다.");
-                }
+                if(totalData.length > 0 || titleData.length > 0) isSuccess = true;
+                else throw new Error("해당 지번에 등록된 건축물대장이 없습니다.");
             } catch(e) {
-                console.error(`[${locName}] 실시간 API 연동 차단 오류:`, e);
                 isSuccess = false;
                 apiErrMsg = e.message;
             }
@@ -233,32 +259,30 @@ function executeLedgerRender(results) {
             // ========================================================
             if (totalData.length > 0 && titleData.length > 0) {
                 totalData.forEach(recapItem => {
-                    if (!recapItem.useAprvDay || recapItem.useAprvDay === '-' || recapItem.useAprvDay.trim() === '') {
+                    const useAprVal = recapItem.useAprDay;
+                    if (!useAprVal || useAprVal === '-' || useAprVal === '자료 없음' || useAprVal.trim() === '') {
                         // 표제부 상세에서 8자리 날짜들만 추출
                         const validDates = titleData
-                            .map(t => t.useAprvDay ? t.useAprvDay.replace(/\D/g, '') : '')
+                            .map(t => t.useAprDay ? t.useAprDay.replace(/\D/g, '') : '')
                             .filter(d => d.length === 8);
                         
                         if (validDates.length > 0) {
-                            // 오름차순 정렬 후 0번째 인덱스 (가장 오래된 과거 날짜) 선택
+                            // 오름차순 정렬 후 0번째(가장 오래된 날짜) 선택
                             const oldestDate = validDates.sort()[0];
-                            recapItem.useAprvDay = oldestDate;
+                            recapItem.useAprDay = oldestDate;
+                        } else {
+                            recapItem.useAprDay = "자료 없음";
                         }
                     }
                 });
             }
 
             // 엑셀 내보내기를 위한 전역 변수에 안전하게 백업
-            window.fetchedData[locName] = {
-                address: locAddr,
-                recap: totalData,
-                title: titleData,
-                floor: floorData
-            };
+            window.fetchedData[locName] = { address: locAddr, recap: totalData, title: titleData, floor: floorData };
 
             // 화면 렌더링용 테이블 (포맷팅 적용)
-            const trTotal = totalData.map(d => `<tr><td>${d.platPlc || locAddr}</td><td>${d.bldNm||'-'}</td><td>${d.mainPurpsCdNm||'-'}</td><td>${formatNumber(d.mainBldCnt||'0')}</td><td>${formatNumber(d.atchBldCnt||'0')}</td><td>${formatNumber(d.totArea||'0')}</td><td>${formatDate(d.prmDay||'-')}</td><td>${formatDate(d.stcDay||'-')}</td><td>${formatDate(d.useAprvDay||'-')}</td></tr>`).join('');
-            const trTitle = titleData.map(d => `<tr><td>${d.dongNm||'-'}</td><td>${d.mainPurpsCdNm||'-'}</td><td>${formatNumber(d.grndFlrCnt||'0')}</td><td>${formatNumber(d.ugrndFlrCnt||'0')}</td><td>${formatNumber(d.totArea||'0')}</td><td>${formatNumber(d.heit||'0')}</td><td>${d.strctCdNm||'-'}</td><td>${d.roofCdNm || '기타지붕'}</td><td>${formatDate(d.useAprvDay||'-')}</td></tr>`).join('');
+            const trTotal = totalData.map(d => `<tr><td>${d.platPlc || locAddr}</td><td>${d.bldNm||'-'}</td><td>${d.mainPurpsCdNm||'-'}</td><td>${formatNumber(d.mainBldCnt||'0')}</td><td>${formatNumber(d.subBldCnt||'0')}</td><td>${formatNumber(d.totArea||'0')}</td><td>${formatDate(d.pmsDay||'-')}</td><td>${formatDate(d.stcnsDay||'-')}</td><td>${formatDate(d.useAprDay||'-')}</td></tr>`).join('');
+            const trTitle = titleData.map(d => `<tr><td>${d.dongNm||'-'}</td><td>${d.mainPurpsCdNm||'-'}</td><td>${formatNumber(d.grndFlrCnt||'0')}</td><td>${formatNumber(d.ugrndFlrCnt||'0')}</td><td>${formatNumber(d.totArea||'0')}</td><td>${formatNumber(d.heit||'0')}</td><td>${d.strctCdNm||'-'}</td><td>${d.roofCdNm || '기타지붕'}</td><td>${formatDate(d.useAprDay||'-')}</td></tr>`).join('');
             const trFloor = floorData.map(d => `<tr><td>${d.dongNm||'-'}</td><td>${d.flrGbCdNm||'-'}</td><td>${d.flrNoNm||'-'}</td><td>${formatNumber(d.area||'0')}</td><td>${d.etcPurps||'-'}</td><td>${d.strctCdNm||'-'}</td><td>${d.roofCdNm || '기타지붕'}</td></tr>`).join('');
 
             // 정렬 가능한 테이블 헤더
@@ -307,15 +331,15 @@ function executeLedgerRender(results) {
 
 
 // ==========================================
-// [기능 보강] 엑셀(CSV) 다운로드 함수 - 오류 해결
+// [기능 보강] 엑셀(CSV) 다운로드 함수 - 연결 버그 해결
 // ==========================================
 window.exportLedgerToExcel = function() {
     if (!window.fetchedData || Object.keys(window.fetchedData).length === 0) {
-        alert("내보낼 데이터가 존재하지 않습니다. 먼저 [건축물대장 조회시작]을 실행해 주세요.");
+        alert("내보낼 데이터가 존재하지 않습니다. 먼저 [건축물대장 조회시작] 버튼을 눌러주세요.");
         return;
     }
     
-    let csvContent = "\uFEFF"; // 한글 깨짐 방지용 UTF-8 BOM
+    let csvContent = "\uFEFF"; // 한글 깨짐 방지용 UTF-8 BOM 삽입
     
     for (const [siteName, data] of Object.entries(window.fetchedData)) {
         csvContent += `[사업장명: ${siteName}]\n`;
@@ -325,7 +349,7 @@ window.exportLedgerToExcel = function() {
             csvContent += "■ 총괄표제부 정보\n";
             csvContent += "대지위치,건물명,주용도,주건축물수,부속건축물수,연면적(m²),허가일,착공일,사용승인일\n";
             data.recap.forEach(row => {
-                csvContent += `"${row.platPlc || data.address}","${row.bldNm}","${row.mainPurpsCdNm}","${row.mainBldCnt}","${row.atchBldCnt}","${row.totArea}","${formatDate(row.prmDay)}","${formatDate(row.stcDay)}","${formatDate(row.useAprvDay)}"\n`;
+                csvContent += `"${row.platPlc || data.address}","${row.bldNm}","${row.mainPurpsCdNm}","${formatNumber(row.mainBldCnt)}","${formatNumber(row.subBldCnt)}","${formatNumber(row.totArea)}","${formatDate(row.pmsDay)}","${formatDate(row.stcnsDay)}","${formatDate(row.useAprDay)}"\n`;
             });
             csvContent += "\n";
         }
@@ -334,7 +358,7 @@ window.exportLedgerToExcel = function() {
             csvContent += "■ 표제부 상세\n";
             csvContent += "동명칭,주용도(건물별),지상층수,지하층수,연면적(m²),높이(m),구조코드명,지붕코드명,사용승인일\n";
             data.title.forEach(row => {
-                 csvContent += `"${row.dongNm}","${row.mainPurpsCdNm}","${row.grndFlrCnt}","${row.ugrndFlrCnt}","${row.totArea}","${row.heit}","${row.strctCdNm}","${row.roofCdNm || '기타지붕'}","${formatDate(row.useAprvDay)}"\n`;
+                 csvContent += `"${row.dongNm}","${row.mainPurpsCdNm}","${formatNumber(row.grndFlrCnt)}","${formatNumber(row.ugrndFlrCnt)}","${formatNumber(row.totArea)}","${formatNumber(row.heit)}","${row.strctCdNm}","${row.roofCdNm || '기타지붕'}","${formatDate(row.useAprDay)}"\n`;
             });
             csvContent += "\n";
         }
@@ -343,7 +367,7 @@ window.exportLedgerToExcel = function() {
             csvContent += "■ 층별 개요\n";
             csvContent += "동명칭,층구분,층번호,면적(m²),기타용도,구조코드명,지붕코드명\n";
             data.floor.forEach(row => {
-                csvContent += `"${row.dongNm}","${row.flrGbCdNm}","${row.flrNoNm}","${row.area}","${row.etcPurps}","${row.strctCdNm}","${row.roofCdNm || '기타지붕'}"\n`;
+                csvContent += `"${row.dongNm}","${row.flrGbCdNm}","${row.flrNoNm}","${formatNumber(row.area)}","${row.etcPurps}","${row.strctCdNm}","${row.roofCdNm || '기타지붕'}"\n`;
             });
             csvContent += "\n\n";
         }
@@ -364,7 +388,7 @@ window.exportLedgerToExcel = function() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     } catch (e) {
-        alert("엑셀 파일을 저장하는 중 오류가 발생했습니다.");
+        alert("엑셀(CSV) 파일을 저장하는 중 오류가 발생했습니다.");
         console.error(e);
     }
 };
