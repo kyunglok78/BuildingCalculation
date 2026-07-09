@@ -29,15 +29,45 @@ body {
 .app-window { display: flex; height: calc(100% - 32px); width: 100%; margin-top: 32px; background: #ffffff; }
 
 /* === 수정된 사이드바 설정 (높이 고정 및 스크롤 추가) === */
-.sidebar { 
-    width: 260px; 
-    background-color: #212529; 
-    display: flex; 
-    flex-direction: column; 
-    color: #fff; 
-    flex-shrink: 0; 
-    height: 100vh; 
-    overflow-y: auto; 
+/* 아래 코드를 복사해서 기존 .sidebar 부분을 완전히 덮어써주세요! */
+.sidebar {
+    width: 260px;
+    height: 100vh;
+    background-color: #1C5691;
+    padding: 15px;
+    color: white;
+    /* 추가된 마법의 레이아웃 (Flex) */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between; 
+    box-sizing: border-box;
+    position: relative;
+    z-index: 10;
+}
+
+/* 아래 내용들도 .sidebar 바로 밑에 이어서 추가해 주세요! */
+.sidebar-menu-wrapper {
+    flex: 1;
+    overflow-y: auto;
+    width: 100%;
+    margin-bottom: 15px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.3) transparent;
+}
+.sidebar-menu-wrapper::-webkit-scrollbar { width: 4px; }
+.sidebar-menu-wrapper::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,0.3); border-radius: 4px; }
+
+.sidebar-bottom {
+    width: 100%;
+    padding-top: 10px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.2);
+    background-color: #1C5691;
+}
+
+.sidebar-bottom button {
+    width: 100%;
+    margin-top: 5px;
+    box-sizing: border-box;
 }
 .sidebar-header { padding: 30px 20px 20px; text-align: center; }
 .sidebar-header h2 { color: #FFC000; font-size: 22px; font-weight: 700; letter-spacing: 1px; }
