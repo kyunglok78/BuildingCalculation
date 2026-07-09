@@ -26,11 +26,11 @@ body {
 
 .app-window { display: flex; height: calc(100% - 32px); width: 100%; margin-top: 32px; background: #ffffff; }
 
-/* === [근본 구조 개선] 사이드바 정규 레이아웃 === */
+//* === [근본 구조 개선] 사이드바 정규 레이아웃 === */
 .sidebar {
     width: 260px;
     height: 100%; /* app-window의 높이를 100% 채움 */
-    background-color: #1C5691;
+    background-color: #212529; /* 원래의 고급스러운 다크 차콜 색상으로 복구 */
     padding: 15px;
     color: white;
     display: flex;
@@ -59,8 +59,8 @@ body {
     display: flex; 
     flex-direction: column; 
     gap: 8px; 
-    border-top: 1px dashed rgba(255, 255, 255, 0.3); 
-    background-color: #1C5691;
+    border-top: 1px solid #343a40; /* 구분선도 기존 다크 테마에 맞게 복구 */
+    background-color: #212529; /* 배경색 복구 */
 }
 
 .sidebar-header { padding: 15px 10px 20px; text-align: center; }
