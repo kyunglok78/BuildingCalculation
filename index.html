@@ -155,14 +155,17 @@
             <h2 class="page-title"><i class="fa-regular fa-file-lines"></i> 2.1.1 건축물대장 통합 조회 및 불러오기</h2>
             <div class="top-panel mb-20">
                 <div class="input-row" style="margin:0;"><span class="input-label">보험계약자</span><input type="text" class="input-box contractor-sync" value="" placeholder="(일반정보 동기화됨)" readonly style="background:#f8f9fa; border:none; outline:none; font-weight:bold;"></div>
-                <div><button type="button" class="btn-dark" onclick="simulateApiFetch(); return false;" id="btnFetchApi">건축물대장 조회시작</button></div>
+                <div>
+                    <button type="button" class="btn-dark" style="background:#28a745; margin-right: 10px;" onclick="exportLedgerToExcel()"><i class="fa-solid fa-file-excel"></i> 대장 엑셀 내보내기</button>
+                    <button type="button" class="btn-dark" onclick="simulateApiFetch(); return false;" id="btnFetchApi">건축물대장 조회시작</button>
+                </div>
             </div>
             <div class="tabs" style="margin-top:0;" id="slide3Tabs"></div>
             <div class="data-area" style="border-top:none; overflow-y: auto; background: #fff;" id="apiDataArea">
                 <div style="text-align: center; color: #999; padding: 100px 0; font-size: 15px; display: block;" id="emptyStateMsg">
                     <i class="fa-solid fa-cloud-arrow-down" style="font-size: 40px; margin-bottom: 15px; display: block;"></i>
                     우측 상단의 '건축물대장 조회시작' 버튼을 클릭하여 공공데이터를 불러와 주세요.<br>
-                    <span style="font-size:13px; color:#28a745;">※ 파이썬 서버 환경에서 리얼 데이터가 빠르고 안전하게 수집됩니다.</span>
+                    <span style="font-size:13px; color:#28a745;">※ 모든 주소지의 데이터가 일괄 파싱되어 탭으로 분류됩니다.</span>
                 </div>
                 <div id="fetchedDataContainer" style="display: none;"></div>
             </div>
