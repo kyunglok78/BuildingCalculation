@@ -101,57 +101,60 @@ function switchApiTab(el, index) {
 }
 
 // ==========================================
-// [추가 기능] .kbproj 빠른 임시 저장 및 불러오기
+// [완벽 복구] .kbproj 빠른 임시 저장 및 불러오기
 // ==========================================
 
-// 1. 임시 저장 기능 (.kbproj 파일 다운로드)
 function quickSaveProject() {
-    const contractorInputs = document.querySelectorAll('.contractor-sync');
-    const contractor = (contractorInputs.length > 0 && contractorInputs[0].value) ? contractorInputs[0].value : "미지정";
-    const evalYearInput = document.getElementById('evalYear');
-    const evalYear = evalYearInput ? evalYearInput.value : new Date().getFullYear();
-    
-    const locations = [];
-    const rows = document.querySelectorAll('#locationListBox .list-row');
-    rows.forEach((row) => {
-        const nameInput = row.querySelector('.input-short');
-        const addrInput = row.querySelector('.addr-input');
-        const checkLedger = row.querySelector('.check-ledger');
-        const checkKfpa = row.querySelector('.check-kfpa');
+    try {
+        const contractorInputs = document.querySelectorAll('.contractor-sync');
+        const contractor = (contractorInputs.length > 0 && contractorInputs[0].value) ? contractorInputs[0].value : "미지정";
+        const evalYearInput = document.getElementById('evalYear');
+        const evalYear = evalYearInput ? evalYearInput.value : new Date().getFullYear();
         
-        locations.push({
-            name: nameInput ? nameInput.value : "",
-            addr: addrInput ? addrInput.value : "",
-            checkLedger: checkLedger ? checkLedger.checked : true,
-            checkKfpa: checkKfpa ? checkKfpa.checked : true
+        const locations = [];
+        const rows = document.querySelectorAll('#locationListBox .list-row');
+        rows.forEach((row) => {
+            const nameInput = row.querySelector('.input-short');
+            const addrInput = row.querySelector('.addr-input');
+            const checkLedger = row.querySelector('.check-ledger');
+            const checkKfpa = row.querySelector('.check-kfpa');
+            
+            locations.push({
+                name: nameInput ? nameInput.value : "",
+                addr: addrInput ? addrInput.value : "",
+                checkLedger: checkLedger ? checkLedger.checked : true,
+                checkKfpa: checkKfpa ? checkKfpa.checked : true
+            });
         });
-    });
 
-    const projectState = {
-        contractor: contractor,
-        eval_year: evalYear,
-        addresses: locations,
-        fetched_data: window.fetchedData || {}, 
-        eval_records: window.evalRecords || {'title': {}, 'floor': {}, 'kfpa': {}}
-    };
+        const projectState = {
+            contractor: contractor,
+            eval_year: evalYear,
+            addresses: locations,
+            fetched_data: window.fetchedData || {}, 
+            eval_records: window.evalRecords || {'title': {}, 'floor': {}, 'kfpa': {}}
+        };
 
-    const dataStr = JSON.stringify(projectState, null, 2);
-    const blob = new Blob([dataStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    
-    const a = document.createElement('a');
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    a.href = url;
-    a.download = `${contractor}_임시저장_${dateStr}.kbproj`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    alert("현재 작업 상태가 '.kbproj' 파일로 안전하게 저장(다운로드)되었습니다! ^^");
+        const dataStr = JSON.stringify(projectState, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+        a.href = url;
+        a.download = `${contractor}_임시저장_${dateStr}.kbproj`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        alert("✅ 성공적으로 저장되었습니다! 브라우저 다운로드 폴더를 확인해주세요.");
+    } catch (e) {
+        alert("❌ 저장 중 오류가 발생했습니다.");
+        console.error(e);
+    }
 }
 
-// 2. 임시 저장 불러오기 기능 (.kbproj 파일 읽기)
 function quickLoadProject(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -176,10 +179,13 @@ function quickLoadProject(event) {
                         if(typeof createLocationRowHTML === 'function') {
                             listBox.insertAdjacentHTML('beforeend', createLocationRowHTML(index + 1));
                             const lastRow = listBox.lastElementChild;
-                            lastRow.querySelector('.input-short').value = item.name;
-                            lastRow.querySelector('.addr-input').value = item.addr;
-                            lastRow.querySelector('.check-ledger').checked = item.checkLedger;
-                            lastRow.querySelector('.check-kfpa').checked = item.checkKfpa;
+                            lastRow.querySelector('.input-short').value = item.name || "";
+                            lastRow.querySelector('.addr-input').value = item.addr || "";
+                            
+                            const checkLedger = lastRow.querySelector('.check-ledger');
+                            const checkKfpa = lastRow.querySelector('.check-kfpa');
+                            if(checkLedger) checkLedger.checked = item.checkLedger !== false;
+                            if(checkKfpa) checkKfpa.checked = item.checkKfpa !== false;
                         }
                     });
                     if(document.getElementById('locationCount')) {
@@ -193,10 +199,12 @@ function quickLoadProject(event) {
             window.evalRecords = projectState.eval_records || {'title': {}, 'floor': {}, 'kfpa': {}};
             
             if(typeof updateMenuState === 'function') updateMenuState();
-            alert("저장된 파일을 성공적으로 불러왔습니다!");
+            alert("✅ 임시 저장 파일을 성공적으로 불러왔습니다!");
             
+            event.target.value = ''; 
         } catch (err) {
-            alert("파일 읽기 실패: 올바른 .kbproj 파일이 아니거나 손상되었습니다 ㅠㅠ");
+            alert("❌ 파일 읽기 실패: 올바른 .kbproj 파일이 아니거나 손상되었습니다.");
+            console.error(err);
         }
     };
     reader.readAsText(file);

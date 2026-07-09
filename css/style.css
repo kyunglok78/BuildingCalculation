@@ -1,6 +1,5 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
-/* [기능 2] 배경 여백 제거 및 브라우저 스크롤 제한 */
 body { 
     background-color: #e2e8f0; 
     margin: 0; padding: 0; 
@@ -8,7 +7,6 @@ body {
     overflow: hidden; 
 }
 
-/* [기능 2] 1280px 고정 규격 해제 및 화면 100% 채우기 */
 .slide-container {
     width: 100vw; height: 100vh; 
     position: relative; overflow: hidden;
@@ -28,26 +26,22 @@ body {
 
 .app-window { display: flex; height: calc(100% - 32px); width: 100%; margin-top: 32px; background: #ffffff; }
 
-/* === 수정된 사이드바 설정 (높이 고정 및 스크롤 추가) === */
-/* 아래 코드를 복사해서 기존 .sidebar 부분을 완전히 덮어써주세요! */
+/* === [근본 구조 개선] 사이드바 정규 레이아웃 === */
 .sidebar {
     width: 260px;
-    height: 100vh;
+    height: 100%; /* app-window의 높이를 100% 채움 */
     background-color: #1C5691;
     padding: 15px;
     color: white;
-    /* 추가된 마법의 레이아웃 (Flex) */
     display: flex;
-    flex-direction: column;
-    justify-content: space-between; 
+    flex-direction: column; /* 위아래 수직 배치 */
     box-sizing: border-box;
-    position: relative;
     z-index: 10;
 }
 
-/* 아래 내용들도 .sidebar 바로 밑에 이어서 추가해 주세요! */
+/* 메뉴 영역 (스크롤 생성 구간) */
 .sidebar-menu-wrapper {
-    flex: 1;
+    flex: 1; /* 남은 공간을 모두 차지 */
     overflow-y: auto;
     width: 100%;
     margin-bottom: 15px;
@@ -57,22 +51,22 @@ body {
 .sidebar-menu-wrapper::-webkit-scrollbar { width: 4px; }
 .sidebar-menu-wrapper::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,0.3); border-radius: 4px; }
 
-.sidebar-bottom {
+/* 하단 버튼 영역 (고정) */
+.sidebar-bottom { 
+    flex-shrink: 0; /* 화면이 작아져도 버튼 영역은 축소 안됨 */
     width: 100%;
-    padding-top: 10px;
-    border-top: 1px dashed rgba(255, 255, 255, 0.2);
+    padding-top: 15px; 
+    display: flex; 
+    flex-direction: column; 
+    gap: 8px; 
+    border-top: 1px dashed rgba(255, 255, 255, 0.3); 
     background-color: #1C5691;
 }
 
-.sidebar-bottom button {
-    width: 100%;
-    margin-top: 5px;
-    box-sizing: border-box;
-}
-.sidebar-header { padding: 30px 20px 20px; text-align: center; }
+.sidebar-header { padding: 15px 10px 20px; text-align: center; }
 .sidebar-header h2 { color: #FFC000; font-size: 22px; font-weight: 700; letter-spacing: 1px; }
 
-.menu-container { padding: 10px 15px; flex: 1; overflow-y: auto; }
+.menu-container { padding: 10px 10px; }
 .menu-l1 { font-size: 15px; font-weight: 700; margin-top: 20px; margin-bottom: 12px; color: #fff; display: flex; justify-content: space-between; align-items: flex-start; cursor: pointer; text-decoration: none; }
 .menu-l2 { font-size: 14px; font-weight: 700; margin-left: 10px; margin-bottom: 10px; color: #e9ecef; display: flex; justify-content: space-between; align-items: center; cursor: pointer; text-decoration: none; }
 .menu-l3 { font-size: 13px; font-weight: 400; margin-left: 25px; margin-bottom: 10px; color: #ced4da; cursor: pointer; text-decoration: none; display: flex; justify-content: space-between; align-items: center; }
@@ -87,16 +81,7 @@ body {
 
 .disabled-link { pointer-events: none; opacity: 0.4; cursor: not-allowed; } 
 
-/* === 수정된 사이드바 하단 설정 (버튼을 최하단으로 밀어냄) === */
-.sidebar-bottom { 
-    margin-top: auto; 
-    padding: 20px; 
-    display: flex; 
-    flex-direction: column; 
-    gap: 10px; 
-    border-top: 1px solid #343a40; 
-}
-.btn-orange { background-color: #f39c12; color: white; padding: 12px; border: none; border-radius: 4px; font-size: 13px; font-weight: 700; text-align: left; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.btn-orange { background-color: #f39c12; color: white; padding: 12px; border: none; border-radius: 4px; font-size: 13px; font-weight: 700; text-align: left; display: flex; align-items: center; gap: 10px; cursor: pointer; width: 100%; box-sizing: border-box; }
 
 .main-content { flex: 1; display: flex; flex-direction: column; padding: 30px 40px; overflow-y: auto; background-color: #ffffff; }
 
@@ -140,7 +125,6 @@ body {
 .modal-close { cursor: pointer; color: #666; font-size: 20px; }
 .modal-close:hover { color: #111; }
 
-/* [기능 3] 카카오 주소 리스트 정렬 및 스타일 개선 */
 .search-results { margin-top: 15px; border: 1px solid #ddd; max-height: 300px; overflow-y: auto; background: #fff; }
 .search-item { padding: 12px 15px; border-bottom: 1px solid #eee; cursor: pointer; text-align: left; }
 .search-item:hover { background: #f8f9fa; }
@@ -159,70 +143,5 @@ body {
 .btn-exec { background: #28a745; color: white; padding: 12px; text-align: center; border: none; font-size: 15px; font-weight: bold; cursor: pointer; border-radius: 4px; text-decoration: none; display: inline-block; width: 250px;}
 .btn-exec:hover { background: #218838; }
 
-/* ========================================================= */
-/* [기능 추가] 카카오 지도 기반 와이드 모달 디자인 */
-/* ========================================================= */
 .map-modal { width: 1100px !important; max-width: 95vw; }
 .map-marker-info { padding: 6px 12px; font-size: 12px; font-family: 'Noto Sans KR'; font-weight: bold; color: #111; border-radius: 4px; border: 1px solid #ccc; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); white-space: nowrap; }
-/* [수정 추가] 사이드바 레이아웃 유연화 및 메뉴 스크롤 */
-.sidebar-menu-wrapper {
-    flex: 1;
-    overflow-y: auto;
-    width: 100%;
-    margin-bottom: 15px;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255,255,255,0.3) transparent;
-}
-.sidebar-menu-wrapper::-webkit-scrollbar {
-    width: 4px;
-}
-.sidebar-menu-wrapper::-webkit-scrollbar-thumb {
-    background-color: rgba(255,255,255,0.3);
-    border-radius: 4px;
-}
-
-.sidebar-bottom {
-    width: 100%;
-    padding-top: 10px;
-    border-top: 1px dashed rgba(255, 255, 255, 0.2);
-    background-color: #1C5691;
-}
-
-.sidebar-bottom button {
-    width: 100%;
-    margin-top: 5px;
-    box-sizing: border-box;
-}
-
-/* ========================================================= */
-/* [응급 복구] 사이드바 레이아웃 및 색상 강제 고정 */
-/* ========================================================= */
-.sidebar {
-    width: 260px !important;
-    height: calc(100vh - 32px) !important; /* 화면 높이에 딱 맞춤 */
-    background-color: #1C5691 !important; /* KB 파란색 강제 적용 */
-    padding: 15px !important;
-    color: white !important;
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: space-between !important; 
-    box-sizing: border-box !important;
-    position: sticky !important; /* 스크롤해도 짤리지 않고 제자리에 고정 */
-    top: 0 !important;
-    left: 0 !important;
-    z-index: 100 !important;
-}
-
-.sidebar-menu-wrapper {
-    flex: 1 !important;
-    overflow-y: auto !important; /* 메뉴가 많을 때 메뉴만 스크롤 */
-    width: 100% !important;
-    margin-bottom: 15px !important;
-}
-
-.sidebar-bottom {
-    width: 100% !important;
-    padding-top: 15px !important;
-    border-top: 1px dashed rgba(255, 255, 255, 0.3) !important;
-    background-color: #1C5691 !important;
-}
