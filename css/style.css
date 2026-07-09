@@ -134,3 +134,32 @@ body {
 /* ========================================================= */
 .map-modal { width: 1100px !important; max-width: 95vw; }
 .map-marker-info { padding: 6px 12px; font-size: 12px; font-family: 'Noto Sans KR'; font-weight: bold; color: #111; border-radius: 4px; border: 1px solid #ccc; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); white-space: nowrap; }
+/* [수정 추가] 사이드바 레이아웃 유연화 및 메뉴 스크롤 */
+.sidebar-menu-wrapper {
+    flex: 1;
+    overflow-y: auto;
+    width: 100%;
+    margin-bottom: 15px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.3) transparent;
+}
+.sidebar-menu-wrapper::-webkit-scrollbar {
+    width: 4px;
+}
+.sidebar-menu-wrapper::-webkit-scrollbar-thumb {
+    background-color: rgba(255,255,255,0.3);
+    border-radius: 4px;
+}
+
+.sidebar-bottom {
+    width: 100%;
+    padding-top: 10px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.2);
+    background-color: #1C5691;
+}
+
+.sidebar-bottom button {
+    width: 100%;
+    margin-top: 5px;
+    box-sizing: border-box;
+}

@@ -57,6 +57,8 @@
     <div class="window-header"><div class="window-title"><i class="fa-solid fa-bolt"></i> KB손해보험 건물 가액평가 시스템</div><div class="window-controls"><i class="fa-solid fa-minus"></i><i class="fa-regular fa-square"></i><i class="fa-solid fa-xmark"></i></div></div>
     <div class="app-window">
         <div class="sidebar">
+            <!-- [수정 1] 사이드바 메뉴 Wrapper 추가 -->
+            <div class="sidebar-menu-wrapper">
             <div class="sidebar-header"><h2>건축 가액평가</h2></div>
             <div class="menu-container">
                 <div class="menu-l1">1. 일반정보 및 지수</div>
@@ -75,7 +77,18 @@
                 
                 <div class="menu-l1" style="margin-top:25px;" onclick="goToSlide('slide8')"><span>3. 총괄표 작성</span><span class="status-badge status-wait">대기</span></div>
             </div>
-            <div class="sidebar-bottom"><button type="button" class="btn-orange"><i class="fa-solid fa-bolt"></i> 빠른 임시 저장 (.kbproj)</button><button type="button" class="btn-orange"><i class="fa-regular fa-folder-open"></i> 임시 저장 열기 (.kbproj)</button></div>
+                        </div>
+
+            <!-- [수정 2] 사이드바 하단 버튼 영역 분리 및 불러오기용 파일 구조 매핑 -->
+            <div class="sidebar-bottom" style="display: flex; flex-direction: column; gap: 8px; width: 100%; padding-top: 10px; border-top: 1px dashed rgba(255,255,255,0.2);">
+                <button type="button" class="btn-orange" onclick="quickSaveProject()">
+                    <i class="fa-solid fa-bolt"></i> 빠른 임시 저장 (.kbproj)
+                </button>
+                <input type="file" id="kbprojFileInput" accept=".kbproj" style="display: none;" onchange="quickLoadProject(event)">
+                <button type="button" class="btn-orange" style="background-color: #D35400;" onclick="document.getElementById('kbprojFileInput').click()">
+                    <i class="fa-solid fa-folder-open"></i> 임시 저장 열기 (.kbproj)
+                </button>
+            </div>
         </div>
         
         <div class="main-content">
