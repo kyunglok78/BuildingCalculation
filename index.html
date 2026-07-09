@@ -154,10 +154,13 @@
         <div class="main-content">
             <h2 class="page-title"><i class="fa-regular fa-file-lines"></i> 2.1.1 건축물대장 통합 조회 및 불러오기</h2>
             <div class="top-panel mb-20">
-                <div class="input-row" style="margin:0;"><span class="input-label">보험계약자</span><input type="text" class="input-box contractor-sync" value="" placeholder="(일반정보 동기화됨)" readonly style="background:#f8f9fa; border:none; outline:none; font-weight:bold;"></div>
+                <div class="input-row" style="margin:0;">
+                    <span class="input-label">보험계약자</span>
+                    <input type="text" class="input-box contractor-sync" value="" placeholder="(일반정보 동기화됨)" readonly style="background:#f8f9fa; border:none; outline:none; font-weight:bold;">
+                </div>
                 <div>
-                    <button type="button" class="btn-dark" style="background:#28a745; margin-right: 10px;" onclick="exportLedgerToExcel()"><i class="fa-solid fa-file-excel"></i> 대장 엑셀 내보내기</button>
                     <button type="button" class="btn-dark" onclick="simulateApiFetch(); return false;" id="btnFetchApi">건축물대장 조회시작</button>
+                    <button type="button" class="btn-dark" style="background:#28a745; margin-left: 10px;" onclick="exportLedgerToExcel()"><i class="fa-solid fa-file-excel"></i> 대장 엑셀 내보내기</button>
                 </div>
             </div>
             <div class="tabs" style="margin-top:0;" id="slide3Tabs"></div>

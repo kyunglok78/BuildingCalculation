@@ -9,22 +9,22 @@ function getXmlText(xmlDoc, tag, defaultVal = "-") {
     return defaultVal;
 }
 
-// [기능 추가] 8자리 숫자를 YYYY-MM-DD 날짜로 예쁘게 변환
+// 8자리 숫자를 YYYY-MM-DD 날짜로 예쁘게 변환
 function formatDate(str) {
-    if (!str || str === '-' || str === '자료 없음') return '자료 없음';
+    if (!str || str === '-' || str === '자료 없음') return '-';
     const s = str.replace(/\D/g, ''); // 숫자만 추출
     if (s.length === 8) return `${s.substring(0,4)}-${s.substring(4,6)}-${s.substring(6,8)}`;
     return str;
 }
 
-// [기능 추가] 1,000단위 콤마 포맷팅 (숫자가 아닌 문자는 그대로 반환)
+// 1,000단위 콤마 포맷팅 (숫자가 아닌 문자는 그대로 반환)
 function formatNumber(str) {
     if (!str || str === '-' || str.trim() === '') return '-';
     const num = parseFloat(str.replace(/,/g, ''));
     return isNaN(num) ? str : num.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
 }
 
-// [기능 추가] 중복된 API 데이터(여러 줄) 제거 알고리즘
+// 중복된 API 데이터(여러 줄) 제거 알고리즘
 function removeDuplicates(arr) {
     const unique = [];
     const seen = new Set();
@@ -38,21 +38,17 @@ function removeDuplicates(arr) {
     return unique;
 }
 
-// ==========================================
-// [기능 추가] 테이블 헤더(th) 클릭 시 오름/내림차순 정렬 로직
-// ==========================================
+// 테이블 정렬 기능
 function sortTable(thElement) {
     const table = thElement.closest('table');
     const tbody = table.querySelector('tbody');
     const rows = Array.from(tbody.querySelectorAll('tr'));
     const colIndex = Array.from(thElement.parentNode.children).indexOf(thElement);
     
-    // 정렬 방향 토글 (asc <-> desc)
     let asc = thElement.dataset.asc === 'true';
     asc = !asc;
     thElement.dataset.asc = asc;
     
-    // 다른 헤더의 화살표 초기화
     Array.from(thElement.parentNode.children).forEach(th => {
         if(th !== thElement) {
             th.dataset.asc = '';
@@ -60,14 +56,12 @@ function sortTable(thElement) {
         }
     });
     
-    // 현재 클릭한 헤더에 화살표 표시
     thElement.innerHTML = thElement.innerHTML.replace(/ ▲▼| ▲| ▼/g, '') + (asc ? ' ▲' : ' ▼');
 
     rows.sort((a, b) => {
         let valA = a.children[colIndex].textContent.trim();
         let valB = b.children[colIndex].textContent.trim();
         
-        // 콤마가 포함된 숫자인지 판별
         let isNumA = /^[\d,]+(\.\d+)?$/.test(valA);
         let isNumB = /^[\d,]+(\.\d+)?$/.test(valB);
         
@@ -80,7 +74,6 @@ function sortTable(thElement) {
         }
     });
 
-    // 정렬된 배열을 DOM에 다시 렌더링하고 얼룩무늬 배경색 재적용
     tbody.innerHTML = '';
     rows.forEach((row, idx) => {
         row.style.backgroundColor = (idx % 2 === 0) ? '#ffffff' : '#f8f9fa';
@@ -99,7 +92,6 @@ function parseXMLToJSON(xmlText, colMap) {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlText, "text/xml");
         
-        // 공공데이터포털 에러 노드 체크
         const cmmMsgHeader = xmlDoc.getElementsByTagName("cmmMsgHeader");
         if(cmmMsgHeader && cmmMsgHeader.length > 0) {
             const returnAuthMsg = getXmlText(xmlDoc, "returnAuthMsg");
@@ -127,15 +119,10 @@ function parseXMLToJSON(xmlText, colMap) {
                     const foundVal = getXmlText(items[i], tags[t], null);
                     if(foundVal !== null) { val = foundVal; break; }
                 }
-                if(val === "-" && (pyKey.includes("사용승인일") || pyKey.includes("허가일") || pyKey.includes("착공일"))) {
-                    val = "자료 없음";
-                }
                 obj[pyKey] = val;
             }
             result.push(obj);
         }
-        
-        // [기능 추가] API 중복 송출 데이터를 필터링하여 반환
         return removeDuplicates(result);
     } catch(e) { throw e; }
 }
@@ -195,7 +182,7 @@ async function simulateApiFetch() {
                     return parseXMLToJSON(xmlText, colMap);
                 };
                 
-                // 파이썬 원본에 맞춰 유연한 태그 매핑(대체 태그 포함) 적용
+                // 데이터 누락 방지를 위한 태그 다중 매핑 (파이썬과 동일화)
                 const totalColMap = [["platPlc", ["platPlc"]], ["bldNm", ["bldNm"]], ["mainPurpsCdNm", ["mainPurpsCdNm"]], ["mainBldCnt", ["mainBldCnt"]], ["atchBldCnt", ["atchBldCnt", "subBldCnt"]], ["totArea", ["totArea"]], ["prmDay", ["prmDay", "pmsDay"]], ["stcDay", ["stcDay", "stcnsDay"]], ["useAprvDay", ["useAprvDay", "useAprDay"]]];
                 const titleColMap = [["dongNm", ["dongNm"]], ["mainPurpsCdNm", ["mainPurpsCdNm"]], ["grndFlrCnt", ["grndFlrCnt"]], ["ugrndFlrCnt", ["ugrndFlrCnt"]], ["totArea", ["totArea"]], ["heit", ["heit"]], ["strctCdNm", ["strctCdNm"]], ["roofCdNm", ["roofCdNm"]], ["useAprvDay", ["useAprvDay", "useAprDay"]]];
                 const floorColMap = [["dongNm", ["dongNm"]], ["flrGbCdNm", ["flrGbCdNm"]], ["flrNoNm", ["flrNoNm"]], ["area", ["area"]], ["etcPurps", ["etcPurps"]], ["strctCdNm", ["strctCdNm"]], ["roofCdNm", ["roofCdNm"]]];
@@ -228,7 +215,7 @@ function executeLedgerRender(results) {
     const tabsContainer = document.getElementById('slide3Tabs');
 
     let hasActive = false;
-    window.fetchedData = window.fetchedData || {}; // 엑셀 추출용 전역 데이터
+    window.fetchedData = {}; // 엑셀 추출용 전역 데이터 완전 초기화
 
     results.forEach(res => {
         const { index, locName, locAddr, totalData, titleData, floorData, isSuccess, apiErrMsg } = res;
@@ -241,7 +228,27 @@ function executeLedgerRender(results) {
         tabsContainer.appendChild(tabDiv);
 
         if (isSuccess) {
-            // [기능 추가] 엑셀 내보내기를 위한 백업본 저장
+            // ========================================================
+            // ★ [핵심 기능 복원] 총괄표제부 사용승인일 "가장 오래된 날짜" 끌어오기
+            // ========================================================
+            if (totalData.length > 0 && titleData.length > 0) {
+                totalData.forEach(recapItem => {
+                    if (!recapItem.useAprvDay || recapItem.useAprvDay === '-' || recapItem.useAprvDay.trim() === '') {
+                        // 표제부 상세에서 8자리 날짜들만 추출
+                        const validDates = titleData
+                            .map(t => t.useAprvDay ? t.useAprvDay.replace(/\D/g, '') : '')
+                            .filter(d => d.length === 8);
+                        
+                        if (validDates.length > 0) {
+                            // 오름차순 정렬 후 0번째 인덱스 (가장 오래된 과거 날짜) 선택
+                            const oldestDate = validDates.sort()[0];
+                            recapItem.useAprvDay = oldestDate;
+                        }
+                    }
+                });
+            }
+
+            // 엑셀 내보내기를 위한 전역 변수에 안전하게 백업
             window.fetchedData[locName] = {
                 address: locAddr,
                 recap: totalData,
@@ -249,12 +256,12 @@ function executeLedgerRender(results) {
                 floor: floorData
             };
 
-            // [기능 추가] 콤마(Number) 및 날짜(Date) 포맷팅 반영
+            // 화면 렌더링용 테이블 (포맷팅 적용)
             const trTotal = totalData.map(d => `<tr><td>${d.platPlc || locAddr}</td><td>${d.bldNm||'-'}</td><td>${d.mainPurpsCdNm||'-'}</td><td>${formatNumber(d.mainBldCnt||'0')}</td><td>${formatNumber(d.atchBldCnt||'0')}</td><td>${formatNumber(d.totArea||'0')}</td><td>${formatDate(d.prmDay||'-')}</td><td>${formatDate(d.stcDay||'-')}</td><td>${formatDate(d.useAprvDay||'-')}</td></tr>`).join('');
             const trTitle = titleData.map(d => `<tr><td>${d.dongNm||'-'}</td><td>${d.mainPurpsCdNm||'-'}</td><td>${formatNumber(d.grndFlrCnt||'0')}</td><td>${formatNumber(d.ugrndFlrCnt||'0')}</td><td>${formatNumber(d.totArea||'0')}</td><td>${formatNumber(d.heit||'0')}</td><td>${d.strctCdNm||'-'}</td><td>${d.roofCdNm || '기타지붕'}</td><td>${formatDate(d.useAprvDay||'-')}</td></tr>`).join('');
             const trFloor = floorData.map(d => `<tr><td>${d.dongNm||'-'}</td><td>${d.flrGbCdNm||'-'}</td><td>${d.flrNoNm||'-'}</td><td>${formatNumber(d.area||'0')}</td><td>${d.etcPurps||'-'}</td><td>${d.strctCdNm||'-'}</td><td>${d.roofCdNm || '기타지붕'}</td></tr>`).join('');
 
-            // [기능 추가] 오름/내림차순 정렬 기능을 내장한 테이블 헤더 생성
+            // 정렬 가능한 테이블 헤더
             const headerRecap = `<tr>${buildSortableTh('대지위치','200px')}${buildSortableTh('건물명')}${buildSortableTh('주용도')}${buildSortableTh('주건축물수')}${buildSortableTh('부속건축물수')}${buildSortableTh('연면적(m²)')}${buildSortableTh('허가일')}${buildSortableTh('착공일')}${buildSortableTh('사용승인일')}</tr>`;
             const headerTitle = `<tr>${buildSortableTh('동명칭')}${buildSortableTh('주용도(건물별)')}${buildSortableTh('지상층수')}${buildSortableTh('지하층수')}${buildSortableTh('연면적(m²)')}${buildSortableTh('높이(m)')}${buildSortableTh('구조코드명')}${buildSortableTh('지붕코드명')}${buildSortableTh('사용승인일')}</tr>`;
             const headerFloor = `<tr>${buildSortableTh('동명칭')}${buildSortableTh('층구분')}${buildSortableTh('층번호')}${buildSortableTh('면적(m²)')}${buildSortableTh('기타용도')}${buildSortableTh('구조코드명')}${buildSortableTh('지붕코드명')}</tr>`;
@@ -282,7 +289,6 @@ function executeLedgerRender(results) {
     btn.innerHTML = '건축물대장 조회시작';
     btn.disabled = false;
     
-    // 테이블 얼룩무늬 스타일 최초 적용
     document.querySelectorAll('.data-table tbody').forEach(tbody => {
         Array.from(tbody.querySelectorAll('tr')).forEach((row, idx) => {
             row.style.backgroundColor = (idx % 2 === 0) ? '#ffffff' : '#f8f9fa';
@@ -301,11 +307,11 @@ function executeLedgerRender(results) {
 
 
 // ==========================================
-// [기능 추가] 엑셀(CSV) 즉시 다운로드 내보내기 
+// [기능 보강] 엑셀(CSV) 다운로드 함수 - 오류 해결
 // ==========================================
-function exportLedgerToExcel() {
+window.exportLedgerToExcel = function() {
     if (!window.fetchedData || Object.keys(window.fetchedData).length === 0) {
-        alert("내보낼 데이터가 존재하지 않습니다. 먼저 건축물대장을 조회해 주세요.");
+        alert("내보낼 데이터가 존재하지 않습니다. 먼저 [건축물대장 조회시작]을 실행해 주세요.");
         return;
     }
     
@@ -319,7 +325,7 @@ function exportLedgerToExcel() {
             csvContent += "■ 총괄표제부 정보\n";
             csvContent += "대지위치,건물명,주용도,주건축물수,부속건축물수,연면적(m²),허가일,착공일,사용승인일\n";
             data.recap.forEach(row => {
-                csvContent += `"${row.platPlc || data.address}","${row.bldNm}","${row.mainPurpsCdNm}","${formatNumber(row.mainBldCnt)}","${formatNumber(row.atchBldCnt)}","${formatNumber(row.totArea)}","${formatDate(row.prmDay)}","${formatDate(row.stcDay)}","${formatDate(row.useAprvDay)}"\n`;
+                csvContent += `"${row.platPlc || data.address}","${row.bldNm}","${row.mainPurpsCdNm}","${row.mainBldCnt}","${row.atchBldCnt}","${row.totArea}","${formatDate(row.prmDay)}","${formatDate(row.stcDay)}","${formatDate(row.useAprvDay)}"\n`;
             });
             csvContent += "\n";
         }
@@ -328,7 +334,7 @@ function exportLedgerToExcel() {
             csvContent += "■ 표제부 상세\n";
             csvContent += "동명칭,주용도(건물별),지상층수,지하층수,연면적(m²),높이(m),구조코드명,지붕코드명,사용승인일\n";
             data.title.forEach(row => {
-                 csvContent += `"${row.dongNm}","${row.mainPurpsCdNm}","${formatNumber(row.grndFlrCnt)}","${formatNumber(row.ugrndFlrCnt)}","${formatNumber(row.totArea)}","${formatNumber(row.heit)}","${row.strctCdNm}","${row.roofCdNm || '기타지붕'}","${formatDate(row.useAprvDay)}"\n`;
+                 csvContent += `"${row.dongNm}","${row.mainPurpsCdNm}","${row.grndFlrCnt}","${row.ugrndFlrCnt}","${row.totArea}","${row.heit}","${row.strctCdNm}","${row.roofCdNm || '기타지붕'}","${formatDate(row.useAprvDay)}"\n`;
             });
             csvContent += "\n";
         }
@@ -337,24 +343,28 @@ function exportLedgerToExcel() {
             csvContent += "■ 층별 개요\n";
             csvContent += "동명칭,층구분,층번호,면적(m²),기타용도,구조코드명,지붕코드명\n";
             data.floor.forEach(row => {
-                csvContent += `"${row.dongNm}","${row.flrGbCdNm}","${row.flrNoNm}","${formatNumber(row.area)}","${row.etcPurps}","${row.strctCdNm}","${row.roofCdNm || '기타지붕'}"\n`;
+                csvContent += `"${row.dongNm}","${row.flrGbCdNm}","${row.flrNoNm}","${row.area}","${row.etcPurps}","${row.strctCdNm}","${row.roofCdNm || '기타지붕'}"\n`;
             });
             csvContent += "\n\n";
         }
     }
     
-    // 파일 다운로드 브라우저 로직
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    
-    const contractorInputs = document.querySelectorAll('.contractor-sync');
-    const contractor = (contractorInputs.length > 0 && contractorInputs[0].value) ? contractorInputs[0].value : "미지정";
-    
-    a.download = `${contractor}_건축물대장_원본_${new Date().toISOString().slice(0,10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-}
+    try {
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        
+        const contractorInputs = document.querySelectorAll('.contractor-sync');
+        const contractor = (contractorInputs.length > 0 && contractorInputs[0].value) ? contractorInputs[0].value : "미지정";
+        
+        a.download = `${contractor}_건축물대장_원본_${new Date().toISOString().slice(0,10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        alert("엑셀 파일을 저장하는 중 오류가 발생했습니다.");
+        console.error(e);
+    }
+};
