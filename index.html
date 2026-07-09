@@ -440,5 +440,79 @@
 <script src="./js/report.js"></script>
 <script src="./js/main.js"></script>
 
+<script>
+function quickSaveProject() {
+    try {
+        const contractorInputs = document.querySelectorAll('.contractor-sync');
+        const contractor = (contractorInputs.length > 0 && contractorInputs[0].value) ? contractorInputs[0].value : "미지정";
+        const evalYearInput = document.getElementById('evalYear');
+        const evalYear = evalYearInput ? evalYearInput.value : new Date().getFullYear();
+        
+        const locations = [];
+        const rows = document.querySelectorAll('#locationListBox .list-row');
+        rows.forEach((row) => {
+            const nameInput = row.querySelector('.input-short');
+            const addrInput = row.querySelector('.addr-input');
+            locations.push({
+                name: nameInput ? nameInput.value : "",
+                addr: addrInput ? addrInput.value : ""
+            });
+        });
+
+        const projectState = {
+            contractor: contractor,
+            eval_year: evalYear,
+            addresses: locations,
+            fetched_data: window.fetchedData || {}, 
+            eval_records: window.evalRecords || {'title': {}, 'floor': {}, 'kfpa': {}}
+        };
+
+        const dataStr = JSON.stringify(projectState, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+        a.href = url;
+        a.download = `${contractor}_임시저장_${dateStr}.kbproj`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        alert("✅ 성공적으로 저장되었습니다! 브라우저 다운로드 폴더를 확인해주세요.");
+    } catch (e) {
+        alert("❌ 저장 중 오류가 발생했습니다. (F12 콘솔창 확인 필요)");
+        console.error(e);
+    }
+}
+
+function quickLoadProject(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const projectState = JSON.parse(e.target.result);
+            if(projectState.contractor) {
+                document.querySelectorAll('.contractor-sync').forEach(input => input.value = projectState.contractor);
+            }
+            if(document.getElementById('evalYear') && projectState.eval_year) {
+                document.getElementById('evalYear').value = projectState.eval_year;
+            }
+            window.fetchedData = projectState.fetched_data || {};
+            window.evalRecords = projectState.eval_records || {'title': {}, 'floor': {}, 'kfpa': {}};
+            
+            alert("✅ 임시 저장 파일을 성공적으로 불러왔습니다!");
+            // 파일을 읽은 후 input 초기화 (같은 파일 다시 열기 위해)
+            event.target.value = ''; 
+        } catch (err) {
+            alert("❌ 파일 읽기 실패: 올바른 파일이 아닙니다.");
+        }
+    };
+    reader.readAsText(file);
+}
+</script>
 </body>
 </html>
