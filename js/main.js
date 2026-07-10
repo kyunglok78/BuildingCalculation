@@ -197,9 +197,28 @@ function addManualItem(mode) {
     else if (mode === 'kfpa') renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
 }
 
+/// ============================================================================
+// [6] 테스트용 Mock 데이터 연동 및 가상 API 응답 세팅
 // ============================================================================
-// [6] 테스트용 Mock 데이터 연동
-// ============================================================================
+
+// 1) 건축물대장 API 조회 결과 모의 데이터 (표제부 연동 버튼 테스트용)
+window.kbState.fetchedData = {
+    "안산공장": {
+        "총괄표제부 정보": [{ "사용승인일": "19770512" }],
+        "표제부 상세": [
+            { "동명칭": "1동", "연면적(m²)": "125.60", "구조코드명": "일반철골구조", "주용도(건물별)": "공장", "사용승인일": "19770512" },
+            { "동명칭": "2동", "연면적(m²)": "300.00", "구조코드명": "철근콘크리트", "주용도(건물별)": "창고", "사용승인일": "19801010" }
+        ]
+    },
+    "시흥공장": {
+        "총괄표제부 정보": [{ "사용승인일": "20260101" }],
+        "표제부 상세": [
+            { "동명칭": "주건축물제1동", "연면적(m²)": "3993.00", "구조코드명": "일반철골구조", "주용도(건물별)": "공장", "사용승인일": "20260101" }
+        ]
+    }
+};
+
+// 2) 화면 초기 렌더링을 위한 테스트 함수 (앱 최초 실행 시 호출됨)
 function runGroupedRenderTest() {
     // 백엔드에서 정제되어 내려온 데이터 형태를 시뮬레이션 합니다. (탭 2개가 생기도록 안산/시흥 분리)
     window.kbState.evalData = {
@@ -222,4 +241,100 @@ function runGroupedRenderTest() {
     renderEvalTabsAndTable('title', 'tbodyTitleEval', 'tabsTitleEval');
     renderEvalTabsAndTable('floor', 'tbodyFloorEval', 'tabsFloorEval');
     renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
+}
+
+// ============================================================================
+// [7] 대장 데이터 -> 표제부 평가 워크시트 연동 (Python sync_building_to_eval 웹 이식)
+// ============================================================================
+function syncTitleData() {
+    // 1. 공공데이터 조회가 완료된 원본 데이터가 있는지 확인 (가상의 kbState.fetchedData 기준)
+    const fetchedData = window.kbState.fetchedData;
+    if (!fetchedData || Object.keys(fetchedData).length === 0) {
+        alert("연동할 수 없습니다. 먼저 [건축물대장 조회시작]을 완료해 주세요.");
+        return;
+    }
+
+    // 2. 기존 작업 내역 초기화 및 경고
+    if (Object.keys(window.kbState.evalData.title || {}).length > 0) {
+        if (!confirm("기존에 작업 중이던 표제부 평가 데이터가 초기화됩니다. 계속하시겠습니까?")) return;
+    }
+    
+    const newTitleData = {};
+
+    // 3. 사업장(소재지)별 순회하며 데이터 맵핑
+    Object.keys(fetchedData).forEach(siteName => {
+        const siteData = fetchedData[siteName];
+        // 파이썬 로직: df_title (표제부 상세), df_recap (총괄표제부 정보)
+        const dfTitle = siteData["표제부 상세"] || [];
+        const dfRecap = siteData["총괄표제부 정보"] || [];
+        
+        let fallbackYear = 2000;
+        
+        // 총괄표제부에서 기준 준공연도(사용승인일) 추출
+        if (dfRecap.length > 0 && dfRecap[0]["사용승인일"]) {
+            const aprDate = String(dfRecap[0]["사용승인일"]).replace(/[-/]/g, "").trim();
+            if (aprDate.length >= 4 && !isNaN(aprDate.substring(0, 4))) {
+                fallbackYear = parseInt(aprDate.substring(0, 4));
+            }
+        }
+
+        const siteRecords = [];
+
+        // 표제부 상세 데이터를 평가 데이터 규격으로 변환
+        dfTitle.forEach((row, idx) => {
+            let dongNm = (row["동명칭"] || "").trim();
+            if (!dongNm || dongNm === "-" || dongNm === "nan") dongNm = "본동";
+            
+            const areaVal = String(row["연면적(m²)"] || "0").replace(/,/g, "").trim();
+            const area = isNaN(parseFloat(areaVal)) ? 0.0 : parseFloat(areaVal);
+            
+            const strct = (row["구조코드명"] || "-").trim();
+            const purps = (row["주용도(건물별)"] || "-").trim();
+            
+            let buildYear = fallbackYear;
+            const rowAprDate = String(row["사용승인일"] || "").replace(/[-/]/g, "").trim();
+            if (rowAprDate.length >= 4 && !isNaN(rowAprDate.substring(0, 4))) {
+                buildYear = parseInt(rowAprDate.substring(0, 4));
+            }
+
+            // 파이썬 _create_empty_record 와 동일한 구조 객체 생성
+            const recordGroup = {
+                "동명칭": dongNm,
+                "부속비율": 20.0,
+                "재조달_부속": 0,
+                "재조달_합계": 0,
+                "현재_부속": 0,
+                "현재_합계": 0,
+                "records": [{
+                    "일련번호": String(idx + 1),
+                    "동명칭": dongNm,
+                    "용도": purps,
+                    "연면적": area,
+                    "구조명": strct,
+                    "준공연도": buildYear,
+                    "구조코드": "-",
+                    "단가": 0.0,
+                    "노무비": 0.0,
+                    "물가지수": 1.0,
+                    "감가율": 1.78,
+                    "재조달_건축": 0,
+                    "잔가율": 100.0,
+                    "현재_건축": 0
+                }]
+            };
+            siteRecords.push(recordGroup);
+        });
+
+        if (siteRecords.length > 0) {
+            newTitleData[siteName] = siteRecords;
+        }
+    });
+
+    // 4. 중앙 상태 업데이트 및 화면 다시 그리기
+    window.kbState.evalData.title = newTitleData;
+    // 연동 직후 첫 번째 탭으로 초기화
+    window.kbState.activeSite.title = Object.keys(newTitleData)[0] || null;
+    
+    renderEvalTabsAndTable('title', 'tbodyTitleEval', 'tabsTitleEval');
+    alert("표제부 데이터 연동이 완료되었습니다.");
 }
