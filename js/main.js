@@ -71,7 +71,7 @@ function renderEvalTabsAndTable(mode, tbodyId, tabContainerId) {
 }
 
 // ============================================================================
-// [4] 3단 콤보(그룹핑) 테이블 렌더링 엔진 (한국어 Key 완벽 매핑)
+// [4] 3단 콤보(그룹핑) 테이블 렌더링 엔진 (파이썬 원본 15열 완벽 매핑)
 // ============================================================================
 function renderEvalTableGrouped(tbody, groupedData) {
     let grandTotalArea = 0, grandTotalReco = 0, grandTotalCur = 0;
@@ -81,14 +81,17 @@ function renderEvalTableGrouped(tbody, groupedData) {
         let groupArea = 0;
         const records = group.records || group.데이터리스트 || [group]; 
 
-        // [1행: 건축공사비 루프]
+        // [1행: 건축공사비] - 총 15칸
         records.forEach(record => {
             const seq = record['일련번호'] || '-';
             const dongName = record['동명칭'] || '-';
             const usage = record['용도'] || '-';
             const area = parseFloat(record['연면적'] || 0);
             const strct = record['구조'] || record['구조명'] || '-';
-            const buildYear = record['준공연도'] || '-';
+            
+            // 누락되었던 7번째 '준공연도' 데이터 추출 복구
+            const buildYear = record['준공연도'] || '-'; 
+            
             const strctCode = record['구조코드'] || '-';
             const unitPrice = parseFloat(record['단가'] || 0);
             const laborCost = parseFloat(record['노무비'] || 0);
@@ -101,17 +104,31 @@ function renderEvalTableGrouped(tbody, groupedData) {
 
             groupArea += area;
 
-            const codeDisp = (strctCode && strctCode !== "nan" && strctCode !== "-") ? strctCode : "<span style='color: #0056b3; font-weight: bold; cursor: pointer;'>[ 🔍 더블클릭 ]</span>";
-            const depDisp = (depRate === 1.78) ? "<span style='color: #0056b3; font-weight: bold; cursor: pointer;'>[ 🔍 더블클릭 (기본 1.78%) ]</span>" : `${depRate.toFixed(2)}%`;
+            // 입력창(Input)을 직접 넣지 않고, 파이썬처럼 '더블클릭 안내 텍스트'로 렌더링
+            const codeDisp = (strctCode && strctCode !== "nan" && strctCode !== "-") 
+                ? strctCode 
+                : "<span style='color: #0056b3; font-weight: bold; cursor: pointer;'>[ 🔍 더블클릭 ]</span>";
+            
+            const depDisp = (depRate === 1.78) 
+                ? "<span style='color: #0056b3; font-weight: bold; cursor: pointer;'>[ 🔍 더블클릭 (기본 1.78%) ]</span>" 
+                : `${depRate.toFixed(2)}%`;
 
             const trArch = document.createElement('tr');
             trArch.style.backgroundColor = '#ffffff';
+            
+            // 정확히 15개의 <td>로 구성하여 밀림 현상 완벽 방지
             trArch.innerHTML = `
-                <td>${seq}</td><td style="color:#0056b3; font-weight:bold;">${dongName}</td><td style="color:#0056b3;">건축공사비</td>
-                <td>${usage}</td><td style="text-align:right;">${formatArea(area)}</td><td>${strct}</td><td>${buildYear}</td>
-                <td>${codeDisp}</td><td style="text-align:right;">${formatPrice(unitPrice)}</td><td>${formatPrice(laborCost)}</td>
-                <td>${priceIdx.toFixed(4)}</td><td style="text-align:right; color:#0056b3;">${formatPrice(recoArch)}</td>
-                <td>${depDisp}</td><td>${remainRate.toFixed(2)}%</td><td style="text-align:right; color:#0056b3;">${formatPrice(curArch)}</td>
+                <td>${seq}</td>
+                <td style="color:#0056b3; font-weight:bold;">${dongName}</td>
+                <td style="color:#0056b3;">건축공사비</td> <td>${usage}</td>
+                <td style="text-align:right;">${formatArea(area)}</td>
+                <td>${strct}</td>
+                <td>${buildYear}</td> <td>${codeDisp}</td>  <td style="text-align:right;">${formatPrice(unitPrice)}</td>
+                <td style="text-align:right;">${formatPrice(laborCost)}</td>
+                <td>${priceIdx.toFixed(4)}</td>
+                <td style="text-align:right; color:#0056b3;">${formatPrice(recoArch)}</td>
+                <td>${depDisp}</td>   <td>${remainRate.toFixed(2)}%</td>
+                <td style="text-align:right; color:#0056b3;">${formatPrice(curArch)}</td>
             `;
             tbody.appendChild(trArch);
         });
@@ -126,22 +143,32 @@ function renderEvalTableGrouped(tbody, groupedData) {
 
         grandTotalArea += groupArea; grandTotalReco += recoTotal; grandTotalCur += curTotal;
 
-        // [2행: 부속설비]
+        // [2행: 부속설비] - 15칸 비율에 맞게 colspan 재조정
         const trSub = document.createElement('tr');
         trSub.style.backgroundColor = '#f8f9fa';
         trSub.innerHTML = `
-            <td colspan="2"></td><td>부속설비</td><td>[${mainDongName}] 일괄부속</td><td colspan="6"></td>
-            <td style="font-weight:bold;">${accRate.toFixed(1)}%</td><td style="text-align:right;">${formatPrice(recoSub)}</td>
-            <td colspan="2"></td><td style="text-align:right;">${formatPrice(curSub)}</td>
+            <td colspan="2"></td>
+            <td>부속설비</td>
+            <td>[${mainDongName}] 일괄부속</td>
+            <td colspan="6"></td>
+            <td style="font-weight:bold;">${accRate.toFixed(1)}%</td>
+            <td style="text-align:right;">${formatPrice(recoSub)}</td>
+            <td colspan="2"></td>
+            <td style="text-align:right;">${formatPrice(curSub)}</td>
         `;
         tbody.appendChild(trSub);
 
-        // [3행: 소계]
+        // [3행: 소계] - 15칸 비율에 맞게 colspan 재조정
         const trTotal = document.createElement('tr');
         trTotal.style.backgroundColor = '#e2e8f0'; trTotal.style.fontWeight = 'bold';
         trTotal.innerHTML = `
-            <td colspan="2"></td><td>[${mainDongName}] 소계</td><td></td><td style="text-align:right;">${formatArea(groupArea)}</td>
-            <td colspan="6"></td><td style="text-align:right;">${formatPrice(recoTotal)}</td><td colspan="2"></td>
+            <td colspan="2"></td>
+            <td>[${mainDongName}] 소계</td>
+            <td></td>
+            <td style="text-align:right;">${formatArea(groupArea)}</td>
+            <td colspan="6"></td>
+            <td style="text-align:right;">${formatPrice(recoTotal)}</td>
+            <td colspan="2"></td>
             <td style="text-align:right;">${formatPrice(curTotal)}</td>
         `;
         tbody.appendChild(trTotal);
@@ -151,13 +178,15 @@ function renderEvalTableGrouped(tbody, groupedData) {
     const trGrandTotal = document.createElement('tr');
     trGrandTotal.style.backgroundColor = '#cbd5e1'; trGrandTotal.style.fontWeight = 'bold';
     trGrandTotal.innerHTML = `
-        <td colspan="4" style="text-align:center;">사업장 합계</td><td style="text-align:right;">${formatArea(grandTotalArea)}</td>
-        <td colspan="6"></td><td style="text-align:right;">${formatPrice(grandTotalReco)}</td><td colspan="2"></td>
+        <td colspan="4" style="text-align:center;">사업장 합계</td>
+        <td style="text-align:right;">${formatArea(grandTotalArea)}</td>
+        <td colspan="6"></td>
+        <td style="text-align:right;">${formatPrice(grandTotalReco)}</td>
+        <td colspan="2"></td>
         <td style="text-align:right;">${formatPrice(grandTotalCur)}</td>
     `;
     tbody.appendChild(trGrandTotal);
 }
-
 // ============================================================================
 // [5] ★ 수동 항목 추가 기능 (무허가 건물 등 추가용) ★
 // ============================================================================
