@@ -245,33 +245,30 @@ function runGroupedRenderTest() {
 // [7] 대장 데이터 -> 표제부 평가 워크시트 연동 (Python sync_building_to_eval 웹 이식)
 // ============================================================================
 function syncTitleData() {
-    // 1. 공공데이터 조회가 완료된 원본 데이터가 있는지 확인
-    // (api_ledger.js 등의 공공데이터 조회 기능 완료 후 window.kbState.fetchedData 에 값이 들어있어야 합니다.)
     const fetchedData = window.kbState.fetchedData;
     if (!fetchedData || Object.keys(fetchedData).length === 0) {
         alert("연동할 수 없습니다. 먼저 [건축물대장 조회시작]을 완료해 주세요.");
         return;
     }
 
-    // 2. 기존 작업 내역 초기화 및 경고
     if (Object.keys(window.kbState.evalData.title || {}).length > 0) {
         if (!confirm("기존에 작업 중이던 표제부 평가 데이터가 초기화됩니다. 계속하시겠습니까?")) return;
     }
     
     const newTitleData = {};
 
-    // 3. 사업장(소재지)별 순회하며 데이터 맵핑
     Object.keys(fetchedData).forEach(siteName => {
         const siteData = fetchedData[siteName];
-        // 파이썬 원본 로직: df_title (표제부 상세), df_recap (총괄표제부 정보)
-        const dfTitle = siteData["표제부 상세"] || [];
-        const dfRecap = siteData["총괄표제부 정보"] || [];
+        
+        // ★ 1차 수정: 저장소의 키 이름이 한글이 아닌 영문(title, recap)입니다!
+        const dfTitle = siteData["title"] || siteData["표제부 상세"] || [];
+        const dfRecap = siteData["recap"] || siteData["총괄표제부 정보"] || [];
         
         let fallbackYear = 2000;
         
-        // 총괄표제부에서 기준 준공연도(사용승인일) 추출
-        if (dfRecap.length > 0 && dfRecap[0]["사용승인일"]) {
-            const aprDate = String(dfRecap[0]["사용승인일"]).replace(/[-/]/g, "").trim();
+        // ★ 2차 수정: '사용승인일' -> 'useAprDay' (API 영문 키 적용)
+        if (dfRecap.length > 0 && dfRecap[0]["useAprDay"]) {
+            const aprDate = String(dfRecap[0]["useAprDay"]).replace(/[-/]/g, "").trim();
             if (aprDate.length >= 4 && !isNaN(aprDate.substring(0, 4))) {
                 fallbackYear = parseInt(aprDate.substring(0, 4));
             }
@@ -279,24 +276,23 @@ function syncTitleData() {
 
         const siteRecords = [];
 
-        // 표제부 상세 데이터를 평가 데이터 규격으로 변환
         dfTitle.forEach((row, idx) => {
-            let dongNm = (row["동명칭"] || "").trim();
+            // ★ 3차 수정: 모든 데이터를 API 원본 영문 키(dongNm, totArea 등)로 매핑
+            let dongNm = (row["dongNm"] || "").trim();
             if (!dongNm || dongNm === "-" || dongNm === "nan") dongNm = "본동";
             
-            const areaVal = String(row["연면적(m²)"] || "0").replace(/,/g, "").trim();
+            const areaVal = String(row["totArea"] || "0").replace(/,/g, "").trim();
             const area = isNaN(parseFloat(areaVal)) ? 0.0 : parseFloat(areaVal);
             
-            const strct = (row["구조코드명"] || "-").trim();
-            const purps = (row["주용도(건물별)"] || "-").trim();
+            const strct = (row["strctCdNm"] || "-").trim();
+            const purps = (row["mainPurpsCdNm"] || "-").trim();
             
             let buildYear = fallbackYear;
-            const rowAprDate = String(row["사용승인일"] || "").replace(/[-/]/g, "").trim();
+            const rowAprDate = String(row["useAprDay"] || "").replace(/[-/]/g, "").trim();
             if (rowAprDate.length >= 4 && !isNaN(rowAprDate.substring(0, 4))) {
                 buildYear = parseInt(rowAprDate.substring(0, 4));
             }
 
-            // 파이썬 원본 _create_empty_record 와 동일한 구조 객체 생성
             const recordGroup = {
                 "동명칭": dongNm,
                 "부속비율": 20.0,
@@ -329,9 +325,7 @@ function syncTitleData() {
         }
     });
 
-    // 4. 중앙 상태 업데이트 및 화면 다시 그리기
     window.kbState.evalData.title = newTitleData;
-    // 연동 직후 첫 번째 탭으로 화면 전환 세팅
     window.kbState.activeSite.title = Object.keys(newTitleData)[0] || null;
     
     renderEvalTabsAndTable('title', 'tbodyTitleEval', 'tabsTitleEval');
