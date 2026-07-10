@@ -32,8 +32,7 @@ function renderEvalTabsAndTable(mode, tbodyId, tabContainerId) {
     const tbody = document.getElementById(tbodyId);
     if (!tabContainer || !tbody) return;
 
-    tabContainer.innerHTML = ''; // 탭 초기화
-    tbody.innerHTML = ''; // 테이블 초기화
+    tabContainer.innerHTML = ''; tbody.innerHTML = '';
 
     if (!dataObj || Object.keys(dataObj).length === 0) {
         tbody.innerHTML = '<tr><td colspan="15" style="padding: 30px; color: #999; text-align: center;">연동된 데이터가 없습니다.</td></tr>';
@@ -41,13 +40,11 @@ function renderEvalTabsAndTable(mode, tbodyId, tabContainerId) {
     }
 
     const sites = Object.keys(dataObj);
-    // 현재 모드의 활성화된 탭이 없거나, 삭제되어서 없어진 경우 첫 번째 사업장으로 세팅
     if (!window.kbState.activeSite[mode] || !sites.includes(window.kbState.activeSite[mode])) {
         window.kbState.activeSite[mode] = sites[0];
     }
     const currentSite = window.kbState.activeSite[mode];
 
-    // 1. 탭 버튼 동적 생성
     sites.forEach(siteName => {
         const isSelected = (siteName === currentSite);
         const tabBtn = document.createElement('div');
@@ -59,44 +56,40 @@ function renderEvalTabsAndTable(mode, tbodyId, tabContainerId) {
             color: ${isSelected ? '#ffffff' : '#333333'};
         `;
         tabBtn.onclick = () => {
-            window.kbState.activeSite[mode] = siteName; // 탭 전환
-            renderEvalTabsAndTable(mode, tbodyId, tabContainerId); // 화면 갱신
+            window.kbState.activeSite[mode] = siteName;
+            renderEvalTabsAndTable(mode, tbodyId, tabContainerId);
         };
         tabContainer.appendChild(tabBtn);
     });
 
-    // 2. 선택된 탭(사업장)의 데이터만 3단 콤보로 렌더링
     const selectedData = dataObj[currentSite];
-    renderEvalTableGrouped(tbody, selectedData);
+    // ★ 변경점: 편집 이벤트를 위해 mode와 currentSite를 렌더링 함수에 전달합니다.
+    renderEvalTableGrouped(tbody, selectedData, mode, currentSite);
 }
 
 // ============================================================================
-// [4] 3단 콤보(그룹핑) 테이블 렌더링 엔진 (파이썬 원본 15열 완벽 매핑)
+// [4] 3단 콤보(그룹핑) 테이블 렌더링 엔진 (인라인 편집 이벤트 추가)
 // ============================================================================
-function renderEvalTableGrouped(tbody, groupedData) {
+function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
     let grandTotalArea = 0, grandTotalReco = 0, grandTotalCur = 0;
     const groups = Array.isArray(groupedData) ? groupedData : Object.values(groupedData);
 
-    groups.forEach(group => {
+    groups.forEach((group, gIdx) => {
         let groupArea = 0;
         const records = group.records || group.데이터리스트 || [group]; 
 
-        // [1행: 건축공사비] - 총 15칸
-        records.forEach(record => {
+        // [1행: 건축공사비] 
+        records.forEach((record, rIdx) => {
             const seq = record['일련번호'] || '-';
             const dongName = record['동명칭'] || '-';
             const usage = record['용도'] || '-';
             const area = parseFloat(record['연면적'] || 0);
             const strct = record['구조'] || record['구조명'] || '-';
-            
-            // 누락되었던 7번째 '준공연도' 데이터 추출 복구
             const buildYear = record['준공연도'] || '-'; 
-            
             const strctCode = record['구조코드'] || '-';
             const unitPrice = parseFloat(record['단가'] || 0);
             const laborCost = parseFloat(record['노무비'] || 0);
             const priceIdx = parseFloat(record['물가지수'] || 1.0);
-            
             const recoArch = parseFloat(record['재조달_건축'] || 0);
             const depRate = parseFloat(record['감가율'] || 1.78);
             const remainRate = parseFloat(record['잔가율'] || 100);
@@ -104,36 +97,33 @@ function renderEvalTableGrouped(tbody, groupedData) {
 
             groupArea += area;
 
-            // 입력창(Input)을 직접 넣지 않고, 파이썬처럼 '더블클릭 안내 텍스트'로 렌더링
-            const codeDisp = (strctCode && strctCode !== "nan" && strctCode !== "-") 
-                ? strctCode 
-                : "<span style='color: #0056b3; font-weight: bold; cursor: pointer;'>[ 🔍 더블클릭 ]</span>";
-            
-            const depDisp = (depRate === 1.78) 
-                ? "<span style='color: #0056b3; font-weight: bold; cursor: pointer;'>[ 🔍 더블클릭 (기본 1.78%) ]</span>" 
-                : `${depRate.toFixed(2)}%`;
+            const codeDisp = (strctCode && strctCode !== "nan" && strctCode !== "-") ? strctCode : "[ 🔍 더블클릭 ]";
+            const depDisp = (depRate === 1.78) ? "[ 🔍 더블클릭 (기본 1.78%) ]" : `${depRate.toFixed(2)}%`;
 
             const trArch = document.createElement('tr');
             trArch.style.backgroundColor = '#ffffff';
             
-            // 정확히 15개의 <td>로 구성하여 밀림 현상 완벽 방지
+            // ★ 변경점: 수정 가능한 칸(td)에 ondblclick 이벤트와 마우스 포인터(cursor:pointer)를 추가했습니다.
             trArch.innerHTML = `
-                <td>${seq}</td>
-                <td style="color:#0056b3; font-weight:bold;">${dongName}</td>
-                <td style="color:#0056b3;">건축공사비</td> <td>${usage}</td>
-                <td style="text-align:right;">${formatArea(area)}</td>
-                <td>${strct}</td>
-                <td>${buildYear}</td> <td>${codeDisp}</td>  <td style="text-align:right;">${formatPrice(unitPrice)}</td>
-                <td style="text-align:right;">${formatPrice(laborCost)}</td>
-                <td>${priceIdx.toFixed(4)}</td>
+                <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '일련번호', 'text')">${seq}</td>
+                <td style="color:#0056b3; font-weight:bold; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '동명칭', 'text')">${dongName}</td>
+                <td style="color:#0056b3;">건축공사비</td>
+                <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '용도', 'text')">${usage}</td>
+                <td style="text-align:right; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '연면적', 'number')">${formatArea(area)}</td>
+                <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '구조', 'text')">${strct}</td>
+                <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '준공연도', 'number')">${buildYear}</td>
+                <td style="color:#0056b3; font-weight:bold; cursor:pointer;" ondblclick="openCodePopup('${mode}', '${siteName}', ${gIdx}, ${rIdx})">${codeDisp}</td>
+                <td style="text-align:right; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '단가', 'number')">${formatPrice(unitPrice)}</td>
+                <td style="text-align:right; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '노무비', 'number')">${formatPrice(laborCost)}</td>
+                <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '물가지수', 'number')">${priceIdx.toFixed(4)}</td>
                 <td style="text-align:right; color:#0056b3;">${formatPrice(recoArch)}</td>
-                <td>${depDisp}</td>   <td>${remainRate.toFixed(2)}%</td>
+                <td style="color:#0056b3; font-weight:bold; cursor:pointer;" ondblclick="openDeprPopup('${mode}', '${siteName}', ${gIdx}, ${rIdx})">${depDisp}</td>
+                <td>${remainRate.toFixed(2)}%</td>
                 <td style="text-align:right; color:#0056b3;">${formatPrice(curArch)}</td>
             `;
             tbody.appendChild(trArch);
         });
 
-        // [부속설비 및 소계 추출]
         const accRate = parseFloat(group['부속비율'] || 20.0);
         const recoSub = parseFloat(group['재조달_부속'] || 0);
         const curSub = parseFloat(group['현재_부속'] || 0);
@@ -143,33 +133,22 @@ function renderEvalTableGrouped(tbody, groupedData) {
 
         grandTotalArea += groupArea; grandTotalReco += recoTotal; grandTotalCur += curTotal;
 
-        // [2행: 부속설비] - 15칸 비율에 맞게 colspan 재조정
+        // [2행: 부속설비] - 부속비율(%) 칸 더블클릭 편집 추가
         const trSub = document.createElement('tr');
         trSub.style.backgroundColor = '#f8f9fa';
         trSub.innerHTML = `
-            <td colspan="2"></td>
-            <td>부속설비</td>
-            <td>[${mainDongName}] 일괄부속</td>
-            <td colspan="6"></td>
-            <td style="font-weight:bold;">${accRate.toFixed(1)}%</td>
-            <td style="text-align:right;">${formatPrice(recoSub)}</td>
-            <td colspan="2"></td>
-            <td style="text-align:right;">${formatPrice(curSub)}</td>
+            <td colspan="2"></td><td>부속설비</td><td>[${mainDongName}] 일괄부속</td><td colspan="6"></td>
+            <td style="font-weight:bold; color:#0056b3; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, 0, '부속비율', 'number', 'group')">${accRate.toFixed(1)}%</td>
+            <td style="text-align:right;">${formatPrice(recoSub)}</td><td colspan="2"></td><td style="text-align:right;">${formatPrice(curSub)}</td>
         `;
         tbody.appendChild(trSub);
 
-        // [3행: 소계] - 15칸 비율에 맞게 colspan 재조정
+        // [3행: 소계]
         const trTotal = document.createElement('tr');
         trTotal.style.backgroundColor = '#e2e8f0'; trTotal.style.fontWeight = 'bold';
         trTotal.innerHTML = `
-            <td colspan="2"></td>
-            <td>[${mainDongName}] 소계</td>
-            <td></td>
-            <td style="text-align:right;">${formatArea(groupArea)}</td>
-            <td colspan="6"></td>
-            <td style="text-align:right;">${formatPrice(recoTotal)}</td>
-            <td colspan="2"></td>
-            <td style="text-align:right;">${formatPrice(curTotal)}</td>
+            <td colspan="2"></td><td>[${mainDongName}] 소계</td><td></td><td style="text-align:right;">${formatArea(groupArea)}</td><td colspan="6"></td>
+            <td style="text-align:right;">${formatPrice(recoTotal)}</td><td colspan="2"></td><td style="text-align:right;">${formatPrice(curTotal)}</td>
         `;
         tbody.appendChild(trTotal);
     });
@@ -178,15 +157,12 @@ function renderEvalTableGrouped(tbody, groupedData) {
     const trGrandTotal = document.createElement('tr');
     trGrandTotal.style.backgroundColor = '#cbd5e1'; trGrandTotal.style.fontWeight = 'bold';
     trGrandTotal.innerHTML = `
-        <td colspan="4" style="text-align:center;">사업장 합계</td>
-        <td style="text-align:right;">${formatArea(grandTotalArea)}</td>
-        <td colspan="6"></td>
-        <td style="text-align:right;">${formatPrice(grandTotalReco)}</td>
-        <td colspan="2"></td>
-        <td style="text-align:right;">${formatPrice(grandTotalCur)}</td>
+        <td colspan="4" style="text-align:center;">사업장 합계</td><td style="text-align:right;">${formatArea(grandTotalArea)}</td><td colspan="6"></td>
+        <td style="text-align:right;">${formatPrice(grandTotalReco)}</td><td colspan="2"></td><td style="text-align:right;">${formatPrice(grandTotalCur)}</td>
     `;
     tbody.appendChild(trGrandTotal);
 }
+
 // ============================================================================
 // [5] ★ 수동 항목 추가 기능 (무허가 건물 등 추가용) ★
 // ============================================================================
@@ -331,3 +307,119 @@ function syncTitleData() {
     renderEvalTabsAndTable('title', 'tbodyTitleEval', 'tabsTitleEval');
     alert("표제부 데이터 연동이 완료되었습니다.");
 }
+
+// ============================================================================
+// [8] 인라인 편집 및 가액 재계산 시스템 (Python calculate_valuation 이식)
+// ============================================================================
+
+// 1. 셀 더블클릭 시 편집창(Input)을 띄우고 저장하는 함수
+window.editCell = function(tdElement, mode, siteName, gIdx, rIdx, field, inputType, level = 'record') {
+    if (tdElement.querySelector('input')) return; // 이미 편집 중이면 무시
+
+    // 대상 데이터 객체 찾기
+    let targetObj;
+    const siteData = window.kbState.evalData[mode][siteName];
+    if (Array.isArray(siteData)) {
+        targetObj = level === 'group' ? siteData[gIdx] : siteData[gIdx].records[rIdx];
+    } else {
+        const keys = Object.keys(siteData);
+        targetObj = level === 'group' ? siteData[keys[gIdx]] : siteData[keys[gIdx]].records[rIdx];
+    }
+
+    let origValue = targetObj[field] || (inputType === 'number' ? 0 : '');
+
+    // 입력창 생성
+    const input = document.createElement('input');
+    input.type = 'text'; 
+    input.value = origValue;
+    input.style.width = '90%';
+    input.style.textAlign = 'center';
+    input.style.border = '2px solid #1C5691';
+    input.style.padding = '3px';
+    input.style.fontWeight = 'bold';
+
+    // 기존 텍스트 지우고 입력창 띄우기
+    tdElement.innerHTML = '';
+    tdElement.appendChild(input);
+    input.focus();
+    input.select();
+
+    // 저장 및 화면 갱신 처리
+    const saveValue = () => {
+        let newVal = input.value.replace(/,/g, '').replace(/%/g, '').trim();
+        if (inputType === 'number') {
+            newVal = parseFloat(newVal);
+            if (isNaN(newVal)) newVal = 0;
+        }
+        targetObj[field] = newVal;
+
+        // ★ 핵심: 값이 변경되었으므로 가액을 자동으로 다시 계산합니다.
+        recalculateValuation(mode, siteName);
+
+        // 변경된 계산 결과를 바탕으로 표 다시 그리기
+        const tbodyId = mode === 'title' ? 'tbodyTitleEval' : (mode === 'floor' ? 'tbodyFloorEval' : 'tbodyKfpaEval');
+        const tabId = mode === 'title' ? 'tabsTitleEval' : (mode === 'floor' ? 'tabsFloorEval' : 'tabsKfpaEval');
+        renderEvalTabsAndTable(mode, tbodyId, tabId);
+    };
+
+    // 포커스를 잃거나 엔터를 치면 자동 저장
+    input.addEventListener('blur', saveValue);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            input.removeEventListener('blur', saveValue);
+            saveValue();
+        }
+    });
+};
+
+// 2. 가액 자동 재계산 엔진 (파이썬 계산식 완벽 구현)
+function recalculateValuation(mode, siteName) {
+    const evalYearInput = document.getElementById('evalYear');
+    const evalYear = parseInt(evalYearInput ? evalYearInput.value : new Date().getFullYear());
+    const siteData = window.kbState.evalData[mode][siteName];
+    
+    const groups = Array.isArray(siteData) ? siteData : Object.values(siteData);
+
+    groups.forEach(group => {
+        let totRecoArch = 0;
+        let totCurArch = 0;
+
+        // [건축공사비] 1행 데이터 재계산
+        group.records.forEach(r => {
+            // 재조달_건축 = 연면적 * 단가 * 물가지수 (1,000원 단위 절사)
+            const compConstCost = (r.연면적 || 0) * (r.단가 || 0) * (r.물가지수 || 1.0);
+            r.재조달_건축 = Math.floor(compConstCost / 1000) * 1000;
+            
+            // 잔가율 = 1.0 - (경과년수 * 감가율) (최소 30% 보장)
+            const elapsed = Math.max(0, evalYear - (r.준공연도 || evalYear));
+            let residualRatio = 1.0 - (elapsed * ((r.감가율 || 1.78) / 100.0));
+            if (residualRatio < 0.30) residualRatio = 0.30; 
+            
+            r.잔가율 = residualRatio * 100.0;
+            // 현재_건축 = 재조달가액 * 잔가율 (1,000원 단위 절사)
+            r.현재_건축 = Math.floor((r.재조달_건축 * residualRatio) / 1000) * 1000;
+
+            totRecoArch += r.재조달_건축;
+            totCurArch += r.현재_건축;
+        });
+
+        // [부속설비] 2행 및 소계 데이터 재계산
+        const accRate = parseFloat(group.부속비율 || 20.0) / 100.0;
+        group.재조달_부속 = Math.floor((totRecoArch * accRate) / 1000) * 1000;
+        
+        const repResidualRatio = group.records.length > 0 ? (group.records[0].잔가율 / 100.0) : 1.0;
+        group.현재_부속 = Math.floor((group.재조달_부속 * repResidualRatio) / 1000) * 1000;
+
+        group.재조달_합계 = totRecoArch + group.재조달_부속;
+        group.현재_합계 = totCurArch + group.현재_부속;
+    });
+}
+
+// 3. 구조코드 & 감가율 팝업 호출 대기 (다음 단계용)
+window.openCodePopup = function(mode, siteName, gIdx, rIdx) {
+    alert("🛠️ 신축단가표 구조코드 팝업창이 뜰 위치입니다.\n(다음 단계에서 엑셀 단가표 검색기를 연결합니다!)");
+};
+
+window.openDeprPopup = function(mode, siteName, gIdx, rIdx) {
+    alert("🛠️ 감가율 표준 선택 팝업창이 뜰 위치입니다.\n(다음 단계에서 KFPA 기준표를 연결합니다!)");
+};
