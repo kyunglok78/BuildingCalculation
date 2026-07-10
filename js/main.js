@@ -3,12 +3,14 @@
 // ============================================================================
 window.kbState = {
     evalData: { title: {}, floor: {}, kfpa: {} }, 
-    activeSite: { title: null, floor: null, kfpa: null } // 모드별로 현재 선택된 탭(사업장) 저장
+    activeSite: { title: null, floor: null, kfpa: null }, // 모드별로 현재 선택된 탭(사업장) 저장
+    fetchedData: {} // API 조회를 통해 가져온 실제 건축물대장 데이터를 보관할 객체 추가
 };
 
 window.onload = function() {
     if (typeof goToSlide === 'function') goToSlide('slide2');
-    // UI 확인용 임시 데이터 세팅 및 렌더링 실행
+    
+    // 페이지 로드 시 가짜 데이터를 넣지 않고, 빈 상태로 렌더링 함수만 호출하여 초기화합니다.
     runGroupedRenderTest();
 };
 
@@ -197,47 +199,14 @@ function addManualItem(mode) {
     else if (mode === 'kfpa') renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
 }
 
-/// ============================================================================
-// [6] 테스트용 Mock 데이터 연동 및 가상 API 응답 세팅
 // ============================================================================
-
-// 1) 건축물대장 API 조회 결과 모의 데이터 (표제부 연동 버튼 테스트용)
-window.kbState.fetchedData = {
-    "안산공장": {
-        "총괄표제부 정보": [{ "사용승인일": "19770512" }],
-        "표제부 상세": [
-            { "동명칭": "1동", "연면적(m²)": "125.60", "구조코드명": "일반철골구조", "주용도(건물별)": "공장", "사용승인일": "19770512" },
-            { "동명칭": "2동", "연면적(m²)": "300.00", "구조코드명": "철근콘크리트", "주용도(건물별)": "창고", "사용승인일": "19801010" }
-        ]
-    },
-    "시흥공장": {
-        "총괄표제부 정보": [{ "사용승인일": "20260101" }],
-        "표제부 상세": [
-            { "동명칭": "주건축물제1동", "연면적(m²)": "3993.00", "구조코드명": "일반철골구조", "주용도(건물별)": "공장", "사용승인일": "20260101" }
-        ]
-    }
-};
-
-// 2) 화면 초기 렌더링을 위한 테스트 함수 (앱 최초 실행 시 호출됨)
+// [6] 초기 화면 렌더링 (가짜 임의 데이터 제거 완료)
+// ============================================================================
 function runGroupedRenderTest() {
-    // 백엔드에서 정제되어 내려온 데이터 형태를 시뮬레이션 합니다. (탭 2개가 생기도록 안산/시흥 분리)
-    window.kbState.evalData = {
-        title: {
-            "안산공장": [
-                { 동명칭: "1동", 부속비율: 20.0, 재조달_부속: 30110000, 재조달_합계: 180662000, 현재_부속: 9033000, 현재_합계: 54198000, records: [{ 일련번호: "1", 동명칭: "1동", 용도: "공장", 연면적: 125.60, 구조명: "일반철골구조", 준공연도: 1977, 구조코드: "6-1-5-6-3", 단가: 1170000, 노무비: 71, 물가지수: 1.0245, 감가율: 1.78, 재조달_건축: 150552000, 잔가율: 30, 현재_건축: 45165000 }] }
-            ],
-            "시흥공장": [
-                { 동명칭: "주건축물제1동", 부속비율: 20.0, 재조달_부속: 0, 재조달_합계: 0, 현재_부속: 0, 현재_합계: 0, records: [{ 일련번호: "1", 동명칭: "주건축물제1동", 용도: "공장", 연면적: 3993.0, 구조명: "일반철골구조", 준공연도: 2026, 구조코드: "-", 단가: 0, 노무비: 0, 물가지수: 1.0, 감가율: 1.78, 재조달_건축: 0, 잔가율: 100, 현재_건축: 0 }] }
-            ]
-        },
-        floor: {}, kfpa: {}
-    };
+    // 기존에 있던 테스트용 임의 데이터(안산공장, 시흥공장 등) 강제 주입 로직을 완전히 삭제했습니다.
+    // 데이터가 없는 빈 상태({} 구조)를 유지하여 최초 화면에 아무것도 보이지 않게 합니다.
     
-    // 깊은 복사로 층별, 화협 테스트 데이터 삽입
-    window.kbState.evalData.floor = JSON.parse(JSON.stringify(window.kbState.evalData.title));
-    window.kbState.evalData.kfpa = JSON.parse(JSON.stringify(window.kbState.evalData.title));
-
-    // 화면 그리기 실행
+    // 화면 그리기 실행 -> 데이터가 없으므로 테이블 중앙에 "연동된 데이터가 없습니다." 메시지만 깔끔하게 표시됩니다.
     renderEvalTabsAndTable('title', 'tbodyTitleEval', 'tabsTitleEval');
     renderEvalTabsAndTable('floor', 'tbodyFloorEval', 'tabsFloorEval');
     renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
@@ -247,7 +216,8 @@ function runGroupedRenderTest() {
 // [7] 대장 데이터 -> 표제부 평가 워크시트 연동 (Python sync_building_to_eval 웹 이식)
 // ============================================================================
 function syncTitleData() {
-    // 1. 공공데이터 조회가 완료된 원본 데이터가 있는지 확인 (가상의 kbState.fetchedData 기준)
+    // 1. 공공데이터 조회가 완료된 원본 데이터가 있는지 확인
+    // (api_ledger.js 등의 공공데이터 조회 기능 완료 후 window.kbState.fetchedData 에 값이 들어있어야 합니다.)
     const fetchedData = window.kbState.fetchedData;
     if (!fetchedData || Object.keys(fetchedData).length === 0) {
         alert("연동할 수 없습니다. 먼저 [건축물대장 조회시작]을 완료해 주세요.");
@@ -264,7 +234,7 @@ function syncTitleData() {
     // 3. 사업장(소재지)별 순회하며 데이터 맵핑
     Object.keys(fetchedData).forEach(siteName => {
         const siteData = fetchedData[siteName];
-        // 파이썬 로직: df_title (표제부 상세), df_recap (총괄표제부 정보)
+        // 파이썬 원본 로직: df_title (표제부 상세), df_recap (총괄표제부 정보)
         const dfTitle = siteData["표제부 상세"] || [];
         const dfRecap = siteData["총괄표제부 정보"] || [];
         
@@ -297,7 +267,7 @@ function syncTitleData() {
                 buildYear = parseInt(rowAprDate.substring(0, 4));
             }
 
-            // 파이썬 _create_empty_record 와 동일한 구조 객체 생성
+            // 파이썬 원본 _create_empty_record 와 동일한 구조 객체 생성
             const recordGroup = {
                 "동명칭": dongNm,
                 "부속비율": 20.0,
@@ -332,9 +302,9 @@ function syncTitleData() {
 
     // 4. 중앙 상태 업데이트 및 화면 다시 그리기
     window.kbState.evalData.title = newTitleData;
-    // 연동 직후 첫 번째 탭으로 초기화
+    // 연동 직후 첫 번째 탭으로 화면 전환 세팅
     window.kbState.activeSite.title = Object.keys(newTitleData)[0] || null;
     
     renderEvalTabsAndTable('title', 'tbodyTitleEval', 'tabsTitleEval');
     alert("표제부 데이터 연동이 완료되었습니다.");
-}
+}}
