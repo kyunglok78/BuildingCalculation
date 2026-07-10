@@ -68,7 +68,7 @@ function renderEvalTabsAndTable(mode, tbodyId, tabContainerId) {
 }
 
 // ============================================================================
-// [4] 3단 콤보(그룹핑) 테이블 렌더링 엔진 (인라인 편집 이벤트 추가)
+// [4] 3단 콤보(그룹핑) 테이블 렌더링 엔진 (인라인 편집 + 휴지통 삭제 기능 추가)
 // ============================================================================
 function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
     let grandTotalArea = 0, grandTotalReco = 0, grandTotalCur = 0;
@@ -100,13 +100,18 @@ function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
             const codeDisp = (strctCode && strctCode !== "nan" && strctCode !== "-") ? strctCode : "[ 🔍 더블클릭 ]";
             const depDisp = (depRate === 1.78) ? "[ 🔍 더블클릭 (기본 1.78%) ]" : `${depRate.toFixed(2)}%`;
 
+            // ★ 휴지통 아이콘 추가 (첫 번째 줄인 경우에만 표시하여 3줄 통째로 삭제)
+            const trashIcon = (rIdx === 0) 
+                ? `<i class="fa-solid fa-trash-can" onclick="event.stopPropagation(); deleteEvalItem('${mode}', '${siteName}', ${gIdx})" style="color:#dc3545; margin-left:8px; cursor:pointer;" title="이 동 전체 삭제"></i>` 
+                : '';
+            const dongDisp = `${dongName} ${trashIcon}`;
+
             const trArch = document.createElement('tr');
             trArch.style.backgroundColor = '#ffffff';
             
-            // ★ 변경점: 수정 가능한 칸(td)에 ondblclick 이벤트와 마우스 포인터(cursor:pointer)를 추가했습니다.
             trArch.innerHTML = `
                 <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '일련번호', 'text')">${seq}</td>
-                <td style="color:#0056b3; font-weight:bold; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '동명칭', 'text')">${dongName}</td>
+                <td style="color:#0056b3; font-weight:bold; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '동명칭', 'text')">${dongDisp}</td>
                 <td style="color:#0056b3;">건축공사비</td>
                 <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '용도', 'text')">${usage}</td>
                 <td style="text-align:right; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '연면적', 'number')">${formatArea(area)}</td>
@@ -133,7 +138,7 @@ function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
 
         grandTotalArea += groupArea; grandTotalReco += recoTotal; grandTotalCur += curTotal;
 
-        // [2행: 부속설비] - 부속비율(%) 칸 더블클릭 편집 추가
+        // [2행: 부속설비]
         const trSub = document.createElement('tr');
         trSub.style.backgroundColor = '#f8f9fa';
         trSub.innerHTML = `
@@ -422,4 +427,37 @@ window.openCodePopup = function(mode, siteName, gIdx, rIdx) {
 
 window.openDeprPopup = function(mode, siteName, gIdx, rIdx) {
     alert("🛠️ 감가율 표준 선택 팝업창이 뜰 위치입니다.\n(다음 단계에서 KFPA 기준표를 연결합니다!)");
+};
+
+// ============================================================================
+// [9] 개별 항목 삭제(휴지통) 기능
+// ============================================================================
+window.deleteEvalItem = function(mode, siteName, gIdx) {
+    const siteData = window.kbState.evalData[mode][siteName];
+    let targetName = "";
+    
+    // 데이터 구조(표제부 vs 층별/화협)에 따라 타겟명 추출
+    if (Array.isArray(siteData)) {
+        targetName = siteData[gIdx].동명칭 || "선택한 항목";
+    } else {
+        const keys = Object.keys(siteData);
+        targetName = keys[gIdx];
+    }
+
+    // 실수로 지우지 않도록 한 번 확인
+    if (!confirm(`[${targetName}] 평가 데이터를 완전히 삭제하시겠습니까?`)) return;
+
+    // 실제 데이터 구조에서 안전하게 삭제
+    if (Array.isArray(siteData)) {
+        siteData.splice(gIdx, 1); // 표제부(Array 형태) 삭제
+    } else {
+        const keys = Object.keys(siteData);
+        delete siteData[keys[gIdx]]; // 층별/화협(Object 딕셔너리 형태) 삭제
+    }
+
+    // 삭제 완료 후 금액 재계산 및 테이블 다시 렌더링
+    recalculateValuation(mode, siteName);
+    const tbodyId = mode === 'title' ? 'tbodyTitleEval' : (mode === 'floor' ? 'tbodyFloorEval' : 'tbodyKfpaEval');
+    const tabId = mode === 'title' ? 'tabsTitleEval' : (mode === 'floor' ? 'tabsFloorEval' : 'tabsKfpaEval');
+    renderEvalTabsAndTable(mode, tbodyId, tabId);
 };
