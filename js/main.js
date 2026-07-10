@@ -336,4 +336,4 @@ function syncTitleData() {
     
     renderEvalTabsAndTable('title', 'tbodyTitleEval', 'tabsTitleEval');
     alert("표제부 데이터 연동이 완료되었습니다.");
-}}
+}
