@@ -176,7 +176,9 @@ function executeLedgerRender(results) {
     const tabsContainer = document.getElementById('slide3Tabs');
 
     let hasActive = false;
-    window.fetchedData = {}; 
+    
+    // ★ 1차 수정: 저장소를 kbState.fetchedData 로 정확히 연결 ★
+    window.kbState.fetchedData = {}; 
 
     results.forEach(res => {
         const { index, locName, locAddr, totalData, titleData, floorData, isSuccess, apiErrMsg } = res;
@@ -200,7 +202,8 @@ function executeLedgerRender(results) {
                 });
             }
 
-            window.fetchedData[locName] = { address: locAddr, recap: totalData, title: titleData, floor: floorData };
+            // ★ 2차 수정: 여기서도 kbState.fetchedData 에 담기도록 변경 ★
+            window.kbState.fetchedData[locName] = { address: locAddr, recap: totalData, title: titleData, floor: floorData };
 
             const trTotal = totalData.map(d => `<tr><td>${d.platPlc || locAddr}</td><td>${d.bldNm||'-'}</td><td>${d.mainPurpsCdNm||'-'}</td><td>${formatNumber(d.mainBldCnt||'0')}</td><td>${formatNumber(d.subBldCnt||'0')}</td><td>${formatNumber(d.totArea||'0')}</td><td>${formatDate(d.pmsDay||'-')}</td><td>${formatDate(d.stcnsDay||'-')}</td><td>${formatDate(d.useAprDay||'-')}</td></tr>`).join('');
             const trTitle = titleData.map(d => `<tr><td>${d.dongNm||'-'}</td><td>${d.mainPurpsCdNm||'-'}</td><td>${formatNumber(d.grndFlrCnt||'0')}</td><td>${formatNumber(d.ugrndFlrCnt||'0')}</td><td>${formatNumber(d.totArea||'0')}</td><td>${formatNumber(d.heit||'0')}</td><td>${d.strctCdNm||'-'}</td><td>${d.roofCdNm || '기타지붕'}</td><td>${formatDate(d.useAprDay||'-')}</td></tr>`).join('');
@@ -233,11 +236,14 @@ function executeLedgerRender(results) {
 // 엑셀 내보내기 
 // ==========================================
 window.exportLedgerToExcel = function() {
-    if (!window.fetchedData || Object.keys(window.fetchedData).length === 0) {
+    // ★ 3차 수정: 엑셀 내보내기도 kbState.fetchedData 를 바라보도록 변경 ★
+    if (!window.kbState.fetchedData || Object.keys(window.kbState.fetchedData).length === 0) {
         alert("내보낼 데이터가 존재하지 않습니다. 먼저 조회해 주세요."); return;
     }
     let csvContent = "\uFEFF"; 
-    for (const [siteName, data] of Object.entries(window.fetchedData)) {
+    
+    // ★ 4차 수정 ★
+    for (const [siteName, data] of Object.entries(window.kbState.fetchedData)) { 
         csvContent += `[사업장명: ${siteName}]\n주소: ${data.address}\n\n`;
         if (data.recap && data.recap.length > 0) {
             csvContent += "■ 총괄표제부 정보\n대지위치,건물명,주용도,주건축물수,부속건축물수,연면적(m²),허가일,착공일,사용승인일\n";
@@ -262,69 +268,4 @@ window.exportLedgerToExcel = function() {
     a.click();
 };
 
-// ==========================================
-// [신규] 표제부 / 층별 데이터 워크시트 연동 기능
-// ==========================================
-window.syncTitleData = function() {
-    if (!window.fetchedData || Object.keys(window.fetchedData).length === 0) {
-        alert("연동할 표제부 데이터가 없습니다. 먼저 대장을 조회해 주세요."); return;
-    }
-    const tbody = document.querySelector('#slide4 .data-table tbody');
-    if(!tbody) return;
-    tbody.innerHTML = '';
-    
-    let seq = 1;
-    for (const [siteName, data] of Object.entries(window.fetchedData)) {
-        if (data.title && data.title.length > 0) {
-            tbody.insertAdjacentHTML('beforeend', `<tr style="background:#e9ecef;"><td colspan="12" style="font-weight:bold; text-align:left; padding-left:15px; color:#1C5691;">🏢 사업장: ${siteName}</td></tr>`);
-            data.title.forEach(tRow => {
-                const dongNm = tRow.dongNm || '본동';
-                const purps = tRow.mainPurpsCdNm || '-';
-                const area = tRow.totArea || '0';
-                const strct = tRow.strctCdNm || '-';
-                
-                const tr = `<tr>
-                    <td>${seq++}</td><td>${dongNm}</td><td>표제부</td><td>${purps}</td><td>${formatNumber(area)}</td><td>${strct}</td>
-                    <td><input type="text" style="width:100px; text-align:center; border:1px solid #ccc; padding:2px;" placeholder="코드입력"></td>
-                    <td>0</td><td>1.0</td><td>0</td>
-                    <td><input type="text" style="width:50px; text-align:center; border:1px solid #ccc; padding:2px;" value="30">%</td>
-                    <td style="font-weight:bold; color:#d32f2f;">0</td>
-                </tr>`;
-                tbody.insertAdjacentHTML('beforeend', tr);
-            });
-        }
-    }
-    alert("✅ 표제부 데이터가 워크시트에 성공적으로 연동되었습니다.");
-};
-
-window.syncFloorData = function() {
-    if (!window.fetchedData || Object.keys(window.fetchedData).length === 0) {
-        alert("연동할 층별 데이터가 없습니다. 먼저 대장을 조회해 주세요."); return;
-    }
-    const tbody = document.querySelector('#slide5 .data-table tbody');
-    if(!tbody) return;
-    tbody.innerHTML = '';
-    
-    let seq = 1;
-    for (const [siteName, data] of Object.entries(window.fetchedData)) {
-        if (data.floor && data.floor.length > 0) {
-            tbody.insertAdjacentHTML('beforeend', `<tr style="background:#e9ecef;"><td colspan="11" style="font-weight:bold; text-align:left; padding-left:15px; color:#1C5691;">🏢 사업장: ${siteName}</td></tr>`);
-            data.floor.forEach(fRow => {
-                const dongNm = fRow.dongNm || '본동';
-                const flrText = `${fRow.flrGbCdNm||''} ${fRow.flrNoNm||''}층`.trim();
-                const purps = fRow.etcPurps || '-';
-                const area = fRow.area || '0';
-                
-                const tr = `<tr>
-                    <td>${seq++}</td><td>${dongNm}</td><td>${flrText}</td><td>${purps}</td><td>${formatNumber(area)}</td>
-                    <td><input type="text" style="width:100px; text-align:center; border:1px solid #ccc; padding:2px;" placeholder="코드입력"></td>
-                    <td>0</td><td>1.0</td><td>0</td>
-                    <td><input type="text" style="width:50px; text-align:center; border:1px solid #ccc; padding:2px;" value="30">%</td>
-                    <td style="font-weight:bold; color:#d32f2f;">0</td>
-                </tr>`;
-                tbody.insertAdjacentHTML('beforeend', tr);
-            });
-        }
-    }
-    alert("✅ 층별 데이터가 워크시트에 성공적으로 연동되었습니다.");
-};
+// ❌ 파일의 가장 끝에 있던 window.syncTitleData 와 window.syncFloorData 함수는 깨끗하게 지웠습니다!
