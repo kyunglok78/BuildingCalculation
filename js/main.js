@@ -4,13 +4,29 @@
 window.kbState = {
     evalData: { title: {}, floor: {}, kfpa: {} }, 
     activeSite: { title: null, floor: null, kfpa: null }, // 모드별로 현재 선택된 탭(사업장) 저장
-    fetchedData: {} // API 조회를 통해 가져온 실제 건축물대장 데이터를 보관할 객체 추가
+    fetchedData: {}, // API 조회를 통해 가져온 실제 건축물대장 데이터
+    sortRev: { title: {}, floor: {}, kfpa: {} } // ★ 동명칭 정렬 상태(오름차순/내림차순) 기억
 };
 
 window.onload = function() {
     if (typeof goToSlide === 'function') goToSlide('slide2');
     
-    // 페이지 로드 시 가짜 데이터를 넣지 않고, 빈 상태로 렌더링 함수만 호출하여 초기화합니다.
+    // ★ 동명칭 헤더를 찾아서 클릭(정렬) 이벤트를 자동으로 연결합니다.
+    document.querySelectorAll('th').forEach(th => {
+        if (th.innerText.includes('동명칭')) {
+            th.style.cursor = 'pointer';
+            th.title = "클릭하여 오름차순/내림차순 정렬";
+            th.onclick = function() {
+                const tableId = th.closest('table').id;
+                let mode = 'title';
+                if (tableId.includes('Floor')) mode = 'floor';
+                if (tableId.includes('Kfpa')) mode = 'kfpa';
+                sortEvalData(mode, th);
+            };
+        }
+    });
+
+    // 페이지 로드 시 가짜 데이터를 넣지 않고 초기화
     runGroupedRenderTest();
 };
 
@@ -457,6 +473,53 @@ window.deleteEvalItem = function(mode, siteName, gIdx) {
 
     // 삭제 완료 후 금액 재계산 및 테이블 다시 렌더링
     recalculateValuation(mode, siteName);
+    const tbodyId = mode === 'title' ? 'tbodyTitleEval' : (mode === 'floor' ? 'tbodyFloorEval' : 'tbodyKfpaEval');
+    const tabId = mode === 'title' ? 'tabsTitleEval' : (mode === 'floor' ? 'tabsFloorEval' : 'tabsKfpaEval');
+    renderEvalTabsAndTable(mode, tbodyId, tabId);
+};
+
+// ============================================================================
+// [10] 동명칭 오름차순/내림차순 정렬 기능
+// ============================================================================
+window.sortEvalData = function(mode, thElement) {
+    const siteName = window.kbState.activeSite[mode];
+    if (!siteName) return;
+
+    const targetData = window.kbState.evalData[mode][siteName];
+    if (!targetData) return;
+
+    // 1. 현재 정렬 상태 확인 및 방향 뒤집기 (Toggle)
+    const isRev = !!window.kbState.sortRev[mode][siteName];
+    window.kbState.sortRev[mode][siteName] = !isRev;
+
+    // 2. 데이터 구조에 맞게 똑똑한 정렬(Natural Sort) 수행
+    const sortLogic = (a, b) => {
+        // {numeric: true} 옵션: '10동'이 '2동'보다 뒤에 오도록 자연스럽게 정렬합니다.
+        return !isRev 
+            ? a.localeCompare(b, undefined, {numeric: true}) 
+            : b.localeCompare(a, undefined, {numeric: true});
+    };
+
+    if (Array.isArray(targetData)) {
+        // 표제부 (배열 구조) 정렬
+        targetData.sort((a, b) => sortLogic(a.동명칭 || "", b.동명칭 || ""));
+    } else {
+        // 층별, 화협 (딕셔너리 구조) 정렬
+        const sortedKeys = Object.keys(targetData).sort(sortLogic);
+        const newData = {};
+        sortedKeys.forEach(k => { newData[k] = targetData[k]; });
+        window.kbState.evalData[mode][siteName] = newData;
+    }
+
+    // 3. 헤더 텍스트 화살표 변경 시각효과 (▲ / ▼)
+    const allTh = thElement.closest('tr').querySelectorAll('th');
+    allTh.forEach(th => {
+        if(th.innerText.includes('동명칭')) {
+            th.innerText = !isRev ? '동명칭 ▲' : '동명칭 ▼';
+        }
+    });
+
+    // 4. 정렬된 데이터로 테이블 갱신
     const tbodyId = mode === 'title' ? 'tbodyTitleEval' : (mode === 'floor' ? 'tbodyFloorEval' : 'tbodyKfpaEval');
     const tabId = mode === 'title' ? 'tabsTitleEval' : (mode === 'floor' ? 'tabsFloorEval' : 'tabsKfpaEval');
     renderEvalTabsAndTable(mode, tbodyId, tabId);
