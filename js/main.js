@@ -623,6 +623,16 @@ window.quickSaveProject = function() {
     URL.revokeObjectURL(url);
 };
 
+// ============================================================================
+// [10] ★ 프로젝트 임시 저장 및 불러오기 (화면 완벽 복구 추가)
+// ============================================================================
+window.quickSaveProject = function() {
+    // ... 기존 quickSaveProject 코드는 그대로 유지합니다 ...
+};
+
+// ----------------------------------------------------------------------------
+// 아래의 기존 window.quickLoadProject 전체를 새로 드린 코드로 대체합니다.
+// ----------------------------------------------------------------------------
 window.quickLoadProject = function(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -646,11 +656,12 @@ window.quickLoadProject = function(event) {
                 if (evalYearInput) evalYearInput.value = projectData.evalYear;
             }
 
-            // ★ [핵심 추가] 3. 저장된 주소 데이터를 바탕으로 HTML 소재지 목록 다시 그리기
-            if (projectData.locations && projectData.locations.length > 0) {
-                const listBox = document.getElementById('locationListBox');
-                if (listBox) {
-                    listBox.innerHTML = ''; // 기존 목록 비우기
+            // 3. 저장된 주소 데이터를 바탕으로 HTML 소재지 목록 다시 그리기
+            const listBox = document.getElementById('locationListBox');
+            if (listBox) {
+                listBox.innerHTML = ''; 
+                
+                if (projectData.locations && projectData.locations.length > 0) {
                     projectData.locations.forEach((loc, idx) => {
                         const row = document.createElement('div');
                         row.className = 'list-row';
@@ -666,10 +677,29 @@ window.quickLoadProject = function(event) {
                         `;
                         listBox.appendChild(row);
                     });
-                    
-                    // 소재지 개수 인풋값 동기화
                     const locCountInput = document.getElementById('locationCount');
                     if(locCountInput) locCountInput.value = projectData.locations.length;
+                } 
+                else if (projectData.kbState && projectData.kbState.fetchedData) {
+                    const siteNames = Object.keys(projectData.kbState.fetchedData);
+                    siteNames.forEach((siteName, idx) => {
+                        const address = projectData.kbState.fetchedData[siteName].address || "";
+                        const row = document.createElement('div');
+                        row.className = 'list-row';
+                        row.innerHTML = `
+                            <input type="checkbox" class="row-checkbox" checked><span>소재지 ${idx + 1}</span>
+                            <input type="text" class="input-short" value="${siteName}" placeholder="예: 공장/지점명">
+                            <button type="button" class="btn-blue" onclick="openAddressModal(this); return false;"><i class="fa-solid fa-magnifying-glass"></i> 주소 검색</button>
+                            <span>주소</span><input type="text" class="input-long addr-input" value="${address}" placeholder="주소를 검색해 주세요" readonly>
+                            <div class="check-group">
+                                <label class="check-item"><input type="checkbox" class="check-ledger" checked onchange="updateMenuState()"> 건축물대장</label>
+                                <label class="check-item"><input type="checkbox" class="check-kfpa" checked onchange="updateMenuState()"> 화협자료평가</label>
+                            </div>
+                        `;
+                        listBox.appendChild(row);
+                    });
+                    const locCountInput = document.getElementById('locationCount');
+                    if(locCountInput) locCountInput.value = siteNames.length;
                 }
             }
 
@@ -682,7 +712,5 @@ window.quickLoadProject = function(event) {
         }
     };
     reader.readAsText(file);
-    
-    // 동일한 파일을 연속으로 열 수 있도록 input 초기화
     event.target.value = ''; 
-};
+};};
