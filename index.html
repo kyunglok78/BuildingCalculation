@@ -79,6 +79,30 @@
     </div>
 </div>
 
+<div class="modal-overlay" id="deprSearchModal" style="display:none; z-index: 1000; justify-content: center; align-items: center;">
+    <div class="modal-content" style="width: 800px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+        <div class="modal-header" style="background:#00695C; color:white; padding:15px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight:bold;"><i class="fa-solid fa-list-check"></i> 표준 감가율 선택 (내용연수 기준 매칭 데이터 자동 계산)</span>
+            <i class="fa-solid fa-xmark modal-close" style="cursor:pointer; font-size:18px;" onclick="closeDeprModal()"></i>
+        </div>
+        <div class="modal-body" style="padding: 20px; background:#f4f5f7;">
+            <div style="height: 350px; overflow-y: auto; background:#fff; border:1px solid #ddd; border-radius:4px; margin-bottom: 15px;">
+                <table class="data-table" id="deprSearchTable" style="margin-bottom:0;">
+                    <thead style="position: sticky; top: 0; z-index: 1; background: #eee;">
+                        <tr>
+                            <th>건물 구조 (재질)</th><th>건물 용도 카테고리</th><th>내용연수(년)</th><th>감가율(%)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="deprSearchTbody"></tbody>
+                </table>
+            </div>
+            <div style="text-align: right;">
+                <button type="button" class="btn-dark" style="background:#17A2B8; padding:8px 25px; font-size: 14px; border:none;" onclick="applySelectedDepr()">⚡ 선택 반영</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="slide-container" id="slide2">
     <div class="window-header"><div class="window-title"><i class="fa-solid fa-bolt"></i> KB손해보험 건물 가액평가 시스템</div><div class="window-controls"><i class="fa-solid fa-minus"></i><i class="fa-regular fa-square"></i><i class="fa-solid fa-xmark"></i></div></div>
     <div class="app-window">
@@ -137,12 +161,12 @@
                 <div class="input-row mb-20" style="gap: 15px;">
                     <button type="button" class="btn-dark" style="width:180px;" onclick="document.getElementById('unitCostFile').click(); return false;">신축단가표 불러오기</button>
                     <input type="text" id="unitCostPath" class="input-box" style="flex:1; background:#f8f9fa;" value="" placeholder="선택된 파일 없음" readonly>
-                    <input type="file" id="unitCostFile" style="display: none;" accept=".xlsx, .xls, .csv" onchange="loadCostExcel(event)">
+                    <input type="file" id="unitCostFile" style="display: none;" accept=".xlsx, .xls, .csv" onclick="this.value=null;" onchange="loadCostExcel(event)">
                 </div>
                 <div class="input-row" style="margin-bottom:0; gap: 15px;">
                     <button type="button" class="btn-dark" style="width:180px;" onclick="document.getElementById('priceIndexFile').click(); return false;">물가지수 불러오기</button>
                     <input type="text" id="priceIndexPath" class="input-box" style="flex:1; background:#f8f9fa;" value="" placeholder="선택된 파일 없음" readonly>
-                    <input type="file" id="priceIndexFile" style="display: none;" accept=".xlsx, .xls" onchange="document.getElementById('priceIndexPath').value = this.files[0] ? this.files[0].name : ''">
+                    <input type="file" id="priceIndexFile" style="display: none;" accept=".xlsx, .xls" onclick="this.value=null;" onchange="document.getElementById('priceIndexPath').value = this.files[0] ? this.files[0].name : ''">
                 </div>
             </div>
             <div style="text-align: right; margin-top: 10px;"><button type="button" class="btn-exec" onclick="goToSlide('slide3')"><i class="fa-solid fa-arrow-right"></i> 정보 저장 후 다음 단계로</button></div>
@@ -239,10 +263,10 @@
             <div class="toolbar" style="background:#fff; border:1px solid #ccc; margin-bottom:10px; display:flex; justify-content: space-between; align-items: center; padding: 10px;">
                 <div style="display:flex; align-items: center; gap: 10px;">
                     <span style="font-size:13px; font-weight:bold;">평가시점 연도:</span>
-                    <input type="number" id="evalYear" value="2026" style="width: 70px; padding: 5px; border: 1px solid #ccc; border-radius:3px;">
-                    <button type="button" style="background:#007BFF; color:white; border:none; padding:6px 12px; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold;">⚡ 구조코드 일괄적용</button>
-                    <button type="button" style="background:#28A745; color:white; border:none; padding:6px 12px; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold;">⚡ 감가율 일괄적용</button>
-                    <button type="button" style="background:#17A2B8; color:white; border:none; padding:6px 12px; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold;">⚡ 부속비율 일괄적용</button>
+                    <input type="number" id="evalYear" value="2026" style="width: 70px; padding: 5px; border: 1px solid #ccc; border-radius:3px;" onchange="recalculateValuation('title', window.kbState.activeSite.title); renderEvalTabsAndTable('title', 'tbodyTitleEval', 'tabsTitleEval');">
+                    <button type="button" style="background:#007BFF; color:white; border:none; padding:6px 12px; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold;" onclick="openCodeModal('title', window.kbState.activeSite.title, null, null)">⚡ 구조코드 일괄적용</button>
+                    <button type="button" style="background:#28A745; color:white; border:none; padding:6px 12px; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold;" onclick="openDeprModal('title', window.kbState.activeSite.title, null, null)">⚡ 감가율 일괄적용</button>
+                    <button type="button" style="background:#17A2B8; color:white; border:none; padding:6px 12px; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold;" onclick="batchApplyRatio('title', window.kbState.activeSite.title)">⚡ 부속비율 일괄적용</button>
                 </div>
                 <div><button type="button" class="btn-yellow" onclick="addManualItem('title')">➕ 항목 추가</button></div>
             </div>
@@ -252,8 +276,8 @@
                     <thead>
                         <tr>
                             <th>일련번호</th><th>동명칭 ▲▼</th><th>구분</th><th>용도</th><th>연면적(㎡)</th>
-                            <th>구조명</th><th>준공연도</th><th>▶ 구조코드(필수선택) ◀</th><th>단가(원)</th><th>노무비</th>
-                            <th>물가지수</th><th>재조달가액</th><th>▶ 감가율(필수선택) ◀</th><th>잔가율(%)</th><th>현재가액</th>
+                            <th>구조명</th><th>준공연도</th><th>▶ 구조코드(선택) ◀</th><th>단가(원)</th><th>노무비</th>
+                            <th>물가지수</th><th>재조달가액</th><th>▶ 감가율(선택) ◀</th><th>잔가율(%)</th><th>현재가액</th>
                         </tr>
                     </thead>
                     <tbody id="tbodyTitleEval"></tbody>
@@ -296,7 +320,12 @@
                 <span class="bold">📋 층별 기반 가액평가 워크시트</span>
                 <button type="button" class="btn-yellow">🔄 층별 데이터 연동하기</button>
             </div>
-            <div class="toolbar" style="background:#fff; border:1px solid #ccc; margin-bottom:10px; display:flex; justify-content: flex-end; padding: 10px;">
+            <div class="toolbar" style="background:#fff; border:1px solid #ccc; margin-bottom:10px; display:flex; justify-content: space-between; align-items: center; padding: 10px;">
+                <div style="display:flex; align-items: center; gap: 10px;">
+                    <button type="button" style="background:#007BFF; color:white; border:none; padding:6px 12px; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold;" onclick="openCodeModal('floor', window.kbState.activeSite.floor, null, null)">⚡ 구조코드 일괄적용</button>
+                    <button type="button" style="background:#28A745; color:white; border:none; padding:6px 12px; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold;" onclick="openDeprModal('floor', window.kbState.activeSite.floor, null, null)">⚡ 감가율 일괄적용</button>
+                    <button type="button" style="background:#17A2B8; color:white; border:none; padding:6px 12px; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold;" onclick="batchApplyRatio('floor', window.kbState.activeSite.floor)">⚡ 부속비율 일괄적용</button>
+                </div>
                 <button type="button" class="btn-yellow" onclick="addManualItem('floor')">➕ 항목 추가</button>
             </div>
             <div id="tabsFloorEval" style="display: flex; margin-bottom: 0; border-bottom: 2px solid #1C5691;"></div>
@@ -305,8 +334,8 @@
                     <thead>
                         <tr>
                             <th>일련번호</th><th>동명칭 ▲▼</th><th>구분</th><th>용도</th><th>연면적(㎡)</th>
-                            <th>구조명</th><th>준공연도</th><th>▶ 구조코드(필수선택) ◀</th><th>단가(원)</th><th>노무비</th>
-                            <th>물가지수</th><th>재조달가액</th><th>▶ 감가율(필수선택) ◀</th><th>잔가율(%)</th><th>현재가액</th>
+                            <th>구조명</th><th>준공연도</th><th>▶ 구조코드(선택) ◀</th><th>단가(원)</th><th>노무비</th>
+                            <th>물가지수</th><th>재조달가액</th><th>▶ 감가율(선택) ◀</th><th>잔가율(%)</th><th>현재가액</th>
                         </tr>
                     </thead>
                     <tbody id="tbodyFloorEval"></tbody>
@@ -349,7 +378,12 @@
                 <span class="bold">📋 화협 데이터 평가 워크시트</span>
                 <button type="button" class="btn-yellow">🔄 화협 데이터 갱신하기</button>
             </div>
-            <div class="toolbar" style="background:#fff; border:1px solid #ccc; margin-bottom:10px; display:flex; justify-content: flex-end; padding: 10px;">
+            <div class="toolbar" style="background:#fff; border:1px solid #ccc; margin-bottom:10px; display:flex; justify-content: space-between; align-items: center; padding: 10px;">
+                <div style="display:flex; align-items: center; gap: 10px;">
+                    <button type="button" style="background:#007BFF; color:white; border:none; padding:6px 12px; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold;" onclick="openCodeModal('kfpa', window.kbState.activeSite.kfpa, null, null)">⚡ 구조코드 일괄적용</button>
+                    <button type="button" style="background:#28A745; color:white; border:none; padding:6px 12px; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold;" onclick="openDeprModal('kfpa', window.kbState.activeSite.kfpa, null, null)">⚡ 감가율 일괄적용</button>
+                    <button type="button" style="background:#17A2B8; color:white; border:none; padding:6px 12px; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold;" onclick="batchApplyRatio('kfpa', window.kbState.activeSite.kfpa)">⚡ 부속비율 일괄적용</button>
+                </div>
                 <button type="button" class="btn-yellow" onclick="addManualItem('kfpa')">➕ 항목 추가</button>
             </div>
             <div id="tabsKfpaEval" style="display: flex; margin-bottom: 0; border-bottom: 2px solid #1C5691;"></div>
@@ -358,8 +392,8 @@
                     <thead>
                         <tr>
                             <th>일련번호</th><th>동명칭 ▲▼</th><th>구분</th><th>용도</th><th>연면적(㎡)</th>
-                            <th>구조명</th><th>준공연도</th><th>▶ 구조코드(필수선택) ◀</th><th>단가(원)</th><th>노무비</th>
-                            <th>물가지수</th><th>재조달가액</th><th>▶ 감가율(필수선택) ◀</th><th>잔가율(%)</th><th>현재가액</th>
+                            <th>구조명</th><th>준공연도</th><th>▶ 구조코드(선택) ◀</th><th>단가(원)</th><th>노무비</th>
+                            <th>물가지수</th><th>재조달가액</th><th>▶ 감가율(선택) ◀</th><th>잔가율(%)</th><th>현재가액</th>
                         </tr>
                     </thead>
                     <tbody id="tbodyKfpaEval"></tbody>
