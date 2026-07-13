@@ -372,7 +372,7 @@ window.recalculateValuation = function(mode, siteName) {
 };
 
 // ============================================================================
-// [7] ★ 신축단가 엑셀 로드 및 구조코드 하이브리드 연동
+// [7] ★ 신축단가 엑셀 로드 및 구조코드 하이브리드 연동 (다중 헤더 밀림 버그 수정)
 // ============================================================================
 window.loadCostExcel = function(event) {
     const file = event.target.files[0];
@@ -386,25 +386,61 @@ window.loadCostExcel = function(event) {
             const workbook = XLSX.read(data, {type: 'array'});
             let targetSheetName = workbook.SheetNames.find(n => n.includes("용도")) || workbook.SheetNames[0];
             const worksheet = workbook.Sheets[targetSheetName];
+            // 엑셀을 2D 배열로 변환
             const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: "-"});
             
+            // ★ 똑똑한 컬럼(열) 인덱스 매핑 (2줄 이상 병합된 헤더의 밀림 현상 완벽 방지)
+            const cols = {};
+            for (let r = 0; r < Math.min(jsonData.length, 10); r++) {
+                jsonData[r].forEach((cell, cIdx) => {
+                    let text = String(cell).replace(/\s/g, '');
+                    if(text.includes('대분류') && cols['대분류']===undefined) cols['대분류'] = cIdx;
+                    if(text.includes('중분류') && cols['중분류']===undefined) cols['중분류'] = cIdx;
+                    if(text.includes('소분류') && cols['소분류']===undefined) cols['소분류'] = cIdx;
+                    if(text.includes('용도') && cols['용도']===undefined) cols['용도'] = cIdx;
+                    if((text === '구조' || text.includes('건물구조')) && cols['구조']===undefined) cols['구조'] = cIdx;
+                    if(text.includes('급수') && cols['급수']===undefined) cols['급수'] = cIdx;
+                    // '단가'와 '노무비'라는 글자가 있는 정확한 열을 핀포인트로 찾아냅니다.
+                    if(text.includes('단가') && cols['단가']===undefined) cols['단가'] = cIdx;
+                    if(text.includes('노무비') && cols['노무비']===undefined) cols['노무비'] = cIdx;
+                });
+            }
+            
+            // 혹시라도 헤더에 글자가 없어 못 찾았을 경우 파이썬 원본의 하드코딩 인덱스를 백업으로 사용
+            if(cols['대분류']===undefined) cols['대분류']=0;
+            if(cols['단가']===undefined) cols['단가']=26;
+            if(cols['노무비']===undefined) cols['노무비']=43;
+
+            // 실제 데이터가 시작되는 줄(Row) 찾기
             let startRow = 0;
             for(let i=0; i<jsonData.length; i++) {
                 const rowStr = jsonData[i].join("").replace(/\s/g, "");
-                if(rowStr.includes("분류번호") || rowStr.includes("용도") || rowStr.includes("대분류")) { startRow = i; break; }
+                // '분류번호' 문자열이나 '1.일반주택' 데이터가 보이면 거기가 데이터 시작 지점 근처
+                if(rowStr.includes("분류번호") || rowStr.includes("1.일반주택") || rowStr.includes("1-1-1-1")) { 
+                    if(!rowStr.includes("분류번호")) startRow = i; 
+                    else startRow = i + 1; // 분류번호 텍스트 다음 줄부터 시작
+                    break; 
+                }
             }
             
-            const headerRow = jsonData[startRow];
-            const findCol = (k, d) => { const idx = headerRow.findIndex(val => String(val).includes(k)); return idx !== -1 ? idx : d; };
-            const cols = { '대분류': findCol('대분류', 0), '중분류': findCol('중분류', 1), '소분류': findCol('소분류', 2), '용도': findCol('용도', 3), '구조': findCol('구조', 4), '급수': findCol('급수', 5), '단가': findCol('단가', 26), '노무비': findCol('노무비', 43) };
-            
             window.kbState.costData = [];
-            for(let i = startRow + 2; i < jsonData.length; i++) {
+            
+            // 데이터 시작점부터 끝까지 순회하며 정확하게 매핑된 열(Column)의 데이터를 꽂아 넣음
+            for(let i = startRow; i < jsonData.length; i++) {
                 const row = jsonData[i];
                 if(!row || row.length === 0 || row.join("").replace(/-/g,"").trim() === "") continue;
+                // 빈 줄(대분류, 중분류 없는 줄) 건너뛰기
+                if(String(row[cols['중분류']]).replace(/-/g,"").trim() === "") continue;
+
                 window.kbState.costData.push({
-                    '대분류': row[cols['대분류']], '중분류': row[cols['중분류']], '소분류': row[cols['소분류']], '용도': row[cols['용도']], '구조': row[cols['구조']], '급수': row[cols['급수']],
-                    '단가': parseFloat(String(row[cols['단가']]).replace(/,/g, '')) || 0, '노무비': parseFloat(String(row[cols['노무비']]).replace(/,/g, '')) || 0
+                    '대분류': row[cols['대분류']], 
+                    '중분류': row[cols['중분류']], 
+                    '소분류': row[cols['소분류']], 
+                    '용도': row[cols['용도']], 
+                    '구조': row[cols['구조']], 
+                    '급수': row[cols['급수']],
+                    '단가': parseFloat(String(row[cols['단가']]).replace(/,/g, '')) || 0,
+                    '노무비': parseFloat(String(row[cols['노무비']]).replace(/,/g, '')) || 0
                 });
             }
             alert(`✅ 신축단가표 분석 완료! (총 ${window.kbState.costData.length}건 데이터 탑재)`);
@@ -413,7 +449,7 @@ window.loadCostExcel = function(event) {
         }
     };
     reader.readAsArrayBuffer(file);
-    event.target.value = ''; // 같은 파일 재선택 허용
+    event.target.value = ''; // 동일한 파일 재선택 허용
 };
 
 window.applyCodeToRecord = function(code, mode, siteName, gIdx, rIdx, skipRender=false) {
@@ -425,11 +461,11 @@ window.applyCodeToRecord = function(code, mode, siteName, gIdx, rIdx, skipRender
             if(matched) { record['단가'] = matched['단가']; record['노무비'] = matched['노무비']; }
         }
     };
-    if (gIdx === null || rIdx === null) { // 일괄적용
+    if (gIdx === null || rIdx === null) { 
         if(!siteData) return;
         if (Array.isArray(siteData)) siteData.forEach(group => group.records.forEach(updateRecord));
         else Object.values(siteData).forEach(group => group.records.forEach(updateRecord));
-    } else { // 개별적용
+    } else { 
         updateRecord(Array.isArray(siteData) ? siteData[gIdx].records[rIdx] : siteData[Object.keys(siteData)[gIdx]].records[rIdx]);
     }
     recalculateValuation(mode, siteName); 
@@ -543,4 +579,79 @@ window.batchApplyRatio = function(mode, siteName) {
     recalculateValuation(mode, siteName);
     renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
     alert(`부속비율이 ${rate}%로 일괄 반영되었습니다.`);
+};
+
+// ============================================================================
+// [10] ★ 프로젝트 임시 저장 및 불러오기 (평가 데이터 누락 버그 수정)
+// ============================================================================
+window.quickSaveProject = function() {
+    // 평가 데이터나 대장 조회 데이터가 존재하는지 확인
+    const hasEvalData = Object.keys(window.kbState.evalData.title).length > 0 || 
+                        Object.keys(window.kbState.evalData.floor).length > 0 || 
+                        Object.keys(window.kbState.evalData.kfpa).length > 0;
+                        
+    if (Object.keys(window.kbState.fetchedData).length === 0 && !hasEvalData) {
+        alert("저장할 데이터가 존재하지 않습니다. 대장 조회나 평가를 먼저 진행해 주세요.");
+        return;
+    }
+
+    // 일반정보 화면의 값들 수집
+    const contractorInputs = document.querySelectorAll('.contractor-sync');
+    const contractorName = contractorInputs.length > 0 ? contractorInputs[0].value : "";
+    const evalYearInput = document.getElementById('evalYear');
+    const evalYear = evalYearInput ? evalYearInput.value : new Date().getFullYear();
+
+    // ★ 가장 중요한 window.kbState (평가기록, 단가표 등) 전체를 압축하여 저장합니다.
+    const projectData = {
+        version: "1.0",
+        contractor: contractorName,
+        evalYear: evalYear,
+        kbState: window.kbState 
+    };
+
+    // 브라우저 다운로드 기능을 이용해 .kbproj 파일로 추출
+    const blob = new Blob([JSON.stringify(projectData)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    
+    const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, "");
+    a.download = `${contractorName || '가액평가'}_임시저장_${dateStr}.kbproj`;
+    a.click();
+    URL.revokeObjectURL(url);
+};
+
+window.quickLoadProject = function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const projectData = JSON.parse(e.target.result);
+            
+            // 1. 핵심 상태 복원 (표제부, 층별 등 모든 평가 데이터가 살아납니다)
+            if (projectData.kbState) {
+                window.kbState = projectData.kbState;
+            }
+
+            // 2. 일반정보 화면 복원
+            if (projectData.contractor) {
+                document.querySelectorAll('.contractor-sync').forEach(el => el.value = projectData.contractor);
+            }
+            if (projectData.evalYear) {
+                const evalYearInput = document.getElementById('evalYear');
+                if (evalYearInput) evalYearInput.value = projectData.evalYear;
+            }
+
+            // 3. 화면 렌더링 강제 업데이트 (데이터를 기반으로 표를 다시 그림)
+            runGroupedRenderTest();
+
+            alert("✅ 프로젝트 임시 저장 데이터를 완벽하게 불러왔습니다!\n(표제부/층별 평가 탭을 확인해 보세요)");
+        } catch (err) {
+            alert("파일 형식이 잘못되었거나 읽을 수 없습니다.\n(" + err + ")");
+        }
+    };
+    reader.readAsText(file);
+    event.target.value = ''; // 재선택을 위해 파일 입력 폼 초기화
 };
