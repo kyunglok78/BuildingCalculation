@@ -576,7 +576,7 @@ window.batchApplyRatio = function(mode, siteName) {
 };
 
 // ============================================================================
-// [10] ★ 프로젝트 임시 저장 및 불러오기 (화면 완벽 복구 추가 - 수정본)
+// [10] ★ 프로젝트 임시 저장 및 불러오기 (화면 완벽 복구 추가 및 하위호환성 유지)
 // ============================================================================
 window.quickSaveProject = function() {
     const hasEvalData = Object.keys(window.kbState.evalData.title).length > 0 || 
@@ -623,16 +623,6 @@ window.quickSaveProject = function() {
     URL.revokeObjectURL(url);
 };
 
-// ============================================================================
-// [10] ★ 프로젝트 임시 저장 및 불러오기 (화면 완벽 복구 추가)
-// ============================================================================
-window.quickSaveProject = function() {
-    // ... 기존 quickSaveProject 코드는 그대로 유지합니다 ...
-};
-
-// ----------------------------------------------------------------------------
-// 아래의 기존 window.quickLoadProject 전체를 새로 드린 코드로 대체합니다.
-// ----------------------------------------------------------------------------
 window.quickLoadProject = function(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -659,8 +649,9 @@ window.quickLoadProject = function(event) {
             // 3. 저장된 주소 데이터를 바탕으로 HTML 소재지 목록 다시 그리기
             const listBox = document.getElementById('locationListBox');
             if (listBox) {
-                listBox.innerHTML = ''; 
+                listBox.innerHTML = ''; // 기존 목록 비우기
                 
+                // ★ [버전 1.1] 신규 저장 방식 (locations 배열이 있는 경우)
                 if (projectData.locations && projectData.locations.length > 0) {
                     projectData.locations.forEach((loc, idx) => {
                         const row = document.createElement('div');
@@ -680,6 +671,7 @@ window.quickLoadProject = function(event) {
                     const locCountInput = document.getElementById('locationCount');
                     if(locCountInput) locCountInput.value = projectData.locations.length;
                 } 
+                // ★ [버전 1.0 복구용] 과거 저장 방식 (올려주신 고려호이스트 파일용)
                 else if (projectData.kbState && projectData.kbState.fetchedData) {
                     const siteNames = Object.keys(projectData.kbState.fetchedData);
                     siteNames.forEach((siteName, idx) => {
@@ -712,5 +704,7 @@ window.quickLoadProject = function(event) {
         }
     };
     reader.readAsText(file);
+    
+    // 동일한 파일을 연속으로 열 수 있도록 input 초기화
     event.target.value = ''; 
-};};
+};
