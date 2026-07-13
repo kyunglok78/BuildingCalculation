@@ -576,7 +576,7 @@ window.batchApplyRatio = function(mode, siteName) {
 };
 
 // ============================================================================
-// [10] ★ 프로젝트 임시 저장 및 불러오기 (화면 완벽 복구 추가)
+// [10] ★ 프로젝트 임시 저장 및 불러오기 (화면 완벽 복구 추가 - 수정본)
 // ============================================================================
 window.quickSaveProject = function() {
     const hasEvalData = Object.keys(window.kbState.evalData.title).length > 0 || 
@@ -593,10 +593,22 @@ window.quickSaveProject = function() {
     const evalYearInput = document.getElementById('evalYear');
     const evalYear = evalYearInput ? evalYearInput.value : new Date().getFullYear();
 
+    // ★ [핵심 추가] 현재 화면에 있는 소재지(주소) 목록 데이터 긁어오기
+    const locations = [];
+    document.querySelectorAll('#locationListBox .list-row').forEach(row => {
+        locations.push({
+            name: row.querySelector('.input-short') ? row.querySelector('.input-short').value : '',
+            address: row.querySelector('.addr-input') ? row.querySelector('.addr-input').value : '',
+            checkedLedger: row.querySelector('.check-ledger') ? row.querySelector('.check-ledger').checked : true,
+            checkedKfpa: row.querySelector('.check-kfpa') ? row.querySelector('.check-kfpa').checked : true
+        });
+    });
+
     const projectData = {
-        version: "1.0",
+        version: "1.1", // 버전 업그레이드
         contractor: contractorName,
         evalYear: evalYear,
+        locations: locations, // 긁어온 주소 목록을 저장 데이터에 포함!
         kbState: window.kbState 
     };
 
@@ -634,14 +646,43 @@ window.quickLoadProject = function(event) {
                 if (evalYearInput) evalYearInput.value = projectData.evalYear;
             }
 
-            // 3. ★ 핵심: 저장된 데이터를 바탕으로 화면 전체 다시 그리기
+            // ★ [핵심 추가] 3. 저장된 주소 데이터를 바탕으로 HTML 소재지 목록 다시 그리기
+            if (projectData.locations && projectData.locations.length > 0) {
+                const listBox = document.getElementById('locationListBox');
+                if (listBox) {
+                    listBox.innerHTML = ''; // 기존 목록 비우기
+                    projectData.locations.forEach((loc, idx) => {
+                        const row = document.createElement('div');
+                        row.className = 'list-row';
+                        row.innerHTML = `
+                            <input type="checkbox" class="row-checkbox" checked><span>소재지 ${idx + 1}</span>
+                            <input type="text" class="input-short" value="${loc.name}" placeholder="예: 공장/지점명">
+                            <button type="button" class="btn-blue" onclick="openAddressModal(this); return false;"><i class="fa-solid fa-magnifying-glass"></i> 주소 검색</button>
+                            <span>주소</span><input type="text" class="input-long addr-input" value="${loc.address}" placeholder="주소를 검색해 주세요" readonly>
+                            <div class="check-group">
+                                <label class="check-item"><input type="checkbox" class="check-ledger" ${loc.checkedLedger ? 'checked' : ''} onchange="updateMenuState()"> 건축물대장</label>
+                                <label class="check-item"><input type="checkbox" class="check-kfpa" ${loc.checkedKfpa ? 'checked' : ''} onchange="updateMenuState()"> 화협자료평가</label>
+                            </div>
+                        `;
+                        listBox.appendChild(row);
+                    });
+                    
+                    // 소재지 개수 인풋값 동기화
+                    const locCountInput = document.getElementById('locationCount');
+                    if(locCountInput) locCountInput.value = projectData.locations.length;
+                }
+            }
+
+            // 4. 저장된 평가 데이터를 바탕으로 하단 테이블 전체 다시 그리기
             runGroupedRenderTest();
 
-            alert("✅ 프로젝트 임시 저장 데이터를 완벽하게 불러왔습니다!\n(평가 워크시트 탭으로 이동하여 확인해 보세요)");
+            alert("✅ 프로젝트 임시 저장 데이터를 완벽하게 불러왔습니다!\n(소재지 목록 및 평가 워크시트가 모두 복구되었습니다.)");
         } catch (err) {
             alert("파일 형식이 잘못되었거나 읽을 수 없습니다.\n(" + err + ")");
         }
     };
     reader.readAsText(file);
+    
+    // 동일한 파일을 연속으로 열 수 있도록 input 초기화
     event.target.value = ''; 
 };
