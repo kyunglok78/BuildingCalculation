@@ -5,13 +5,14 @@ window.kbState = {
     evalData: { title: {}, floor: {}, kfpa: {} }, 
     activeSite: { title: null, floor: null, kfpa: null }, // 모드별로 현재 선택된 탭(사업장) 저장
     fetchedData: {}, // API 조회를 통해 가져온 실제 건축물대장 데이터
-    sortRev: { title: {}, floor: {}, kfpa: {} } // ★ 동명칭 정렬 상태(오름차순/내림차순) 기억
+    sortRev: { title: {}, floor: {}, kfpa: {} }, // 동명칭 정렬 상태 기억
+    costData: [] // 엑셀에서 읽어올 단가표 데이터 저장소
 };
 
 window.onload = function() {
     if (typeof goToSlide === 'function') goToSlide('slide2');
     
-    // ★ 동명칭 헤더를 찾아서 클릭(정렬) 이벤트를 자동으로 연결합니다.
+    // 동명칭 헤더를 찾아서 클릭(정렬) 이벤트를 자동으로 연결합니다.
     document.querySelectorAll('th').forEach(th => {
         if (th.innerText.includes('동명칭')) {
             th.style.cursor = 'pointer';
@@ -26,8 +27,7 @@ window.onload = function() {
         }
     });
 
-    // 페이지 로드 시 가짜 데이터를 넣지 않고 초기화
-    runGroupedRenderTest();
+    runGroupedRenderTest(); // 빈 테이블 뼈대 초기화
 };
 
 // ============================================================================
@@ -40,7 +40,7 @@ function formatArea(num) {
 }
 
 // ============================================================================
-// [3] ★ 사업장별 탭(Tab) 생성 및 화면 분리 렌더링 ★
+// [3] 사업장별 탭(Tab) 생성 및 화면 분리 렌더링
 // ============================================================================
 function renderEvalTabsAndTable(mode, tbodyId, tabContainerId) {
     const dataObj = window.kbState.evalData[mode];
@@ -79,12 +79,11 @@ function renderEvalTabsAndTable(mode, tbodyId, tabContainerId) {
     });
 
     const selectedData = dataObj[currentSite];
-    // ★ 변경점: 편집 이벤트를 위해 mode와 currentSite를 렌더링 함수에 전달합니다.
     renderEvalTableGrouped(tbody, selectedData, mode, currentSite);
 }
 
 // ============================================================================
-// [4] 3단 콤보(그룹핑) 테이블 렌더링 엔진 (인라인 편집 + 휴지통 삭제 기능 추가)
+// [4] 3단 콤보(그룹핑) 테이블 렌더링 엔진 (인라인 편집 + 삭제 + 하이브리드 검색 결합)
 // ============================================================================
 function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
     let grandTotalArea = 0, grandTotalReco = 0, grandTotalCur = 0;
@@ -113,10 +112,10 @@ function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
 
             groupArea += area;
 
-            const codeDisp = (strctCode && strctCode !== "nan" && strctCode !== "-") ? strctCode : "[ 🔍 더블클릭 ]";
+            const codeDisp = (strctCode && strctCode !== "nan" && strctCode !== "-") ? strctCode : "[ 🔍 검색 / ⌨️ 입력 ]";
             const depDisp = (depRate === 1.78) ? "[ 🔍 더블클릭 (기본 1.78%) ]" : `${depRate.toFixed(2)}%`;
 
-            // ★ 휴지통 아이콘 추가 (첫 번째 줄인 경우에만 표시하여 3줄 통째로 삭제)
+            // 휴지통 아이콘 추가 (첫 번째 줄인 경우에만 표시하여 3줄 통째로 삭제)
             const trashIcon = (rIdx === 0) 
                 ? `<i class="fa-solid fa-trash-can" onclick="event.stopPropagation(); deleteEvalItem('${mode}', '${siteName}', ${gIdx})" style="color:#dc3545; margin-left:8px; cursor:pointer;" title="이 동 전체 삭제"></i>` 
                 : '';
@@ -133,7 +132,7 @@ function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
                 <td style="text-align:right; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '연면적', 'number')">${formatArea(area)}</td>
                 <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '구조', 'text')">${strct}</td>
                 <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '준공연도', 'number')">${buildYear}</td>
-                <td style="color:#0056b3; font-weight:bold; cursor:pointer;" ondblclick="openCodePopup('${mode}', '${siteName}', ${gIdx}, ${rIdx})">${codeDisp}</td>
+                <td style="color:#0056b3; font-weight:bold; cursor:pointer;" ondblclick="editCodeCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx})">${codeDisp}</td>
                 <td style="text-align:right; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '단가', 'number')">${formatPrice(unitPrice)}</td>
                 <td style="text-align:right; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '노무비', 'number')">${formatPrice(laborCost)}</td>
                 <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '물가지수', 'number')">${priceIdx.toFixed(4)}</td>
@@ -185,13 +184,12 @@ function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
 }
 
 // ============================================================================
-// [5] ★ 수동 항목 추가 기능 (무허가 건물 등 추가용) ★
+// [5] 수동 항목 추가 기능
 // ============================================================================
 function addManualItem(mode) {
     const currentSite = window.kbState.activeSite[mode];
     if (!currentSite) return alert("선택된 사업장 탭이 없습니다.");
 
-    // 새로운 3단 콤보 데이터 블록 생성
     const newGroup = {
         동명칭: "신규 추가항목",
         부속비율: 20.0, 재조달_부속: 0, 현재_부속: 0, 재조달_합계: 0, 현재_합계: 0,
@@ -205,41 +203,32 @@ function addManualItem(mode) {
     const targetData = window.kbState.evalData[mode][currentSite];
 
     if (Array.isArray(targetData)) {
-        // 표제부(Title)처럼 배열 구조인 경우
         targetData.push(newGroup);
     } else {
-        // 층별(Floor), 화협(Kfpa)처럼 딕셔너리 구조인 경우 키(Key) 중복 방지
         let key = "신규 추가항목";
         let cnt = 1;
-        while (targetData[key]) {
-            key = `신규 추가항목(${cnt++})`;
-        }
+        while (targetData[key]) key = `신규 추가항목(${cnt++})`;
         newGroup.동명칭 = key;
         newGroup.records[0].동명칭 = key;
         targetData[key] = newGroup;
     }
 
-    // 렌더링 트리거 함수 호출 매핑
     if (mode === 'title') renderEvalTabsAndTable('title', 'tbodyTitleEval', 'tabsTitleEval');
     else if (mode === 'floor') renderEvalTabsAndTable('floor', 'tbodyFloorEval', 'tabsFloorEval');
     else if (mode === 'kfpa') renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
 }
 
 // ============================================================================
-// [6] 초기 화면 렌더링 (가짜 임의 데이터 제거 완료)
+// [6] 초기 화면 렌더링
 // ============================================================================
 function runGroupedRenderTest() {
-    // 기존에 있던 테스트용 임의 데이터(안산공장, 시흥공장 등) 강제 주입 로직을 완전히 삭제했습니다.
-    // 데이터가 없는 빈 상태({} 구조)를 유지하여 최초 화면에 아무것도 보이지 않게 합니다.
-    
-    // 화면 그리기 실행 -> 데이터가 없으므로 테이블 중앙에 "연동된 데이터가 없습니다." 메시지만 깔끔하게 표시됩니다.
     renderEvalTabsAndTable('title', 'tbodyTitleEval', 'tabsTitleEval');
     renderEvalTabsAndTable('floor', 'tbodyFloorEval', 'tabsFloorEval');
     renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
 }
 
 // ============================================================================
-// [7] 대장 데이터 -> 표제부 평가 워크시트 연동 (Python sync_building_to_eval 웹 이식)
+// [7] 대장 데이터 -> 표제부 평가 워크시트 연동
 // ============================================================================
 function syncTitleData() {
     const fetchedData = window.kbState.fetchedData;
@@ -256,14 +245,10 @@ function syncTitleData() {
 
     Object.keys(fetchedData).forEach(siteName => {
         const siteData = fetchedData[siteName];
-        
-        // ★ 1차 수정: 저장소의 키 이름이 한글이 아닌 영문(title, recap)입니다!
         const dfTitle = siteData["title"] || siteData["표제부 상세"] || [];
         const dfRecap = siteData["recap"] || siteData["총괄표제부 정보"] || [];
         
         let fallbackYear = 2000;
-        
-        // ★ 2차 수정: '사용승인일' -> 'useAprDay' (API 영문 키 적용)
         if (dfRecap.length > 0 && dfRecap[0]["useAprDay"]) {
             const aprDate = String(dfRecap[0]["useAprDay"]).replace(/[-/]/g, "").trim();
             if (aprDate.length >= 4 && !isNaN(aprDate.substring(0, 4))) {
@@ -274,7 +259,6 @@ function syncTitleData() {
         const siteRecords = [];
 
         dfTitle.forEach((row, idx) => {
-            // ★ 3차 수정: 모든 데이터를 API 원본 영문 키(dongNm, totArea 등)로 매핑
             let dongNm = (row["dongNm"] || "").trim();
             if (!dongNm || dongNm === "-" || dongNm === "nan") dongNm = "본동";
             
@@ -291,35 +275,17 @@ function syncTitleData() {
             }
 
             const recordGroup = {
-                "동명칭": dongNm,
-                "부속비율": 20.0,
-                "재조달_부속": 0,
-                "재조달_합계": 0,
-                "현재_부속": 0,
-                "현재_합계": 0,
+                "동명칭": dongNm, "부속비율": 20.0, "재조달_부속": 0, "재조달_합계": 0, "현재_부속": 0, "현재_합계": 0,
                 "records": [{
-                    "일련번호": String(idx + 1),
-                    "동명칭": dongNm,
-                    "용도": purps,
-                    "연면적": area,
-                    "구조명": strct,
-                    "준공연도": buildYear,
-                    "구조코드": "-",
-                    "단가": 0.0,
-                    "노무비": 0.0,
-                    "물가지수": 1.0,
-                    "감가율": 1.78,
-                    "재조달_건축": 0,
-                    "잔가율": 100.0,
-                    "현재_건축": 0
+                    "일련번호": String(idx + 1), "동명칭": dongNm, "용도": purps, "연면적": area, "구조명": strct,
+                    "준공연도": buildYear, "구조코드": "-", "단가": 0.0, "노무비": 0.0, "물가지수": 1.0,
+                    "감가율": 1.78, "재조달_건축": 0, "잔가율": 100.0, "현재_건축": 0
                 }]
             };
             siteRecords.push(recordGroup);
         });
 
-        if (siteRecords.length > 0) {
-            newTitleData[siteName] = siteRecords;
-        }
+        if (siteRecords.length > 0) newTitleData[siteName] = siteRecords;
     });
 
     window.kbState.evalData.title = newTitleData;
@@ -330,42 +296,26 @@ function syncTitleData() {
 }
 
 // ============================================================================
-// [8] 인라인 편집 및 가액 재계산 시스템 (Python calculate_valuation 이식)
+// [8] 인라인 편집 및 가액 재계산 시스템
 // ============================================================================
-
-// 1. 셀 더블클릭 시 편집창(Input)을 띄우고 저장하는 함수
 window.editCell = function(tdElement, mode, siteName, gIdx, rIdx, field, inputType, level = 'record') {
-    if (tdElement.querySelector('input')) return; // 이미 편집 중이면 무시
+    if (tdElement.querySelector('input')) return;
 
-    // 대상 데이터 객체 찾기
     let targetObj;
     const siteData = window.kbState.evalData[mode][siteName];
-    if (Array.isArray(siteData)) {
-        targetObj = level === 'group' ? siteData[gIdx] : siteData[gIdx].records[rIdx];
-    } else {
-        const keys = Object.keys(siteData);
-        targetObj = level === 'group' ? siteData[keys[gIdx]] : siteData[keys[gIdx]].records[rIdx];
-    }
+    if (Array.isArray(siteData)) targetObj = level === 'group' ? siteData[gIdx] : siteData[gIdx].records[rIdx];
+    else targetObj = level === 'group' ? siteData[Object.keys(siteData)[gIdx]] : siteData[Object.keys(siteData)[gIdx]].records[rIdx];
 
     let origValue = targetObj[field] || (inputType === 'number' ? 0 : '');
 
-    // 입력창 생성
     const input = document.createElement('input');
-    input.type = 'text'; 
-    input.value = origValue;
-    input.style.width = '90%';
-    input.style.textAlign = 'center';
-    input.style.border = '2px solid #1C5691';
-    input.style.padding = '3px';
-    input.style.fontWeight = 'bold';
+    input.type = 'text'; input.value = origValue;
+    input.style.width = '90%'; input.style.textAlign = 'center';
+    input.style.border = '2px solid #1C5691'; input.style.padding = '3px'; input.style.fontWeight = 'bold';
 
-    // 기존 텍스트 지우고 입력창 띄우기
-    tdElement.innerHTML = '';
-    tdElement.appendChild(input);
-    input.focus();
-    input.select();
+    tdElement.innerHTML = ''; tdElement.appendChild(input);
+    input.focus(); input.select();
 
-    // 저장 및 화면 갱신 처리
     const saveValue = () => {
         let newVal = input.value.replace(/,/g, '').replace(/%/g, '').trim();
         if (inputType === 'number') {
@@ -373,61 +323,45 @@ window.editCell = function(tdElement, mode, siteName, gIdx, rIdx, field, inputTy
             if (isNaN(newVal)) newVal = 0;
         }
         targetObj[field] = newVal;
-
-        // ★ 핵심: 값이 변경되었으므로 가액을 자동으로 다시 계산합니다.
         recalculateValuation(mode, siteName);
-
-        // 변경된 계산 결과를 바탕으로 표 다시 그리기
         const tbodyId = mode === 'title' ? 'tbodyTitleEval' : (mode === 'floor' ? 'tbodyFloorEval' : 'tbodyKfpaEval');
         const tabId = mode === 'title' ? 'tabsTitleEval' : (mode === 'floor' ? 'tabsFloorEval' : 'tabsKfpaEval');
         renderEvalTabsAndTable(mode, tbodyId, tabId);
     };
 
-    // 포커스를 잃거나 엔터를 치면 자동 저장
     input.addEventListener('blur', saveValue);
     input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            input.removeEventListener('blur', saveValue);
-            saveValue();
-        }
+        if (e.key === 'Enter') { input.removeEventListener('blur', saveValue); saveValue(); }
     });
 };
 
-// 2. 가액 자동 재계산 엔진 (파이썬 계산식 완벽 구현)
 function recalculateValuation(mode, siteName) {
     const evalYearInput = document.getElementById('evalYear');
     const evalYear = parseInt(evalYearInput ? evalYearInput.value : new Date().getFullYear());
     const siteData = window.kbState.evalData[mode][siteName];
-    
     const groups = Array.isArray(siteData) ? siteData : Object.values(siteData);
 
     groups.forEach(group => {
         let totRecoArch = 0;
         let totCurArch = 0;
 
-        // [건축공사비] 1행 데이터 재계산
         group.records.forEach(r => {
-            // 재조달_건축 = 연면적 * 단가 * 물가지수 (1,000원 단위 절사)
             const compConstCost = (r.연면적 || 0) * (r.단가 || 0) * (r.물가지수 || 1.0);
             r.재조달_건축 = Math.floor(compConstCost / 1000) * 1000;
             
-            // 잔가율 = 1.0 - (경과년수 * 감가율) (최소 30% 보장)
             const elapsed = Math.max(0, evalYear - (r.준공연도 || evalYear));
             let residualRatio = 1.0 - (elapsed * ((r.감가율 || 1.78) / 100.0));
             if (residualRatio < 0.30) residualRatio = 0.30; 
             
             r.잔가율 = residualRatio * 100.0;
-            // 현재_건축 = 재조달가액 * 잔가율 (1,000원 단위 절사)
             r.현재_건축 = Math.floor((r.재조달_건축 * residualRatio) / 1000) * 1000;
 
             totRecoArch += r.재조달_건축;
             totCurArch += r.현재_건축;
         });
 
-        // [부속설비] 2행 및 소계 데이터 재계산
         const accRate = parseFloat(group.부속비율 || 20.0) / 100.0;
         group.재조달_부속 = Math.floor((totRecoArch * accRate) / 1000) * 1000;
-        
         const repResidualRatio = group.records.length > 0 ? (group.records[0].잔가율 / 100.0) : 1.0;
         group.현재_부속 = Math.floor((group.재조달_부속 * repResidualRatio) / 1000) * 1000;
 
@@ -436,13 +370,8 @@ function recalculateValuation(mode, siteName) {
     });
 }
 
-// 3. 구조코드 & 감가율 팝업 호출 대기 (다음 단계용)
-window.openCodePopup = function(mode, siteName, gIdx, rIdx) {
-    alert("🛠️ 신축단가표 구조코드 팝업창이 뜰 위치입니다.\n(다음 단계에서 엑셀 단가표 검색기를 연결합니다!)");
-};
-
 window.openDeprPopup = function(mode, siteName, gIdx, rIdx) {
-    alert("🛠️ 감가율 표준 선택 팝업창이 뜰 위치입니다.\n(다음 단계에서 KFPA 기준표를 연결합니다!)");
+    alert("🛠️ 감가율 표준 선택 팝업창이 뜰 위치입니다.");
 };
 
 // ============================================================================
@@ -452,26 +381,14 @@ window.deleteEvalItem = function(mode, siteName, gIdx) {
     const siteData = window.kbState.evalData[mode][siteName];
     let targetName = "";
     
-    // 데이터 구조(표제부 vs 층별/화협)에 따라 타겟명 추출
-    if (Array.isArray(siteData)) {
-        targetName = siteData[gIdx].동명칭 || "선택한 항목";
-    } else {
-        const keys = Object.keys(siteData);
-        targetName = keys[gIdx];
-    }
+    if (Array.isArray(siteData)) targetName = siteData[gIdx].동명칭 || "선택한 항목";
+    else targetName = Object.keys(siteData)[gIdx];
 
-    // 실수로 지우지 않도록 한 번 확인
     if (!confirm(`[${targetName}] 평가 데이터를 완전히 삭제하시겠습니까?`)) return;
 
-    // 실제 데이터 구조에서 안전하게 삭제
-    if (Array.isArray(siteData)) {
-        siteData.splice(gIdx, 1); // 표제부(Array 형태) 삭제
-    } else {
-        const keys = Object.keys(siteData);
-        delete siteData[keys[gIdx]]; // 층별/화협(Object 딕셔너리 형태) 삭제
-    }
+    if (Array.isArray(siteData)) siteData.splice(gIdx, 1);
+    else delete siteData[Object.keys(siteData)[gIdx]]; 
 
-    // 삭제 완료 후 금액 재계산 및 테이블 다시 렌더링
     recalculateValuation(mode, siteName);
     const tbodyId = mode === 'title' ? 'tbodyTitleEval' : (mode === 'floor' ? 'tbodyFloorEval' : 'tbodyKfpaEval');
     const tabId = mode === 'title' ? 'tabsTitleEval' : (mode === 'floor' ? 'tabsFloorEval' : 'tabsKfpaEval');
@@ -488,39 +405,216 @@ window.sortEvalData = function(mode, thElement) {
     const targetData = window.kbState.evalData[mode][siteName];
     if (!targetData) return;
 
-    // 1. 현재 정렬 상태 확인 및 방향 뒤집기 (Toggle)
     const isRev = !!window.kbState.sortRev[mode][siteName];
     window.kbState.sortRev[mode][siteName] = !isRev;
 
-    // 2. 데이터 구조에 맞게 똑똑한 정렬(Natural Sort) 수행
     const sortLogic = (a, b) => {
-        // {numeric: true} 옵션: '10동'이 '2동'보다 뒤에 오도록 자연스럽게 정렬합니다.
-        return !isRev 
-            ? a.localeCompare(b, undefined, {numeric: true}) 
-            : b.localeCompare(a, undefined, {numeric: true});
+        return !isRev ? a.localeCompare(b, undefined, {numeric: true}) : b.localeCompare(a, undefined, {numeric: true});
     };
 
     if (Array.isArray(targetData)) {
-        // 표제부 (배열 구조) 정렬
         targetData.sort((a, b) => sortLogic(a.동명칭 || "", b.동명칭 || ""));
     } else {
-        // 층별, 화협 (딕셔너리 구조) 정렬
         const sortedKeys = Object.keys(targetData).sort(sortLogic);
         const newData = {};
         sortedKeys.forEach(k => { newData[k] = targetData[k]; });
         window.kbState.evalData[mode][siteName] = newData;
     }
 
-    // 3. 헤더 텍스트 화살표 변경 시각효과 (▲ / ▼)
     const allTh = thElement.closest('tr').querySelectorAll('th');
     allTh.forEach(th => {
-        if(th.innerText.includes('동명칭')) {
-            th.innerText = !isRev ? '동명칭 ▲' : '동명칭 ▼';
-        }
+        if(th.innerText.includes('동명칭')) th.innerText = !isRev ? '동명칭 ▲' : '동명칭 ▼';
     });
 
-    // 4. 정렬된 데이터로 테이블 갱신
     const tbodyId = mode === 'title' ? 'tbodyTitleEval' : (mode === 'floor' ? 'tbodyFloorEval' : 'tbodyKfpaEval');
     const tabId = mode === 'title' ? 'tabsTitleEval' : (mode === 'floor' ? 'tabsFloorEval' : 'tabsKfpaEval');
     renderEvalTabsAndTable(mode, tbodyId, tabId);
+};
+
+// ============================================================================
+// [11] 신축단가표 엑셀 파싱 및 하이브리드 구조코드 검색 시스템
+// ============================================================================
+
+window.loadCostExcel = function(event) {
+    const file = event.target.files[0];
+    if(!file) return;
+    document.getElementById('unitCostPath').value = file.name;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            
+            let targetSheetName = workbook.SheetNames.find(n => n.includes("용도")) || workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[targetSheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: "-"});
+            
+            let startRow = 0;
+            for(let i=0; i<jsonData.length; i++) {
+                const rowStr = jsonData[i].join("").replace(/\s/g, "");
+                if(rowStr.includes("분류번호") || rowStr.includes("용도") || rowStr.includes("대분류")) {
+                    startRow = i; break;
+                }
+            }
+            
+            const headerRow = jsonData[startRow];
+            const findCol = (keyword, defaultIdx) => {
+                const idx = headerRow.findIndex(val => String(val).includes(keyword));
+                return idx !== -1 ? idx : defaultIdx;
+            };
+            
+            const cols = {
+                '대분류': findCol('대분류', 0), '중분류': findCol('중분류', 1), '소분류': findCol('소분류', 2),
+                '용도': findCol('용도', 3), '구조': findCol('구조', 4), '급수': findCol('급수', 5),
+                '단가': findCol('단가', 26), '노무비': findCol('노무비', 43)
+            };
+            
+            window.kbState.costData = [];
+            for(let i = startRow + 2; i < jsonData.length; i++) {
+                const row = jsonData[i];
+                if(!row || row.length === 0 || row.join("").replace(/-/g,"").trim() === "") continue;
+                window.kbState.costData.push({
+                    '대분류': row[cols['대분류']], '중분류': row[cols['중분류']], '소분류': row[cols['소분류']],
+                    '용도': row[cols['용도']], '구조': row[cols['구조']], '급수': row[cols['급수']],
+                    '단가': parseFloat(String(row[cols['단가']]).replace(/,/g, '')) || 0,
+                    '노무비': parseFloat(String(row[cols['노무비']]).replace(/,/g, '')) || 0
+                });
+            }
+            alert(`✅ 단가표 파일 분석 완료! (총 ${window.kbState.costData.length}건 데이터 탑재)`);
+        } catch(err) {
+            alert("엑셀 파일 분석 중 오류가 발생했습니다: " + err);
+        }
+    };
+    reader.readAsArrayBuffer(file);
+};
+
+window.editCodeCell = function(tdElement, mode, siteName, gIdx, rIdx) {
+    if (tdElement.querySelector('input')) return; 
+    
+    const siteData = window.kbState.evalData[mode][siteName];
+    const targetObj = Array.isArray(siteData) ? siteData[gIdx].records[rIdx] : siteData[Object.keys(siteData)[gIdx]].records[rIdx];
+    const origValue = (targetObj['구조코드'] && targetObj['구조코드'] !== '-') ? targetObj['구조코드'] : '';
+    
+    tdElement.innerHTML = '';
+    const container = document.createElement('div');
+    container.style.cssText = 'display:flex; align-items:center; justify-content:center; gap:5px;';
+    
+    const input = document.createElement('input');
+    input.type = 'text'; input.value = origValue;
+    input.style.cssText = 'width:85px; text-align:center; border:2px solid #1C5691; padding:3px; font-weight:bold; outline:none;';
+    
+    const btn = document.createElement('button');
+    btn.innerHTML = '🔍';
+    btn.style.cssText = 'cursor:pointer; padding:3px 6px; border:none; background:#1C5691; color:white; border-radius:3px;';
+    
+    container.appendChild(input); container.appendChild(btn); tdElement.appendChild(container);
+    input.focus(); input.select();
+    
+    input.addEventListener('keydown', (e) => {
+        if(e.key === 'Enter') {
+            const code = input.value.trim();
+            if(code) applyCodeToRecord(code, mode, siteName, gIdx, rIdx);
+        }
+    });
+    
+    btn.onclick = (e) => {
+        e.stopPropagation();
+        openCodeModal(mode, siteName, gIdx, rIdx, input.value.trim());
+    };
+};
+
+window.applyCodeToRecord = function(code, mode, siteName, gIdx, rIdx, skipRender=false) {
+    const siteData = window.kbState.evalData[mode][siteName];
+    const targetObj = Array.isArray(siteData) ? siteData[gIdx].records[rIdx] : siteData[Object.keys(siteData)[gIdx]].records[rIdx];
+    
+    targetObj['구조코드'] = code;
+    
+    if(window.kbState.costData && window.kbState.costData.length > 0) {
+        const matched = window.kbState.costData.find(row => String(row['중분류']).includes(code) || String(row['소분류']).includes(code));
+        if(matched) {
+            targetObj['단가'] = matched['단가'];
+            targetObj['노무비'] = matched['노무비'];
+        }
+    } else {
+        alert("⚠️ 신축단가표가 로드되지 않아 코드는 입력되었으나 단가를 불러오지 못했습니다.");
+    }
+    
+    recalculateValuation(mode, siteName); 
+    
+    if(!skipRender) {
+        const tbodyId = mode === 'title' ? 'tbodyTitleEval' : (mode === 'floor' ? 'tbodyFloorEval' : 'tbodyKfpaEval');
+        const tabId = mode === 'title' ? 'tabsTitleEval' : (mode === 'floor' ? 'tabsFloorEval' : 'tabsKfpaEval');
+        renderEvalTabsAndTable(mode, tbodyId, tabId);
+    }
+};
+
+window.currentCodeTarget = null;
+
+window.openCodeModal = function(mode, siteName, gIdx, rIdx, initKeyword) {
+    if(!window.kbState.costData || window.kbState.costData.length === 0) {
+        alert("1.2 메뉴에서 [신축단가표 불러오기]를 통해 엑셀을 먼저 로드해주세요."); return;
+    }
+    window.currentCodeTarget = {mode, siteName, gIdx, rIdx};
+    document.getElementById('codeSearchModal').style.display = 'flex';
+    document.getElementById('codeSearchKeyword').value = initKeyword || "6-1-6-16-3";
+    searchCodeData();
+};
+
+window.closeCodeModal = function() {
+    document.getElementById('codeSearchModal').style.display = 'none';
+    if(window.currentCodeTarget) {
+        const m = window.currentCodeTarget.mode;
+        const tbodyId = m === 'title' ? 'tbodyTitleEval' : (m === 'floor' ? 'tbodyFloorEval' : 'tbodyKfpaEval');
+        const tabId = m === 'title' ? 'tabsTitleEval' : (m === 'floor' ? 'tabsFloorEval' : 'tabsKfpaEval');
+        renderEvalTabsAndTable(m, tbodyId, tabId);
+    }
+    window.currentCodeTarget = null;
+};
+
+window.searchCodeData = function() {
+    const col = document.getElementById('codeSearchCol').value;
+    const kw = document.getElementById('codeSearchKeyword').value.trim().toLowerCase();
+    const tbody = document.getElementById('codeSearchTbody');
+    tbody.innerHTML = '';
+    
+    let filtered = window.kbState.costData;
+    if(kw) filtered = filtered.filter(row => String(row[col]).toLowerCase().includes(kw));
+    
+    const max = Math.min(filtered.length, 100); 
+    for(let i=0; i<max; i++) {
+        const row = filtered[i];
+        const tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        tr.style.background = i % 2 === 0 ? '#fff' : '#f9f9fa';
+        
+        tr.innerHTML = `
+            <td>${row['대분류']}</td><td style="font-weight:bold; color:#1C5691;">${row['중분류']}</td><td>${row['소분류']}</td>
+            <td>${row['용도']}</td><td>${row['구조']}</td><td>${row['급수']}</td>
+            <td style="text-align:right;">${formatPrice(row['단가'])}</td><td style="text-align:right;">${formatPrice(row['노무비'])}</td>
+        `;
+        
+        tr.onclick = () => { 
+            Array.from(tbody.children).forEach(c => c.style.background = c.dataset.origBg);
+            tr.dataset.origBg = tr.style.background;
+            tr.style.background = '#d6e4f0';
+            tbody.dataset.selectedCode = row['중분류']; 
+        };
+        
+        tr.ondblclick = () => { 
+            tbody.dataset.selectedCode = row['중분류'];
+            applySelectedCode();
+        };
+        tbody.appendChild(tr);
+    }
+};
+
+window.applySelectedCode = function() {
+    const code = document.getElementById('codeSearchTbody').dataset.selectedCode;
+    if(!code) return alert("반영할 코드를 목록에서 선택해주세요.");
+    if(!window.currentCodeTarget) return;
+    
+    const {mode, siteName, gIdx, rIdx} = window.currentCodeTarget;
+    applyCodeToRecord(code, mode, siteName, gIdx, rIdx); 
+    closeCodeModal();
 };
