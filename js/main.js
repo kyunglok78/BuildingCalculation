@@ -335,6 +335,12 @@ window.editCell = function(tdElement, mode, siteName, gIdx, rIdx, field, inputTy
         let newVal = input.value.replace(/,/g, '').replace(/%/g, '').trim();
         if (inputType === 'number') newVal = isNaN(parseFloat(newVal)) ? 0 : parseFloat(newVal);
         targetObj[field] = newVal;
+        
+        // ★ [핵심 추가] 노무비 직접 편집 시 물가지수도 자동 재계산
+        if (field === '노무비') {
+            if(window.applyAutoPriceIndex) window.applyAutoPriceIndex(targetObj);
+        }
+        
         recalculateValuation(mode, siteName);
         renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
     };
@@ -405,9 +411,9 @@ window.loadCostExcel = function(event) {
             const headerRow = jsonData[startRow] || [];
             const cols = {};
             
-            // 2. ★ 핵심 수정: 엑셀 데이터를 화면 우측으로 밀기 위해 인덱스를 0부터 시작하도록 보정
+            // 2. ★ 파이썬과 100% 동일한 인덱스 (1, 2, 3, 4, 5, 6 -> 엑셀 B,C,D,E,F,G 열) 
             const targetKeys = ["대분류", "중분류", "소분류", "용도", "구조", "급수"];
-            const defaultIndices = [0, 1, 2, 3, 4, 5]; // 기존 1,2,3,4,5,6 에서 0,1,2,3,4,5 로 이동 (화면 우측 밀림)
+            const defaultIndices = [1, 2, 3, 4, 5, 6]; 
             
             targetKeys.forEach((key, idx) => {
                 let foundIdx = -1;
@@ -419,8 +425,10 @@ window.loadCostExcel = function(event) {
                 cols[key] = foundIdx !== -1 ? foundIdx : defaultIndices[idx];
             });
 
-            // 3. 단가, 노무비 최신 연도 인덱스 동적 탐색 (병합 셀 완벽 방어)
+            // 3. 단가, 노무비 최신 연도 인덱스 동적 탐색 (물가지수를 위해 baseYear 저장)
+            window.kbState.costBaseYear = new Date().getFullYear();
             let idxDanga = -1, idxNomu = -1;
+            
             if (jsonData.length > startRow + 1) {
                 const yearRow = jsonData[startRow + 1];
                 let maxYear = 0;
@@ -437,30 +445,28 @@ window.loadCostExcel = function(event) {
                     }
                 }
                 if (maxYear > 0) {
+                    window.kbState.costBaseYear = maxYear; // 물가지수 매핑을 위해 연도 백업
                     const maxCols = yearIndices.filter(item => item.year === maxYear).map(item => item.col);
                     if (maxCols.length >= 2) { 
                         idxDanga = maxCols[0]; idxNomu = maxCols[1]; 
                     } else if (maxCols.length === 1) { 
-                        // ★ 병합 셀 방어: 엑셀에서 연도가 병합되어 첫 컬럼에만 글자가 있는 경우 바로 다음 컬럼을 노무비로 간주
                         idxDanga = maxCols[0]; 
-                        idxNomu = maxCols[0] + 1; 
+                        // ★ (이전 버그 원인 제거) 병합 셀 때문에 연도가 한 칸만 잡혀도 억지로 +1을 하지 않고, 아래 헤더 탐색이나 43 기본값으로 넘깁니다!
                     }
                 }
             }
             
             // 연도로 못 찾았을 경우 헤더 명칭으로 백업 탐색
-            if (idxDanga === -1 || idxNomu === -1) {
-                for(let r = startRow; r <= startRow + 2; r++) {
-                    if(!jsonData[r]) continue;
-                    for(let c = 0; c < jsonData[r].length; c++) {
-                        const val = String(jsonData[r][c]).replace(/\s/g, "");
-                        if (val.includes("단가") && idxDanga === -1) idxDanga = c;
-                        if (val.includes("노무비") && idxNomu === -1) idxNomu = c;
-                    }
+            for(let r = startRow; r <= startRow + 2; r++) {
+                if(!jsonData[r]) continue;
+                for(let c = 0; c < jsonData[r].length; c++) {
+                    const val = String(jsonData[r][c]).replace(/\s/g, "");
+                    if (val.includes("단가") && idxDanga === -1) idxDanga = c;
+                    if (val.includes("노무비") && idxNomu === -1) idxNomu = c;
                 }
             }
             
-            // 최후의 보루 (파이썬 기본값)
+            // 최후의 보루 (파이썬 기본값 적용 - 노무비는 통상 43열(AR))
             if (idxDanga === -1) idxDanga = 26; 
             if (idxNomu === -1) idxNomu = 43; 
 
@@ -487,6 +493,10 @@ window.loadCostExcel = function(event) {
                 });
             }
             alert(`✅ 신축단가표 분석 완료! (총 ${window.kbState.costData.length}건 데이터 탑재)`);
+            
+            // 만약 물가지수가 이미 로드되어 있다면 소급 적용
+            if(window.retroactiveApplyPriceIndex) window.retroactiveApplyPriceIndex();
+            
         } catch(err) {
             alert("엑셀 파싱 중 오류가 발생했습니다.\n(에러: " + err + ")");
         }
@@ -505,6 +515,28 @@ window.applyCodeToRecord = function(code, mode, siteName, gIdx, rIdx, skipRender
                 const allText = Object.values(row).map(v => String(v || "")).join(" ").toLowerCase();
                 const cleanAllText = allText.replace(/-/g, "");
                 return allText.includes(String(code).toLowerCase()) || (cleanCode && cleanAllText.includes(cleanCode));
+            });
+            if(matched) { 
+                record['단가'] = matched['단가']; 
+                record['노무비'] = matched['노무비']; 
+                // ★ [핵심 추가] 단가/노무비가 변경되었으므로 물가지수를 즉시 매핑합니다!
+                if(window.applyAutoPriceIndex) window.applyAutoPriceIndex(record);
+            }
+        }
+    };
+    reader.readAsArrayBuffer(file);
+    event.target.value = ''; 
+};
+
+window.applyCodeToRecord = function(code, mode, siteName, gIdx, rIdx, skipRender=false) {
+    const siteData = window.kbState.evalData[mode][siteName];
+    const updateRecord = (record) => {
+        record['구조코드'] = code;
+        if(window.kbState.costData && window.kbState.costData.length > 0) {
+            // ★ 강력한 매칭: 중분류가 비어있어도 대분류나 용도에서 코드를 찾아내도록 보완
+            const matched = window.kbState.costData.find(row => {
+                const searchTargets = [row['중분류'], row['소분류'], row['대분류'], row['용도']].map(v => String(v || ''));
+                return searchTargets.some(val => val.includes(code));
             });
             if(matched) { record['단가'] = matched['단가']; record['노무비'] = matched['노무비']; }
         }
@@ -541,16 +573,9 @@ window.searchCodeData = function() {
     let filtered = window.kbState.costData;
     if(kw) {
         filtered = filtered.filter(row => {
-            const targetVal = String(row[col] || "").toLowerCase();
-            const allText = Object.values(row).map(v => String(v || "")).join(" ").toLowerCase();
-            const cleanKw = kw.replace(/-/g, "");
-            const cleanAllText = allText.replace(/-/g, "");
-            
-            if (targetVal.includes(kw)) return true;
-            if (allText.includes(kw)) return true;
-            if (cleanKw && cleanAllText.includes(cleanKw)) return true;
-            
-            return false;
+            // ★ 검색 보정: 선택한 컬럼이 비어있으면 중분류/대분류/용도를 백업으로 뒤져서 통합 검색
+            const targetVal = row[col] || row['중분류'] || row['대분류'] || row['용도'] || "";
+            return String(targetVal).toLowerCase().includes(kw);
         });
     }
     
@@ -559,18 +584,17 @@ window.searchCodeData = function() {
         const row = filtered[i]; const tr = document.createElement('tr');
         tr.style.cursor = 'pointer'; tr.style.background = i % 2 === 0 ? '#fff' : '#f9f9fa';
         
+        // ★ 화면 표시 보정: 데이터가 undefined이면 임시값을 차용해서라도 빈칸 없이 표시
         const dispDae = row['대분류'] || '-';
-        const dispJung = row['중분류'] || dispDae;
+        const dispJung = row['중분류'] || row['대분류'] || row['용도'] || '-';
         const dispSo = row['소분류'] || '-';
         const dispYong = row['용도'] || dispDae;
         const dispGoo = row['구조'] || '-';
         const dispGeup = row['급수'] || '-';
 
         tr.innerHTML = `<td>${dispDae}</td><td style="font-weight:bold; color:#1C5691;">${dispJung}</td><td>${dispSo}</td><td>${dispYong}</td><td>${dispGoo}</td><td>${dispGeup}</td><td style="text-align:right;">${formatPrice(row['단가'])}</td><td style="text-align:right;">${formatPrice(row['노무비'])}</td>`;
-        
-        const applyVal = (dispJung !== '-' && dispJung !== 'undefined') ? dispJung : dispDae;
-        tr.onclick = () => { Array.from(tbody.children).forEach(c => c.style.background = c.dataset.origBg); tr.dataset.origBg = tr.style.background; tr.style.background = '#d6e4f0'; tbody.dataset.selectedCode = applyVal; };
-        tr.ondblclick = () => { tbody.dataset.selectedCode = applyVal; applySelectedCode(); };
+        tr.onclick = () => { Array.from(tbody.children).forEach(c => c.style.background = c.dataset.origBg); tr.dataset.origBg = tr.style.background; tr.style.background = '#d6e4f0'; tbody.dataset.selectedCode = dispJung; };
+        tr.ondblclick = () => { tbody.dataset.selectedCode = dispJung; applySelectedCode(); };
         tbody.appendChild(tr);
     }
 };
@@ -582,6 +606,113 @@ window.applySelectedCode = function() {
     const {mode, siteName, gIdx, rIdx} = window.currentCodeTarget;
     applyCodeToRecord(code, mode, siteName, gIdx, rIdx); 
     closeCodeModal();
+};
+
+// ============================================================================
+// [7-5] ★ 물가지수 엑셀 로드 및 연동 (파이썬 완벽 호환)
+// ============================================================================
+window.loadIndexExcel = function(event) {
+    const file = event.target.files[0];
+    if(!file) return;
+    
+    // HTML의 input 텍스트 업데이트
+    const pathInput = document.getElementById('priceIndexPath');
+    if(pathInput) pathInput.value = file.name;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const sheetName = workbook.SheetNames[0]; 
+            const worksheet = workbook.Sheets[sheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, {defval: "-"});
+            
+            window.kbState.indexData = jsonData;
+            alert(`✅ 건축물가지수 엑셀 분석 완료!`);
+            
+            // 기존에 단가/노무비가 입력된 항목이 있다면 물가지수를 소급 적용
+            window.retroactiveApplyPriceIndex();
+            
+        } catch(err) {
+            alert("물가지수 파싱 중 오류가 발생했습니다.\n(에러: " + err + ")");
+        }
+    };
+    reader.readAsArrayBuffer(file);
+    event.target.value = ''; 
+};
+
+// 물가지수 엑셀 파일 로더를 HTML 인풋과 연결
+document.addEventListener("DOMContentLoaded", () => {
+    const priceIndexFile = document.getElementById('priceIndexFile');
+    if(priceIndexFile) priceIndexFile.addEventListener('change', window.loadIndexExcel);
+});
+
+// 단일 레코드(행)에 물가지수 자동 맵핑 (파이썬 apply_auto_price_index 100% 동일)
+window.applyAutoPriceIndex = function(record) {
+    if(!window.kbState.indexData || window.kbState.indexData.length === 0) return;
+    const nomuVal = parseFloat(record['노무비']) || 0;
+    if (nomuVal <= 0) return;
+
+    const targetYear = String(window.kbState.costBaseYear || new Date().getFullYear());
+
+    let yearCol = null;
+    let nomuCol = null;
+
+    // 첫 번째 행을 뒤져서 기준연도(예: 2025) 컬럼과 '노무비(인건비)' 컬럼을 찾습니다.
+    const sampleRow = window.kbState.indexData[0] || {};
+    for(let key in sampleRow) {
+        const cleanKey = String(key).replace(/\s/g, '');
+        if (cleanKey.includes(targetYear)) yearCol = key;
+        if (cleanKey.includes("인건비") || cleanKey.includes("노무비")) nomuCol = key;
+    }
+
+    if (!yearCol || !nomuCol) return;
+
+    // 해당 노무비 값과 일치하는 행을 찾아 물가지수를 가져옵니다.
+    const matched = window.kbState.indexData.find(row => {
+        const rowNomuStr = String(row[nomuCol] || "").replace(/,/g, '').split('.')[0];
+        const rowNomu = parseFloat(rowNomuStr);
+        return rowNomu === Math.floor(nomuVal);
+    });
+
+    if (matched) {
+        const indexVal = parseFloat(String(matched[yearCol]).replace(/,/g, ''));
+        if (!isNaN(indexVal)) {
+            record['물가지수'] = indexVal;
+        }
+    }
+};
+
+// 이미 로드된 전체 표제부/층별/화협 데이터에 물가지수 일괄 재적용
+window.retroactiveApplyPriceIndex = function() {
+    let changed = false;
+    ['title', 'floor', 'kfpa'].forEach(mode => {
+        if (!window.kbState.evalData[mode]) return;
+        Object.keys(window.kbState.evalData[mode]).forEach(siteName => {
+            let groups = window.kbState.evalData[mode][siteName];
+            if (!Array.isArray(groups)) groups = Object.values(groups);
+            groups.forEach(group => {
+                const records = group.records || [group];
+                records.forEach(r => {
+                    if (r["단가"] > 0 || r["노무비"] > 0) {
+                        window.applyAutoPriceIndex(r);
+                        changed = true;
+                    }
+                });
+            });
+        });
+    });
+    
+    // 변경된 내역이 있다면 화면과 가액을 즉시 업데이트
+    if (changed) {
+        ['title', 'floor', 'kfpa'].forEach(mode => {
+            Object.keys(window.kbState.evalData[mode] || {}).forEach(siteName => {
+                recalculateValuation(mode, siteName);
+            });
+        });
+        runGroupedRenderTest();
+    }
 };
 
 // ============================================================================
