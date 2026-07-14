@@ -372,7 +372,7 @@ window.recalculateValuation = function(mode, siteName) {
 };
 
 // ============================================================================
-// [7] ★ 신축단가 엑셀 로드 및 구조코드 하이브리드 연동 (다중 헤더 완벽 방어 및 통합 검색)
+// [7] ★ 신축단가 엑셀 로드 및 구조코드 하이브리드 연동 (파이썬 완벽 호환 파서 탑재)
 // ============================================================================
 window.loadCostExcel = function(event) {
     const file = event.target.files[0];
@@ -388,56 +388,90 @@ window.loadCostExcel = function(event) {
             const worksheet = workbook.Sheets[targetSheetName];
             const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: "-"});
             
-            const cols = {};
-            for (let r = 0; r < Math.min(jsonData.length, 10); r++) {
-                jsonData[r].forEach((cell, cIdx) => {
-                    let text = String(cell).replace(/\s/g, '');
-                    if(text.includes('대분류') && cols['대분류']===undefined) cols['대분류'] = cIdx;
-                    if(text.includes('중분류') && cols['중분류']===undefined) cols['중분류'] = cIdx;
-                    if(text.includes('소분류') && cols['소분류']===undefined) cols['소분류'] = cIdx;
-                    if(text.includes('용도') && cols['용도']===undefined) cols['용도'] = cIdx;
-                    if((text === '구조' || text.includes('건물구조')) && cols['구조']===undefined) cols['구조'] = cIdx;
-                    if(text.includes('급수') && cols['급수']===undefined) cols['급수'] = cIdx;
-                    if(text.includes('단가') && cols['단가']===undefined) cols['단가'] = cIdx;
-                    if(text.includes('노무비') && cols['노무비']===undefined) cols['노무비'] = cIdx;
-                });
-            }
-            
-            // ★ 파이썬 원본 코드 기반 하드코딩 인덱스 (헤더가 깨져있어도 완벽하게 긁어옴)
-            if(cols['대분류']===undefined) cols['대분류'] = 1;
-            if(cols['중분류']===undefined) cols['중분류'] = 2;
-            if(cols['소분류']===undefined) cols['소분류'] = 3;
-            if(cols['용도']===undefined) cols['용도'] = 4;
-            if(cols['구조']===undefined) cols['구조'] = 5;
-            if(cols['급수']===undefined) cols['급수'] = 6;
-            if(cols['단가']===undefined) cols['단가'] = 26;
-            if(cols['노무비']===undefined) cols['노무비'] = 43;
-
+            // 1. 헤더 행(startRow) 정확히 찾기 (파이썬 동일 로직)
             let startRow = 0;
-            for(let i=0; i<jsonData.length; i++) {
+            for(let i=0; i < Math.min(jsonData.length, 30); i++) {
                 const rowStr = jsonData[i].join("").replace(/\s/g, "");
-                if(rowStr.includes("분류번호") || rowStr.includes("1.일반주택") || rowStr.includes("1-1-1-1")) { 
-                    if(!rowStr.includes("분류번호")) startRow = i; 
-                    else startRow = i + 1; 
+                if(rowStr.includes("분류번호") || rowStr.includes("용도") || rowStr.includes("대분류") || rowStr.includes("1.일반주택") || rowStr.includes("1-1-1-1")) { 
+                    if(rowStr.includes("분류번호") || rowStr.includes("용도") || rowStr.includes("대분류")) {
+                        startRow = i;
+                    } else {
+                        startRow = Math.max(0, i - 1);
+                    }
                     break; 
                 }
             }
+
+            const headerRow = jsonData[startRow] || [];
+            const cols = {};
             
+            // 2. 파이썬과 동일한 기본 인덱스(1,2,3,4,5,6) 맵핑 전략
+            const targetKeys = ["대분류", "중분류", "소분류", "용도", "구조", "급수"];
+            const defaultIndices = [1, 2, 3, 4, 5, 6];
+            
+            targetKeys.forEach((key, idx) => {
+                let foundIdx = -1;
+                for(let c = 0; c < headerRow.length; c++) {
+                    if(String(headerRow[c]).replace(/\s/g, "").includes(key)) {
+                        foundIdx = c; break;
+                    }
+                }
+                cols[key] = foundIdx !== -1 ? foundIdx : defaultIndices[idx];
+            });
+
+            // 3. 단가, 노무비 최신 연도 인덱스 동적 탐색 (startRow + 1)
+            let idxDanga = -1, idxNomu = -1;
+            if (jsonData.length > startRow + 1) {
+                const yearRow = jsonData[startRow + 1];
+                let maxYear = 0;
+                let yearIndices = [];
+                for(let c = 0; c < yearRow.length; c++) {
+                    const cellStr = String(yearRow[c]).replace(/\s/g, "");
+                    if (cellStr.includes("년")) {
+                        const yMatch = cellStr.match(/\d+/);
+                        if(yMatch) {
+                            const y = parseInt(yMatch[0], 10);
+                            yearIndices.push({col: c, year: y});
+                            if(y > maxYear) maxYear = y;
+                        }
+                    }
+                }
+                if (maxYear > 0) {
+                    const maxIndices = yearIndices.filter(item => item.year === maxYear).map(item => item.col);
+                    if (maxIndices.length >= 2) { idxDanga = maxIndices[0]; idxNomu = maxIndices[1]; } 
+                    else if (maxIndices.length === 1) { idxDanga = maxIndices[0]; }
+                }
+            }
+            
+            // 연도로 못 찾았을 경우 헤더 명칭으로 백업 탐색
+            if (idxDanga === -1) {
+                for(let c = 0; c < headerRow.length; c++) { if(String(headerRow[c]).includes("단가")) { idxDanga = c; break; } }
+                if(idxDanga === -1) idxDanga = 26;
+            }
+            if (idxNomu === -1) {
+                for(let c = 0; c < headerRow.length; c++) { if(String(headerRow[c]).includes("노무비")) { idxNomu = c; break; } }
+                if(idxNomu === -1) idxNomu = 43;
+            }
+            cols['단가'] = idxDanga; cols['노무비'] = idxNomu;
+
             window.kbState.costData = [];
             
-            for(let i = startRow; i < jsonData.length; i++) {
+            // 4. 데이터 파싱 (파이썬의 iloc[start_row+2:] 와 동일하게 +2 부터 시작)
+            for(let i = startRow + 2; i < jsonData.length; i++) {
                 const row = jsonData[i];
                 if(!row || row.length === 0 || row.join("").replace(/-/g,"").trim() === "") continue;
-
+                
+                const getVal = (cIdx) => row[cIdx] !== undefined && row[cIdx] !== null && String(row[cIdx]).trim() !== "" ? row[cIdx] : "-";
+                
                 window.kbState.costData.push({
-                    '대분류': row[cols['대분류']], 
-                    '중분류': row[cols['중분류']], 
-                    '소분류': row[cols['소분류']], 
-                    '용도': row[cols['용도']], 
-                    '구조': row[cols['구조']], 
-                    '급수': row[cols['급수']],
-                    '단가': parseFloat(String(row[cols['단가']]).replace(/,/g, '')) || 0,
-                    '노무비': parseFloat(String(row[cols['노무비']]).replace(/,/g, '')) || 0
+                    '대분류': getVal(cols['대분류']), 
+                    '중분류': getVal(cols['중분류']), 
+                    '소분류': getVal(cols['소분류']), 
+                    '용도': getVal(cols['용도']), 
+                    '구조': getVal(cols['구조']), 
+                    '급수': getVal(cols['급수']),
+                    '단가': parseFloat(String(getVal(cols['단가'])).replace(/,/g, '')) || 0,
+                    '노무비': parseFloat(String(getVal(cols['노무비'])).replace(/,/g, '')) || 0
                 });
             }
             alert(`✅ 신축단가표 분석 완료! (총 ${window.kbState.costData.length}건 데이터 탑재)`);
@@ -454,12 +488,11 @@ window.applyCodeToRecord = function(code, mode, siteName, gIdx, rIdx, skipRender
     const updateRecord = (record) => {
         record['구조코드'] = code;
         if(window.kbState.costData && window.kbState.costData.length > 0) {
-            const cleanCode = code.replace(/-/g, "");
-            // ★ 강력한 매칭: 특정 컬럼이 아니라 행 전체의 텍스트를 조합해서 찾아냅니다!
+            const cleanCode = String(code).replace(/-/g, "");
             const matched = window.kbState.costData.find(row => {
                 const allText = Object.values(row).map(v => String(v || "")).join(" ").toLowerCase();
                 const cleanAllText = allText.replace(/-/g, "");
-                return allText.includes(code.toLowerCase()) || (cleanCode && cleanAllText.includes(cleanCode));
+                return allText.includes(String(code).toLowerCase()) || (cleanCode && cleanAllText.includes(cleanCode));
             });
             if(matched) { record['단가'] = matched['단가']; record['노무비'] = matched['노무비']; }
         }
@@ -496,7 +529,6 @@ window.searchCodeData = function() {
     let filtered = window.kbState.costData;
     if(kw) {
         filtered = filtered.filter(row => {
-            // ★ 검색 혁명: 선택한 컬럼에만 의존하지 않고, 행의 모든 데이터를 결합해 하이픈(-) 무시 검색 수행
             const targetVal = String(row[col] || "").toLowerCase();
             const allText = Object.values(row).map(v => String(v || "")).join(" ").toLowerCase();
             const cleanKw = kw.replace(/-/g, "");
