@@ -406,6 +406,11 @@ window.loadCostExcel = function(event) {
             
             // 헤더 못 찾았을 경우 대비 파이썬 원본 하드코딩 인덱스 백업
             if(cols['대분류']===undefined) cols['대분류']=0;
+            // ★ 누락 방어: 중분류/소분류/용도가 없을 경우 대분류 인덱스를 임시로 같이 바라보게 함
+            if(cols['중분류']===undefined) cols['중분류'] = cols['대분류'] || 0;
+            if(cols['소분류']===undefined) cols['소분류'] = cols['중분류'] || 0;
+            if(cols['용도']===undefined) cols['용도'] = cols['대분류'] || 0;
+            
             if(cols['단가']===undefined) cols['단가']=26;
             if(cols['노무비']===undefined) cols['노무비']=43;
 
@@ -451,7 +456,11 @@ window.applyCodeToRecord = function(code, mode, siteName, gIdx, rIdx, skipRender
     const updateRecord = (record) => {
         record['구조코드'] = code;
         if(window.kbState.costData && window.kbState.costData.length > 0) {
-            const matched = window.kbState.costData.find(row => String(row['중분류']).includes(code) || String(row['소분류']).includes(code));
+            // ★ 강력한 매칭: 중분류가 비어있어도 대분류나 용도에서 코드를 찾아내도록 보완
+            const matched = window.kbState.costData.find(row => {
+                const searchTargets = [row['중분류'], row['소분류'], row['대분류'], row['용도']].map(v => String(v || ''));
+                return searchTargets.some(val => val.includes(code));
+            });
             if(matched) { record['단가'] = matched['단가']; record['노무비'] = matched['노무비']; }
         }
     };
@@ -485,15 +494,30 @@ window.searchCodeData = function() {
     const tbody = document.getElementById('codeSearchTbody'); tbody.innerHTML = '';
     
     let filtered = window.kbState.costData;
-    if(kw) filtered = filtered.filter(row => String(row[col]).toLowerCase().includes(kw));
+    if(kw) {
+        filtered = filtered.filter(row => {
+            // ★ 검색 보정: 선택한 컬럼이 비어있으면 중분류/대분류/용도를 백업으로 뒤져서 통합 검색
+            const targetVal = row[col] || row['중분류'] || row['대분류'] || row['용도'] || "";
+            return String(targetVal).toLowerCase().includes(kw);
+        });
+    }
     
     const max = Math.min(filtered.length, 100); 
     for(let i=0; i<max; i++) {
         const row = filtered[i]; const tr = document.createElement('tr');
         tr.style.cursor = 'pointer'; tr.style.background = i % 2 === 0 ? '#fff' : '#f9f9fa';
-        tr.innerHTML = `<td>${row['대분류']}</td><td style="font-weight:bold; color:#1C5691;">${row['중분류']}</td><td>${row['소분류']}</td><td>${row['용도']}</td><td>${row['구조']}</td><td>${row['급수']}</td><td style="text-align:right;">${formatPrice(row['단가'])}</td><td style="text-align:right;">${formatPrice(row['노무비'])}</td>`;
-        tr.onclick = () => { Array.from(tbody.children).forEach(c => c.style.background = c.dataset.origBg); tr.dataset.origBg = tr.style.background; tr.style.background = '#d6e4f0'; tbody.dataset.selectedCode = row['중분류']; };
-        tr.ondblclick = () => { tbody.dataset.selectedCode = row['중분류']; applySelectedCode(); };
+        
+        // ★ 화면 표시 보정: 데이터가 undefined이면 임시값을 차용해서라도 빈칸 없이 표시
+        const dispDae = row['대분류'] || '-';
+        const dispJung = row['중분류'] || row['대분류'] || row['용도'] || '-';
+        const dispSo = row['소분류'] || '-';
+        const dispYong = row['용도'] || dispDae;
+        const dispGoo = row['구조'] || '-';
+        const dispGeup = row['급수'] || '-';
+
+        tr.innerHTML = `<td>${dispDae}</td><td style="font-weight:bold; color:#1C5691;">${dispJung}</td><td>${dispSo}</td><td>${dispYong}</td><td>${dispGoo}</td><td>${dispGeup}</td><td style="text-align:right;">${formatPrice(row['단가'])}</td><td style="text-align:right;">${formatPrice(row['노무비'])}</td>`;
+        tr.onclick = () => { Array.from(tbody.children).forEach(c => c.style.background = c.dataset.origBg); tr.dataset.origBg = tr.style.background; tr.style.background = '#d6e4f0'; tbody.dataset.selectedCode = dispJung; };
+        tr.ondblclick = () => { tbody.dataset.selectedCode = dispJung; applySelectedCode(); };
         tbody.appendChild(tr);
     }
 };
