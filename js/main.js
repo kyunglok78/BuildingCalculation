@@ -372,7 +372,7 @@ window.recalculateValuation = function(mode, siteName) {
 };
 
 // ============================================================================
-// [7] ★ 신축단가 엑셀 로드 및 구조코드 하이브리드 연동 (파이썬 완벽 호환 파서 탑재)
+// [7] ★ 신축단가 엑셀 로드 및 구조코드 하이브리드 연동 (엑셀 밀림 및 병합셀 완벽 방어)
 // ============================================================================
 window.loadCostExcel = function(event) {
     const file = event.target.files[0];
@@ -388,7 +388,7 @@ window.loadCostExcel = function(event) {
             const worksheet = workbook.Sheets[targetSheetName];
             const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: "-"});
             
-            // 1. 헤더 행(startRow) 정확히 찾기 (파이썬 동일 로직)
+            // 1. 헤더 행(startRow) 정확히 찾기
             let startRow = 0;
             for(let i=0; i < Math.min(jsonData.length, 30); i++) {
                 const rowStr = jsonData[i].join("").replace(/\s/g, "");
@@ -405,9 +405,9 @@ window.loadCostExcel = function(event) {
             const headerRow = jsonData[startRow] || [];
             const cols = {};
             
-            // 2. 파이썬과 동일한 기본 인덱스(1,2,3,4,5,6) 맵핑 전략
+            // 2. ★ 핵심 수정: 엑셀 데이터를 화면 우측으로 밀기 위해 인덱스를 0부터 시작하도록 보정
             const targetKeys = ["대분류", "중분류", "소분류", "용도", "구조", "급수"];
-            const defaultIndices = [1, 2, 3, 4, 5, 6];
+            const defaultIndices = [0, 1, 2, 3, 4, 5]; // 기존 1,2,3,4,5,6 에서 0,1,2,3,4,5 로 이동 (화면 우측 밀림)
             
             targetKeys.forEach((key, idx) => {
                 let foundIdx = -1;
@@ -419,7 +419,7 @@ window.loadCostExcel = function(event) {
                 cols[key] = foundIdx !== -1 ? foundIdx : defaultIndices[idx];
             });
 
-            // 3. 단가, 노무비 최신 연도 인덱스 동적 탐색 (startRow + 1)
+            // 3. 단가, 노무비 최신 연도 인덱스 동적 탐색 (병합 셀 완벽 방어)
             let idxDanga = -1, idxNomu = -1;
             if (jsonData.length > startRow + 1) {
                 const yearRow = jsonData[startRow + 1];
@@ -437,26 +437,38 @@ window.loadCostExcel = function(event) {
                     }
                 }
                 if (maxYear > 0) {
-                    const maxIndices = yearIndices.filter(item => item.year === maxYear).map(item => item.col);
-                    if (maxIndices.length >= 2) { idxDanga = maxIndices[0]; idxNomu = maxIndices[1]; } 
-                    else if (maxIndices.length === 1) { idxDanga = maxIndices[0]; }
+                    const maxCols = yearIndices.filter(item => item.year === maxYear).map(item => item.col);
+                    if (maxCols.length >= 2) { 
+                        idxDanga = maxCols[0]; idxNomu = maxCols[1]; 
+                    } else if (maxCols.length === 1) { 
+                        // ★ 병합 셀 방어: 엑셀에서 연도가 병합되어 첫 컬럼에만 글자가 있는 경우 바로 다음 컬럼을 노무비로 간주
+                        idxDanga = maxCols[0]; 
+                        idxNomu = maxCols[0] + 1; 
+                    }
                 }
             }
             
             // 연도로 못 찾았을 경우 헤더 명칭으로 백업 탐색
-            if (idxDanga === -1) {
-                for(let c = 0; c < headerRow.length; c++) { if(String(headerRow[c]).includes("단가")) { idxDanga = c; break; } }
-                if(idxDanga === -1) idxDanga = 26;
+            if (idxDanga === -1 || idxNomu === -1) {
+                for(let r = startRow; r <= startRow + 2; r++) {
+                    if(!jsonData[r]) continue;
+                    for(let c = 0; c < jsonData[r].length; c++) {
+                        const val = String(jsonData[r][c]).replace(/\s/g, "");
+                        if (val.includes("단가") && idxDanga === -1) idxDanga = c;
+                        if (val.includes("노무비") && idxNomu === -1) idxNomu = c;
+                    }
+                }
             }
-            if (idxNomu === -1) {
-                for(let c = 0; c < headerRow.length; c++) { if(String(headerRow[c]).includes("노무비")) { idxNomu = c; break; } }
-                if(idxNomu === -1) idxNomu = 43;
-            }
+            
+            // 최후의 보루 (파이썬 기본값)
+            if (idxDanga === -1) idxDanga = 26; 
+            if (idxNomu === -1) idxNomu = 43; 
+
             cols['단가'] = idxDanga; cols['노무비'] = idxNomu;
 
             window.kbState.costData = [];
             
-            // 4. 데이터 파싱 (파이썬의 iloc[start_row+2:] 와 동일하게 +2 부터 시작)
+            // 4. 데이터 파싱
             for(let i = startRow + 2; i < jsonData.length; i++) {
                 const row = jsonData[i];
                 if(!row || row.length === 0 || row.join("").replace(/-/g,"").trim() === "") continue;
