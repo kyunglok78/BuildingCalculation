@@ -811,8 +811,7 @@ window.quickLoadProject = function(event) {
             // 3. 저장된 주소 데이터를 바탕으로 HTML 소재지 목록 다시 그리기
             const listBox = document.getElementById('locationListBox');
             if (listBox) {
-                listBox.innerHTML = ''; // 기존 목록 비우기
-                
+                listBox.innerHTML = ''; 
                 if (projectData.locations && projectData.locations.length > 0) {
                     projectData.locations.forEach((loc, idx) => {
                         const row = document.createElement('div');
@@ -832,71 +831,108 @@ window.quickLoadProject = function(event) {
                     const locCountInput = document.getElementById('locationCount');
                     if(locCountInput) locCountInput.value = projectData.locations.length;
                 } 
-                else if (projectData.kbState && projectData.kbState.fetchedData) {
-                    const siteNames = Object.keys(projectData.kbState.fetchedData);
-                    siteNames.forEach((siteName, idx) => {
-                        const address = projectData.kbState.fetchedData[siteName].address || "";
-                        const row = document.createElement('div');
-                        row.className = 'list-row';
-                        row.innerHTML = `
-                            <input type="checkbox" class="row-checkbox" checked><span>소재지 ${idx + 1}</span>
-                            <input type="text" class="input-short" value="${siteName}" placeholder="예: 공장/지점명">
-                            <button type="button" class="btn-blue" onclick="openAddressModal(this); return false;"><i class="fa-solid fa-magnifying-glass"></i> 주소 검색</button>
-                            <span>주소</span><input type="text" class="input-long addr-input" value="${address}" placeholder="주소를 검색해 주세요" readonly>
-                            <div class="check-group">
-                                <label class="check-item"><input type="checkbox" class="check-ledger" checked onchange="updateMenuState()"> 건축물대장</label>
-                                <label class="check-item"><input type="checkbox" class="check-kfpa" checked onchange="updateMenuState()"> 화협자료평가</label>
-                            </div>
-                        `;
-                        listBox.appendChild(row);
-                    });
-                    const locCountInput = document.getElementById('locationCount');
-                    if(locCountInput) locCountInput.value = siteNames.length;
-                }
             }
 
             // 4. 저장된 평가 데이터를 바탕으로 하단 테이블 전체 다시 그리기
             runGroupedRenderTest();
 
             // =========================================================
-            // 5. ★ 건축물대장 조회 화면(Slide 3) 복구 로직
+            // 5. ★ 건축물대장 표(Table) 화면 완벽 복구 로직 추가
             // =========================================================
             if (window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
                 const emptyMsg = document.getElementById('emptyStateMsg');
                 const dataContainer = document.getElementById('fetchedDataContainer');
+                const tabsContainer = document.getElementById('slide3Tabs');
                 
                 if (emptyMsg) emptyMsg.style.display = 'none';
-                if (dataContainer) {
+                if (dataContainer && tabsContainer) {
                     dataContainer.style.display = 'block';
-                    
-                    // api_ledger.js에 구현된 렌더링 함수 자동 매칭
-                    if (typeof window.renderLedgerTabs === 'function') {
-                        window.renderLedgerTabs();
-                    } else if (typeof window.renderLedgerUI === 'function') {
-                        window.renderLedgerUI();
-                    } else {
-                        // 기본 안전 표시 가이드 UI
-                        dataContainer.innerHTML = `
-                            <div style="padding: 40px; text-align: center; color: #1C5691; font-weight: bold; background: #f4f5f7; border-radius: 8px;">
-                                <i class="fa-solid fa-file-circle-check" style="font-size: 36px; margin-bottom: 15px; display: block; color: #28a745;"></i>
-                                ✅ 총 ${Object.keys(window.kbState.fetchedData).length}건의 건축물대장 데이터가 성공적으로 복구되었습니다.<br>
-                                <span style="font-size: 13px; color: #666; font-weight: normal; display: block; margin-top: 10px;">
-                                (별도의 탭이 보이지 않더라도 메모리에 안전하게 로드되었으며, <br>'표제부 평가' 탭에서 🔄[데이터 연동하기]를 누르시면 즉시 정상 반영됩니다.)
-                                </span>
-                            </div>
-                        `;
+                    dataContainer.innerHTML = ''; 
+                    tabsContainer.innerHTML = '';
+
+                    let isFirst = true;
+                    // 저장된 데이터를 순회하며 탭과 표를 동적으로 생성
+                    for (const [siteName, siteData] of Object.entries(window.kbState.fetchedData)) {
+                        // 5-1. 상단 탭(Tab) 버튼 생성
+                        const tabBtn = document.createElement('div');
+                        tabBtn.innerText = siteName;
+                        tabBtn.style.cssText = `padding:10px 20px; cursor:pointer; font-weight:bold; border:1px solid #ddd; border-bottom:none; border-radius:4px 4px 0 0; margin-right:5px; background:${isFirst ? '#fff' : '#f8f9fa'}; color:${isFirst ? '#1C5691' : '#333'};`;
+                        
+                        // 5-2. 데이터 표시 영역 생성
+                        const contentDiv = document.createElement('div');
+                        contentDiv.style.display = isFirst ? 'block' : 'none';
+                        
+                        // 탭 클릭 이벤트 (화면 전환)
+                        tabBtn.onclick = () => {
+                            Array.from(tabsContainer.children).forEach(c => { c.style.background = '#f8f9fa'; c.style.color = '#333'; });
+                            Array.from(dataContainer.children).forEach(c => c.style.display = 'none');
+                            tabBtn.style.background = '#fff'; tabBtn.style.color = '#1C5691';
+                            contentDiv.style.display = 'block';
+                        };
+                        tabsContainer.appendChild(tabBtn);
+
+                        // 5-3. 총괄표제부, 표제부 상세, 층별 개요 등 각 항목별 표 생성
+                        for (const [title, rows] of Object.entries(siteData)) {
+                            // address나 errors 등 배열이 아닌 메타데이터는 건너뜀
+                            if (title === 'address' || title === 'errors' || !Array.isArray(rows) || rows.length === 0) continue;
+                            
+                            const sectionTitle = document.createElement('h3');
+                            sectionTitle.innerText = `■ ${title}`;
+                            sectionTitle.style.cssText = 'font-size:15px; margin: 20px 0 10px 0; color:#1C5691;';
+                            contentDiv.appendChild(sectionTitle);
+
+                            const tableWrapper = document.createElement('div');
+                            tableWrapper.style.cssText = 'overflow-x:auto; margin-bottom:20px; border:1px solid #ddd; border-radius:4px; max-height: 300px; overflow-y: auto;';
+                            
+                            const table = document.createElement('table');
+                            table.className = 'data-table';
+                            table.style.margin = '0';
+                            
+                            // 테이블 헤더 (컬럼명)
+                            const thead = document.createElement('thead');
+                            const headerRow = document.createElement('tr');
+                            thead.style.position = 'sticky';
+                            thead.style.top = '0';
+                            thead.style.zIndex = '1';
+                            
+                            const cols = Object.keys(rows[0]);
+                            cols.forEach(col => {
+                                const th = document.createElement('th');
+                                th.innerText = col;
+                                headerRow.appendChild(th);
+                            });
+                            thead.appendChild(headerRow);
+                            table.appendChild(thead);
+                            
+                            // 테이블 본문 (데이터)
+                            const tbody = document.createElement('tbody');
+                            rows.forEach((row, rIdx) => {
+                                const tr = document.createElement('tr');
+                                tr.style.background = rIdx % 2 === 0 ? '#fff' : '#f9f9fa';
+                                cols.forEach(col => {
+                                    const td = document.createElement('td');
+                                    td.innerText = row[col] || '-';
+                                    td.style.textAlign = 'center';
+                                    tr.appendChild(td);
+                                });
+                                tbody.appendChild(tr);
+                            });
+                            table.appendChild(tbody);
+                            tableWrapper.appendChild(table);
+                            contentDiv.appendChild(tableWrapper);
+                        }
+                        dataContainer.appendChild(contentDiv);
+                        isFirst = false;
                     }
                 }
             }
             // =========================================================
 
-            alert("✅ 프로젝트 임시 저장 데이터를 완벽하게 불러왔습니다!\n(소재지 목록, 건축물대장, 평가 워크시트가 모두 복구되었습니다.)");
+            alert("✅ 임시 저장 데이터 로드 완료!\n(건축물대장 내용도 정상적으로 복구되었습니다.)");
         } catch (err) {
             alert("파일 형식이 잘못되었거나 읽을 수 없습니다.\n(" + err + ")");
         }
     };
     reader.readAsText(file);
-    
-    // 동일한 파일을 연속으로 열 수 있도록 input 초기화
     event.target.value = ''; 
 };
