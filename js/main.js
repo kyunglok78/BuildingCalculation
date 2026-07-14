@@ -431,18 +431,18 @@ window.loadCostExcel = function(event) {
 
             window.kbState.costData = [];
             
-            // 2. 데이터 파싱 (불필요한 헤더/빈칸 행 무시하고 순수 데이터만 쏙쏙 추출)
+// 2. 데이터 파싱 (불필요한 헤더/빈칸 행 무시하고 순수 데이터만 쏙쏙 추출)
             for(let i = 0; i < jsonData.length; i++) {
                 const row = jsonData[i];
                 if(!row || row.length < 6) continue;
                 
-                // 파이썬 원본과 동일하게 엑셀의 B,C,D,E,F,G열 (인덱스 1,2,3,4,5,6) 고정 맵핑
-                const colDae = String(row[1] || "").trim();
-                const colJung = String(row[2] || "").trim();
-                const colSo = String(row[3] || "").trim();
-                const colYong = String(row[4] || "").trim();
-                const colGoo = String(row[5] || "").trim();
-                const colGeup = String(row[6] || "").trim();
+                // ★ [수정됨] A열(0)부터 F열(5)까지로 인덱스를 한 칸씩 당겨서 맵핑 (밀림 현상 해결)
+                const colDae = String(row[0] || "").trim();
+                const colJung = String(row[1] || "").trim();
+                const colSo = String(row[2] || "").trim();
+                const colYong = String(row[3] || "").trim();
+                const colGoo = String(row[4] || "").trim();
+                const colGeup = String(row[5] || "").trim();
                 
                 // 데이터 유효성 검사 (코드나 용도, 구조 중 하나라도 있어야 함)
                 if (colDae.includes("용도별") || colDae.includes("상승지수") || colDae.includes("분류번호")) continue;
