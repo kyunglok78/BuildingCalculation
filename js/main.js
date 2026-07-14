@@ -755,7 +755,7 @@ window.quickSaveProject = function() {
     const evalYearInput = document.getElementById('evalYear');
     const evalYear = evalYearInput ? evalYearInput.value : new Date().getFullYear();
 
-    // ★ [핵심 추가] 현재 화면에 있는 소재지(주소) 목록 데이터 긁어오기
+    // ★ 현재 화면에 있는 소재지(주소) 목록 데이터 긁어오기
     const locations = [];
     document.querySelectorAll('#locationListBox .list-row').forEach(row => {
         locations.push({
@@ -813,7 +813,6 @@ window.quickLoadProject = function(event) {
             if (listBox) {
                 listBox.innerHTML = ''; // 기존 목록 비우기
                 
-                // ★ [버전 1.1] 신규 저장 방식 (locations 배열이 있는 경우)
                 if (projectData.locations && projectData.locations.length > 0) {
                     projectData.locations.forEach((loc, idx) => {
                         const row = document.createElement('div');
@@ -833,7 +832,6 @@ window.quickLoadProject = function(event) {
                     const locCountInput = document.getElementById('locationCount');
                     if(locCountInput) locCountInput.value = projectData.locations.length;
                 } 
-                // ★ [버전 1.0 복구용] 과거 저장 방식 (올려주신 고려호이스트 파일용)
                 else if (projectData.kbState && projectData.kbState.fetchedData) {
                     const siteNames = Object.keys(projectData.kbState.fetchedData);
                     siteNames.forEach((siteName, idx) => {
@@ -860,7 +858,39 @@ window.quickLoadProject = function(event) {
             // 4. 저장된 평가 데이터를 바탕으로 하단 테이블 전체 다시 그리기
             runGroupedRenderTest();
 
-            alert("✅ 프로젝트 임시 저장 데이터를 완벽하게 불러왔습니다!\n(소재지 목록 및 평가 워크시트가 모두 복구되었습니다.)");
+            // =========================================================
+            // 5. ★ 건축물대장 조회 화면(Slide 3) 복구 로직
+            // =========================================================
+            if (window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
+                const emptyMsg = document.getElementById('emptyStateMsg');
+                const dataContainer = document.getElementById('fetchedDataContainer');
+                
+                if (emptyMsg) emptyMsg.style.display = 'none';
+                if (dataContainer) {
+                    dataContainer.style.display = 'block';
+                    
+                    // api_ledger.js에 구현된 렌더링 함수 자동 매칭
+                    if (typeof window.renderLedgerTabs === 'function') {
+                        window.renderLedgerTabs();
+                    } else if (typeof window.renderLedgerUI === 'function') {
+                        window.renderLedgerUI();
+                    } else {
+                        // 기본 안전 표시 가이드 UI
+                        dataContainer.innerHTML = `
+                            <div style="padding: 40px; text-align: center; color: #1C5691; font-weight: bold; background: #f4f5f7; border-radius: 8px;">
+                                <i class="fa-solid fa-file-circle-check" style="font-size: 36px; margin-bottom: 15px; display: block; color: #28a745;"></i>
+                                ✅ 총 ${Object.keys(window.kbState.fetchedData).length}건의 건축물대장 데이터가 성공적으로 복구되었습니다.<br>
+                                <span style="font-size: 13px; color: #666; font-weight: normal; display: block; margin-top: 10px;">
+                                (별도의 탭이 보이지 않더라도 메모리에 안전하게 로드되었으며, <br>'표제부 평가' 탭에서 🔄[데이터 연동하기]를 누르시면 즉시 정상 반영됩니다.)
+                                </span>
+                            </div>
+                        `;
+                    }
+                }
+            }
+            // =========================================================
+
+            alert("✅ 프로젝트 임시 저장 데이터를 완벽하게 불러왔습니다!\n(소재지 목록, 건축물대장, 평가 워크시트가 모두 복구되었습니다.)");
         } catch (err) {
             alert("파일 형식이 잘못되었거나 읽을 수 없습니다.\n(" + err + ")");
         }
