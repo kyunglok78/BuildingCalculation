@@ -479,7 +479,7 @@
                     <div class="menu-l2" style="cursor:default; margin-top:15px;">2.2 화협자료 평가</div>
                     <div class="menu-l3" data-menu-type="kfpa" onclick="initKfpaScreen()"><span>2.2.1 화협 불러오기</span><span class="status-badge status-done">완료</span></div>
                     <div class="menu-l3" data-menu-type="kfpa" onclick="goToSlide('slide7')"><span>2.2.2 화협자료 평가</span><span class="status-badge status-done">완료</span></div>
-                    <div class="menu-l1 menu-active" style="margin-top:25px;" onclick="goToSlide('slide8')"><span>3. 총괄표 작성</span><span class="status-badge status-ing">진행</span></div>
+                    <div class="menu-l1 menu-active" style="margin-top:25px;" onclick="initSummaryScreen()"><span>3. 총괄표 작성</span><span class="status-badge status-ing">진행</span></div>
                 </div>
             </div>
             <div class="sidebar-bottom">
@@ -488,14 +488,36 @@
                 <button type="button" class="btn-orange" style="background-color: #D35400;" onclick="this.previousElementSibling.click()"><i class="fa-solid fa-folder-open"></i> 임시 저장 열기 (.kbproj)</button>
             </div>
         </div>
+        
         <div class="main-content">
-            <h2 class="page-title"><i class="fa-solid fa-table-list"></i> 3. 평가 방식별 통합 총괄표 확인</h2>
-            <div style="display:flex; border-bottom:1px solid #ddd; margin-bottom:10px;">
-                <div style="padding:10px 20px; border:1px solid #ddd; border-bottom:none; background:#fff; font-weight:bold; color:#1C5691;">표제부 기반 총괄표</div>
-                <div style="padding:10px 20px; background:#f8f9fa; cursor:pointer;">층별 기반 총괄표</div>
-                <div style="padding:10px 20px; background:#f8f9fa; cursor:pointer;">화협자료 기반 총괄표</div>
+            <div class="flex-between mb-20" style="align-items: flex-end;">
+                <h2 class="page-title" style="margin:0; padding:0; border:none;"><i class="fa-solid fa-table-list"></i> 3. 평가 방식별 통합 총괄표 확인</h2>
+                <button type="button" class="btn-dark" style="background:#28a745; padding: 10px 20px; font-size:14px;" onclick="exportSummaryExcel()"><i class="fa-solid fa-file-excel"></i> 현재 총괄표 엑셀 다운로드</button>
             </div>
-            <div class="data-table-wrapper" style="flex:1;"><table class="data-table"><thead><tr><th>소재지명</th><th>동명칭</th><th>구분</th><th>연면적(㎡)</th><th>준공연도</th><th>재조달가액</th><th>현재가액</th></tr></thead><tbody></tbody></table></div>
+            
+            <div id="summaryTabs" style="display:flex; border-bottom:2px solid #1C5691; margin-bottom:0;">
+                <div class="summary-tab active" onclick="renderSummary('title', this)" style="padding:10px 20px; border:1px solid #1C5691; border-bottom:none; background:#fff; font-weight:bold; color:#1C5691; cursor:pointer; border-radius:4px 4px 0 0; margin-right:5px;">표제부 기반 총괄표</div>
+                <div class="summary-tab" onclick="renderSummary('floor', this)" style="padding:10px 20px; border:1px solid #ddd; border-bottom:none; background:#f8f9fa; color:#666; cursor:pointer; border-radius:4px 4px 0 0; margin-right:5px;">층별 기반 총괄표</div>
+                <div class="summary-tab" onclick="renderSummary('kfpa', this)" style="padding:10px 20px; border:1px solid #ddd; border-bottom:none; background:#f8f9fa; color:#666; cursor:pointer; border-radius:4px 4px 0 0;">화협자료 기반 총괄표</div>
+            </div>
+            
+            <div class="data-table-wrapper" style="flex:1; border-top: none; overflow-y: auto; height: 500px;">
+                <table class="data-table" id="summaryTable" style="margin: 0; border: none;">
+                    <thead style="position: sticky; top: 0; z-index: 1;">
+                        <tr>
+                            <th>소재지명</th>
+                            <th>동명칭</th>
+                            <th>구분</th>
+                            <th>연면적(㎡)</th>
+                            <th>재조달가액(원)</th>
+                            <th>현재가액(원)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodySummary">
+                        <tr><td colspan="6" style="text-align:center; padding: 60px; color:#999;">좌측 메뉴에서 평가를 완료한 후 총괄표를 확인해 주세요.</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>

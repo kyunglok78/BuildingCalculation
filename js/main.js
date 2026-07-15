@@ -1175,3 +1175,130 @@ window.confirmAllKfpaData = function() {
     
     alert(`🎉 총 ${sites.length}개 사업장의 화협자료가 평가 테이블로 일괄 전송되었습니다!\n(엑셀 구조코드를 바탕으로 단가, 노무비, 물가지수 자동 매핑 완료)`);
 };
+
+// ============================================================================
+// [12] ★ 통합 총괄표(Summary Table) 렌더링 로직
+// ============================================================================
+
+// 총괄표 화면 진입 (기본적으로 표제부 탭 렌더링)
+window.initSummaryScreen = function() {
+    goToSlide('slide8');
+    const firstTab = document.querySelector('#summaryTabs .summary-tab');
+    if (firstTab) firstTab.click();
+};
+
+window.renderSummary = function(mode, tabElement) {
+    // 1. 탭 UI 스타일 변경
+    if (tabElement) {
+        document.querySelectorAll('#summaryTabs .summary-tab').forEach(t => {
+            t.style.background = '#f8f9fa'; t.style.color = '#666'; 
+            t.style.borderColor = '#ddd'; t.style.fontWeight = 'normal';
+        });
+        tabElement.style.background = '#fff'; tabElement.style.color = '#1C5691'; 
+        tabElement.style.borderColor = '#1C5691'; tabElement.style.fontWeight = 'bold';
+    }
+
+    const tbody = document.getElementById('tbodySummary');
+    tbody.innerHTML = '';
+    
+    const dataObj = window.kbState.evalData[mode];
+    if (!dataObj || Object.keys(dataObj).length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 60px; color:#999; font-size:15px;"><i class="fa-solid fa-folder-open" style="font-size:30px; margin-bottom:10px; display:block;"></i>${mode === 'title' ? '표제부' : mode === 'floor' ? '층별' : '화협자료'} 평가 데이터가 아직 없습니다.</td></tr>`;
+        return;
+    }
+
+    let grandTotalArea = 0, grandTotalReco = 0, grandTotalCur = 0;
+
+    // 2. 사업장(Site)별 데이터 순회
+    for (const [siteName, groups] of Object.entries(dataObj)) {
+        let siteTotalArea = 0, siteTotalReco = 0, siteTotalCur = 0;
+        const groupArray = Array.isArray(groups) ? groups : Object.values(groups);
+
+        if (groupArray.length === 0) continue;
+
+        // 3. 동(Group)별 데이터 순회
+        groupArray.forEach((group, gIdx) => {
+            let groupArea = 0;
+            (group.records || []).forEach(r => groupArea += (parseFloat(r.연면적) || 0));
+
+            const recoTotal = parseFloat(group.재조달_합계 || 0);
+            const curTotal = parseFloat(group.현재_합계 || 0);
+            const recoSub = parseFloat(group.재조달_부속 || 0);
+            const curSub = parseFloat(group.현재_부속 || 0);
+            const recoArch = recoTotal - recoSub;
+            const curArch = curTotal - curSub;
+
+            siteTotalArea += groupArea;
+            siteTotalReco += recoTotal;
+            siteTotalCur += curTotal;
+
+            const dongName = group.동명칭 || '-';
+            const accRate = parseFloat(group.부속비율 || 20.0).toFixed(1);
+
+            // 해당 사업장의 첫 번째 동(Group)일 때만 소재지명 컬럼에 rowspan을 줍니다.
+            const siteCellHtml = (gIdx === 0) 
+                ? `<td rowspan="${groupArray.length * 3}" style="vertical-align:middle; font-weight:bold; background:#fff;">${siteName}</td>` 
+                : '';
+
+            // [동별] 건축공사비 행
+            tbody.innerHTML += `
+                <tr style="background:#fff;">
+                    ${siteCellHtml}
+                    <td rowspan="3" style="vertical-align:middle; font-weight:bold; color:#1C5691;">${dongName}</td>
+                    <td>건축공사비</td>
+                    <td style="text-align:right;">${formatArea(groupArea)}</td>
+                    <td style="text-align:right;">${formatPrice(recoArch)}</td>
+                    <td style="text-align:right;">${formatPrice(curArch)}</td>
+                </tr>
+            `;
+            // [동별] 부속설비 행
+            tbody.innerHTML += `
+                <tr style="background:#f8f9fa;">
+                    <td>부속설비 (${accRate}%)</td>
+                    <td style="text-align:right; color:#999;">-</td>
+                    <td style="text-align:right;">${formatPrice(recoSub)}</td>
+                    <td style="text-align:right;">${formatPrice(curSub)}</td>
+                </tr>
+            `;
+            // [동별] 소계 행
+            tbody.innerHTML += `
+                <tr style="background:#e2e8f0; font-weight:bold;">
+                    <td>소계</td>
+                    <td style="text-align:right;">${formatArea(groupArea)}</td>
+                    <td style="text-align:right; color:#1C5691;">${formatPrice(recoTotal)}</td>
+                    <td style="text-align:right; color:#1C5691;">${formatPrice(curTotal)}</td>
+                </tr>
+            `;
+        });
+
+        // [사업장별] 합계 행
+        grandTotalArea += siteTotalArea;
+        grandTotalReco += siteTotalReco;
+        grandTotalCur += siteTotalCur;
+
+        tbody.innerHTML += `
+            <tr style="background:#cbd5e1; font-weight:bold;">
+                <td colspan="3" style="text-align:center;">[${siteName}] 평가 합계</td>
+                <td style="text-align:right; color:#d32f2f;">${formatArea(siteTotalArea)}</td>
+                <td style="text-align:right; color:#d32f2f;">${formatPrice(siteTotalReco)}</td>
+                <td style="text-align:right; color:#d32f2f;">${formatPrice(siteTotalCur)}</td>
+            </tr>
+        `;
+    }
+
+    // 4. [전체] 총계 행 (맨 아래)
+    if (Object.keys(dataObj).length > 1) { // 사업장이 2개 이상일 때만 전체 총계 표시
+        tbody.innerHTML += `
+            <tr style="background:#1C5691; color:#fff; font-weight:bold; font-size:15px;">
+                <td colspan="3" style="text-align:center;">전체 사업장 총 평가액</td>
+                <td style="text-align:right;">${formatArea(grandTotalArea)}</td>
+                <td style="text-align:right;">${formatPrice(grandTotalReco)}</td>
+                <td style="text-align:right;">${formatPrice(grandTotalCur)}</td>
+            </tr>
+        `;
+    }
+};
+
+window.exportSummaryExcel = function() {
+    alert("엑셀 다운로드 기능은 다음 단계에서 구현할 예정입니다! ^^");
+};
