@@ -142,10 +142,14 @@
                     <input type="text" class="input-short" value="" placeholder="예: 공장/지점명">
                     <button type="button" class="btn-blue" onclick="openAddressModal(this); return false;"><i class="fa-solid fa-magnifying-glass"></i> 주소 검색</button>
                     <span>주소</span><input type="text" class="input-long addr-input" value="" placeholder="주소를 검색해 주세요" readonly>
-                    <div class="check-group">
+                    <div class="check-group" style="display: inline-flex; align-items: center;">
                         <label class="check-item"><input type="checkbox" class="check-ledger" checked onchange="updateMenuState()"> 건축물대장</label>
-                        <label class="check-item"><input type="checkbox" class="check-kfpa" checked onchange="updateMenuState()"> 화협자료평가</label>
+                        <label class="check-item" style="margin-right: 5px;"><input type="checkbox" class="check-kfpa" checked onchange="updateMenuState()"> 화협자료평가</label>
+                        <button type="button" class="btn-dark" style="background:#28a745; padding: 3px 8px; font-size:12px; border:none; border-radius:3px; cursor:pointer;" onclick="triggerKfpaUpload(this)">
+                              <i class="fa-solid fa-file-excel"></i> 엑셀 첨부
+                         </button>
                     </div>
+                    <input type="file" id="globalKfpaFileInput" accept=".xlsx, .xls, .csv" style="display: none;" onchange="loadKfpaExcel(event)">
                 </div>
             </div>
             <div class="section-title">1.2 평가지수 불러오기</div>
@@ -197,11 +201,14 @@
         <div class="main-content">
             <h2 class="page-title"><i class="fa-regular fa-file-lines"></i> 2.1.1 건축물대장 통합 조회 및 불러오기</h2>
             <div class="top-panel mb-20">
-                <div class="input-row" style="margin:0;">
-                    <span class="input-label">보험계약자</span>
-                    <input type="text" class="input-box contractor-sync" value="" placeholder="(일반정보 동기화됨)" readonly style="background:#f8f9fa; border:none; outline:none; font-weight:bold;">
+                <div class="input-row" style="margin:0; align-items:center;">
+                    <span class="input-label" style="width:100px;">적용 사업장</span>
+                    <input type="text" id="kfpaPreviewSite" class="input-box" value="" readonly style="background:#f8f9fa; font-weight:bold; width:150px; margin-right:20px; color:#1C5691; border: 1px solid #ccc;">
+                    
+                    <span class="input-label" style="width:80px;">사업장 주소</span>
+                    <input type="text" id="kfpaPreviewAddress" class="input-box" value="" readonly style="background:#f8f9fa; width:350px; border: 1px solid #ccc; color:#666;">
                 </div>
-                <div>
+            </div>                <div>
                     <button type="button" class="btn-dark" onclick="simulateApiFetch(); return false;" id="btnFetchApi">건축물대장 조회시작</button>
                     <button type="button" class="btn-dark" style="background:#28a745; margin-left: 10px;" onclick="exportLedgerToExcel()"><i class="fa-solid fa-file-excel"></i> 대장 엑셀 내보내기</button>
                 </div>
@@ -360,20 +367,13 @@
         <div class="main-content">
             <h2 class="page-title"><i class="fa-solid fa-file-csv"></i> 2.2.1 화협(KFPA) 자료 업로드 및 데이터 검증</h2>
             
-            <div class="top-panel mb-20">
+           <div class="top-panel mb-20">
                 <div class="input-row" style="margin:0; align-items:center;">
-                    <span class="input-label" style="width:100px;">보험계약자</span>
-                    <input type="text" class="input-box contractor-sync" value="" readonly style="background:#f8f9fa; border:none; outline:none; font-weight:bold; width:150px; margin-right:20px;">
+                    <span class="input-label" style="width:100px;">적용 사업장</span>
+                    <input type="text" id="kfpaPreviewSite" class="input-box" value="" readonly style="background:#f8f9fa; font-weight:bold; width:150px; margin-right:20px; color:#1C5691; border: 1px solid #ccc;">
                     
-                    <span class="input-label" style="width:140px; color:#1C5691;"><i class="fa-solid fa-location-dot"></i> 적용 사업장 선택</span>
-                    <select id="kfpaSiteSelect" class="input-box" style="width: 250px; font-weight: bold; border: 2px solid #1C5691;">
-                        <option value="">사업장 선택...</option>
-                    </select>
-                    
-                    <input type="file" id="kfpaFileInput" accept=".xlsx, .xls, .csv" style="display: none;" onchange="loadKfpaExcel(event)">
-                    <button type="button" class="btn-dark" style="background:#28a745; margin-left: auto;" onclick="document.getElementById('kfpaFileInput').click()">
-                        <i class="fa-solid fa-file-excel"></i> 화협자료 파일 찾기
-                    </button>
+                    <span class="input-label" style="width:80px;">사업장 주소</span>
+                    <input type="text" id="kfpaPreviewAddress" class="input-box" value="" readonly style="background:#f8f9fa; width:350px; border: 1px solid #ccc; color:#666;">
                 </div>
             </div>
 
