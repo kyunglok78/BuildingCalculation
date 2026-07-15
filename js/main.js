@@ -44,7 +44,6 @@ window.onload = function() {
             };
         }
     });
-
     runGroupedRenderTest(); 
 };
 
@@ -95,9 +94,7 @@ function renderEvalTabsAndTable(mode, tbodyId, tabContainerId) {
         };
         tabContainer.appendChild(tabBtn);
     });
-
-    const selectedData = dataObj[currentSite];
-    renderEvalTableGrouped(tbody, selectedData, mode, currentSite);
+    renderEvalTableGrouped(tbody, dataObj[currentSite], mode, currentSite);
 }
 
 // ============================================================================
@@ -111,7 +108,6 @@ function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
         let groupArea = 0;
         const records = group.records || group.데이터리스트 || [group]; 
 
-        // [1행: 건축공사비] 
         records.forEach((record, rIdx) => {
             const seq = record['일련번호'] || '-';
             const dongName = record['동명칭'] || '-';
@@ -130,7 +126,6 @@ function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
 
             groupArea += area;
 
-            // ★ 항시 노출되는 직접입력창 + 돋보기 하이브리드 UI 생성
             const codeVal = (strctCode !== "nan" && strctCode !== "-") ? strctCode : "";
             const codeInputHtml = `
                 <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
@@ -185,7 +180,6 @@ function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
 
         grandTotalArea += groupArea; grandTotalReco += recoTotal; grandTotalCur += curTotal;
 
-        // [2행: 부속설비]
         const trSub = document.createElement('tr');
         trSub.style.backgroundColor = '#f8f9fa';
         trSub.innerHTML = `
@@ -195,7 +189,6 @@ function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
         `;
         tbody.appendChild(trSub);
 
-        // [3행: 소계]
         const trTotal = document.createElement('tr');
         trTotal.style.backgroundColor = '#e2e8f0'; trTotal.style.fontWeight = 'bold';
         trTotal.innerHTML = `
@@ -289,9 +282,6 @@ function syncTitleData() {
     alert("표제부 데이터 연동이 완료되었습니다.");
 }
 
-// ============================================================================
-// ★ [신규 추가] 층별 데이터 연동 및 표제부 데이터(구조, 감가, 부속비율) 자동 상속
-// ============================================================================
 window.syncFloorData = function() {
     const fetchedData = window.kbState.fetchedData;
     if (!fetchedData || Object.keys(fetchedData).length === 0) {
@@ -302,30 +292,23 @@ window.syncFloorData = function() {
     }
     
     const newFloorData = {};
-    
     Object.keys(fetchedData).forEach(siteName => {
         const siteData = fetchedData[siteName];
         const dfFloor = siteData["floor"] || siteData["층별 개요"] || [];
         const dfRecap = siteData["recap"] || siteData["총괄표제부 정보"] || [];
-        
         let fallbackYear = 2000;
         if (dfRecap.length > 0 && dfRecap[0]["useAprDay"]) {
             const aprDate = String(dfRecap[0]["useAprDay"]).replace(/[-/]/g, "").trim();
             if (aprDate.length >= 4 && !isNaN(aprDate.substring(0, 4))) fallbackYear = parseInt(aprDate.substring(0, 4));
         }
-        
-        // ★ 1. 표제부(Title) 평가 데이터 가져오기 (매칭용)
         const titleRecords = window.kbState.evalData.title[siteName] || [];
-        
-        const siteGroups = {}; // 동별로 그룹핑
+        const siteGroups = {}; 
         
         dfFloor.forEach((row, idx) => {
             let dongNm = (row["dongNm"] || "").trim(); 
             if (!dongNm || dongNm === "-" || dongNm === "nan") dongNm = "본동";
-            
             const area = isNaN(parseFloat(String(row["area"] || "0").replace(/,/g, "").trim())) ? 0.0 : parseFloat(String(row["area"] || "0").replace(/,/g, "").trim());
             const strct = (row["strctCdNm"] || "-").trim(); 
-            
             const flrGb = (row["flrGbCdNm"] || "").trim();
             const flrNo = (row["flrNoNm"] || "").trim();
             const etcPurps = (row["etcPurps"] || "-").trim();
@@ -334,33 +317,24 @@ window.syncFloorData = function() {
             
             let buildYear = fallbackYear;
             const rowAprDate = String(row["useAprDay"] || "").replace(/[-/]/g, "").trim();
-            if (rowAprDate.length >= 4 && !isNaN(rowAprDate.substring(0, 4))) {
-                buildYear = parseInt(rowAprDate.substring(0, 4));
-            }
+            if (rowAprDate.length >= 4 && !isNaN(rowAprDate.substring(0, 4))) buildYear = parseInt(rowAprDate.substring(0, 4));
             
-            // 기본 레코드 뼈대 생성
             const record = {
                 "일련번호": String(idx + 1), "동명칭": dongNm, "용도": purps, "연면적": area, "구조명": strct,
                 "준공연도": buildYear, "구조코드": "-", "단가": 0.0, "노무비": 0.0, "물가지수": 1.0,
                 "감가율": 1.78, "재조달_건축": 0, "잔가율": 100.0, "현재_건축": 0
             };
             
-            // ★ 2. 표제부 상속 로직 (핵심 포인트)
-            let inheritedRatio = 20.0; // 기본 부속비율
-            
-            // 현재 층의 '동명칭'과 일치하는 표제부 건물을 찾음
+            let inheritedRatio = 20.0; 
             const tGroup = titleRecords.find(g => g.동명칭 === dongNm);
             if (tGroup) {
-                const tReq = tGroup.records[0]; // 표제부의 실제 입력 데이터
-                record["구조코드"] = tReq["구조코드"];
-                record["단가"] = tReq["단가"];
-                record["노무비"] = tReq["노무비"];
-                record["물가지수"] = tReq["물가지수"];
+                const tReq = tGroup.records[0];
+                record["구조코드"] = tReq["구조코드"]; record["단가"] = tReq["단가"];
+                record["노무비"] = tReq["노무비"]; record["물가지수"] = tReq["물가지수"];
                 record["감가율"] = tReq["감가율"];
                 if (tGroup["부속비율"]) inheritedRatio = tGroup["부속비율"];
             }
             
-            // 그룹(동) 단위로 층별 데이터 묶어주기
             if (!siteGroups[dongNm]) {
                 siteGroups[dongNm] = {
                     "동명칭": dongNm, "부속비율": inheritedRatio, "재조달_부속": 0, "재조달_합계": 0, "현재_부속": 0, "현재_합계": 0,
@@ -369,19 +343,13 @@ window.syncFloorData = function() {
             }
             siteGroups[dongNm].records.push(record);
         });
-        
-        if (Object.keys(siteGroups).length > 0) {
-            newFloorData[siteName] = Object.values(siteGroups);
-        }
+        if (Object.keys(siteGroups).length > 0) newFloorData[siteName] = Object.values(siteGroups);
     });
     
     window.kbState.evalData.floor = newFloorData;
     window.kbState.activeSite.floor = Object.keys(newFloorData)[0] || null;
-    
-    // 복사된 데이터로 가액 자동 재계산 및 화면 렌더링
     Object.keys(newFloorData).forEach(siteName => recalculateValuation('floor', siteName));
     renderEvalTabsAndTable('floor', 'tbodyFloorEval', 'tabsFloorEval');
-    
     alert("✅ 층별 데이터 연동 완료!\n\n(표제부에서 작업하신 구조코드, 단가, 노무비, 감가율, 부속비율이 동명칭 기준으로 자동 상속되었습니다.)");
 };
 
@@ -431,12 +399,9 @@ window.editCell = function(tdElement, mode, siteName, gIdx, rIdx, field, inputTy
         let newVal = input.value.replace(/,/g, '').replace(/%/g, '').trim();
         if (inputType === 'number') newVal = isNaN(parseFloat(newVal)) ? 0 : parseFloat(newVal);
         targetObj[field] = newVal;
-        
-        // ★ [핵심 추가] 노무비 직접 편집 시 물가지수도 자동 재계산
         if (field === '노무비') {
             if(window.applyAutoPriceIndex) window.applyAutoPriceIndex(targetObj);
         }
-        
         recalculateValuation(mode, siteName);
         renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
     };
@@ -474,7 +439,7 @@ window.recalculateValuation = function(mode, siteName) {
 };
 
 // ============================================================================
-// [7] ★ 신축단가 엑셀 로드 및 구조코드 하이브리드 연동 (엑셀 밀림 및 병합셀 완벽 방어)
+// [7] 단가/물가/구조코드 연동 로직
 // ============================================================================
 window.loadCostExcel = function(event) {
     const file = event.target.files[0];
@@ -490,84 +455,45 @@ window.loadCostExcel = function(event) {
             const worksheet = workbook.Sheets[targetSheetName];
             const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: "-"});
             
-            // 1. 단가, 노무비 최신 연도 인덱스 동적 탐색 (병합 셀 완벽 방어)
             window.kbState.costBaseYear = new Date().getFullYear();
-            let idxDanga = 26, idxNomu = 43; // 기본값 (통상 26열, 43열)
+            let idxDanga = 26, idxNomu = 43; 
             let yearCols = [];
-            
-            // 상위 15개 행을 탐색하여 연도(2025 등)가 적힌 열을 모두 수집
             for (let r = 0; r < Math.min(jsonData.length, 15); r++) {
                 const row = jsonData[r];
                 if (!row) continue;
                 for (let c = 5; c < row.length; c++) {
-                    const cellStr = String(row[c]).replace(/\s/g, "");
-                    const match = cellStr.match(/^(20\d{2})(년)?$/); // 2025 또는 2025년 매칭
-                    if (match) {
-                        yearCols.push({ col: c, year: parseInt(match[1], 10) });
-                    }
+                    const match = String(row[c]).replace(/\s/g, "").match(/^(20\d{2})(년)?$/);
+                    if (match) yearCols.push({ col: c, year: parseInt(match[1], 10) });
                 }
             }
-            
             if (yearCols.length > 0) {
                 const maxYear = Math.max(...yearCols.map(y => y.year));
                 window.kbState.costBaseYear = maxYear; 
-                
-                // 최신 연도에 해당하는 열 번호 추출 (중복 제거)
-                const maxCols = yearCols.filter(y => y.year === maxYear).map(y => y.col);
-                const uniqueCols = [...new Set(maxCols)].sort((a, b) => a - b);
-                
-                if (uniqueCols.length >= 2) {
-                    idxDanga = uniqueCols[0];
-                    idxNomu = uniqueCols[1];
-                } else if (uniqueCols.length === 1) {
-                    idxDanga = uniqueCols[0];
-                    idxNomu = uniqueCols[0] + 1; // 병합셀 대비 우측 칸 강제 지정
-                }
+                const uniqueCols = [...new Set(yearCols.filter(y => y.year === maxYear).map(y => y.col))].sort((a, b) => a - b);
+                if (uniqueCols.length >= 2) { idxDanga = uniqueCols[0]; idxNomu = uniqueCols[1]; } 
+                else if (uniqueCols.length === 1) { idxDanga = uniqueCols[0]; idxNomu = uniqueCols[0] + 1; }
             }
 
             window.kbState.costData = [];
-            
-// 2. 데이터 파싱 (불필요한 헤더/빈칸 행 무시하고 순수 데이터만 쏙쏙 추출)
             for(let i = 0; i < jsonData.length; i++) {
                 const row = jsonData[i];
                 if(!row || row.length < 6) continue;
+                const colDae = String(row[0] || "").trim(); const colJung = String(row[1] || "").trim();
+                const colSo = String(row[2] || "").trim(); const colYong = String(row[3] || "").trim();
+                const colGoo = String(row[4] || "").trim(); const colGeup = String(row[5] || "").trim();
                 
-                // ★ [수정됨] A열(0)부터 F열(5)까지로 인덱스를 한 칸씩 당겨서 맵핑 (밀림 현상 해결)
-                const colDae = String(row[0] || "").trim();
-                const colJung = String(row[1] || "").trim();
-                const colSo = String(row[2] || "").trim();
-                const colYong = String(row[3] || "").trim();
-                const colGoo = String(row[4] || "").trim();
-                const colGeup = String(row[5] || "").trim();
-                
-                // 데이터 유효성 검사 (코드나 용도, 구조 중 하나라도 있어야 함)
                 if (colDae.includes("용도별") || colDae.includes("상승지수") || colDae.includes("분류번호")) continue;
                 if (!colDae && !colJung && !colYong && !colGoo) continue;
                 
                 const danga = parseFloat(String(row[idxDanga]).replace(/,/g, '')) || 0;
                 const nomu = parseFloat(String(row[idxNomu]).replace(/,/g, '')) || 0;
-                
-                // 단가, 노무비가 둘 다 0이고 구조명도 없으면 의미 없는 행이므로 스킵
                 if (danga === 0 && nomu === 0 && colGoo === "" && colGoo === "-") continue;
                 
-                window.kbState.costData.push({
-                    '대분류': colDae || "-", 
-                    '중분류': colJung || colDae || "-", 
-                    '소분류': colSo || "-", 
-                    '용도': colYong || "-", 
-                    '구조': colGoo || "-", 
-                    '급수': colGeup || "-",
-                    '단가': danga,
-                    '노무비': nomu
-                });
+                window.kbState.costData.push({'대분류': colDae || "-", '중분류': colJung || colDae || "-", '소분류': colSo || "-", '용도': colYong || "-", '구조': colGoo || "-", '급수': colGeup || "-", '단가': danga, '노무비': nomu});
             }
-            alert(`✅ 신축단가표 분석 완료! (총 ${window.kbState.costData.length}건 데이터 탑재)`);
-            
+            alert(`✅ 신축단가표 분석 완료! (총 ${window.kbState.costData.length}건)`);
             if(window.retroactiveApplyPriceIndex) window.retroactiveApplyPriceIndex();
-            
-        } catch(err) {
-            alert("엑셀 파싱 중 오류가 발생했습니다.\n(에러: " + err + ")");
-        }
+        } catch(err) { alert("엑셀 파싱 중 오류가 발생했습니다.\n(에러: " + err + ")"); }
     };
     reader.readAsArrayBuffer(file);
     event.target.value = ''; 
@@ -581,23 +507,16 @@ window.applyCodeToRecord = function(code, mode, siteName, gIdx, rIdx, skipRender
             const cleanCode = String(code).replace(/-/g, "");
             const matched = window.kbState.costData.find(row => {
                 const allText = Object.values(row).map(v => String(v || "")).join(" ").toLowerCase();
-                const cleanAllText = allText.replace(/-/g, "");
-                return allText.includes(String(code).toLowerCase()) || (cleanCode && cleanAllText.includes(cleanCode));
+                return allText.includes(String(code).toLowerCase()) || (cleanCode && allText.replace(/-/g, "").includes(cleanCode));
             });
-            if(matched) { 
-                record['단가'] = matched['단가']; 
-                record['노무비'] = matched['노무비']; 
-                if(window.applyAutoPriceIndex) window.applyAutoPriceIndex(record);
-            }
+            if(matched) { record['단가'] = matched['단가']; record['노무비'] = matched['노무비']; if(window.applyAutoPriceIndex) window.applyAutoPriceIndex(record); }
         }
     };
     if (gIdx === null || rIdx === null) { 
         if(!siteData) return;
         if (Array.isArray(siteData)) siteData.forEach(group => group.records.forEach(updateRecord));
         else Object.values(siteData).forEach(group => group.records.forEach(updateRecord));
-    } else { 
-        updateRecord(Array.isArray(siteData) ? siteData[gIdx].records[rIdx] : siteData[Object.keys(siteData)[gIdx]].records[rIdx]);
-    }
+    } else { updateRecord(Array.isArray(siteData) ? siteData[gIdx].records[rIdx] : siteData[Object.keys(siteData)[gIdx]].records[rIdx]); }
     recalculateValuation(mode, siteName); 
     if(!skipRender) renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
 };
@@ -610,10 +529,7 @@ window.openCodeModal = function(mode, siteName, gIdx, rIdx, initKeyword) {
     document.getElementById('codeSearchKeyword').value = initKeyword || "6-1-6-16-3";
     searchCodeData();
 };
-
-window.closeCodeModal = function() {
-    document.getElementById('codeSearchModal').style.display = 'none'; window.currentCodeTarget = null;
-};
+window.closeCodeModal = function() { document.getElementById('codeSearchModal').style.display = 'none'; window.currentCodeTarget = null; };
 
 window.searchCodeData = function() {
     const col = document.getElementById('codeSearchCol').value;
@@ -626,13 +542,7 @@ window.searchCodeData = function() {
             const targetVal = String(row[col] || "").toLowerCase();
             const allText = Object.values(row).map(v => String(v || "")).join(" ").toLowerCase();
             const cleanKw = kw.replace(/-/g, "");
-            const cleanAllText = allText.replace(/-/g, "");
-            
-            if (targetVal.includes(kw)) return true;
-            if (allText.includes(kw)) return true;
-            if (cleanKw && cleanAllText.includes(cleanKw)) return true;
-            
-            return false;
+            return targetVal.includes(kw) || allText.includes(kw) || (cleanKw && allText.replace(/-/g, "").includes(cleanKw));
         });
     }
     
@@ -640,16 +550,8 @@ window.searchCodeData = function() {
     for(let i=0; i<max; i++) {
         const row = filtered[i]; const tr = document.createElement('tr');
         tr.style.cursor = 'pointer'; tr.style.background = i % 2 === 0 ? '#fff' : '#f9f9fa';
-        
-        const dispDae = row['대분류'] || '-';
-        const dispJung = row['중분류'] || dispDae;
-        const dispSo = row['소분류'] || '-';
-        const dispYong = row['용도'] || dispDae;
-        const dispGoo = row['구조'] || '-';
-        const dispGeup = row['급수'] || '-';
-
-        tr.innerHTML = `<td>${dispDae}</td><td style="font-weight:bold; color:#1C5691;">${dispJung}</td><td>${dispSo}</td><td>${dispYong}</td><td>${dispGoo}</td><td>${dispGeup}</td><td style="text-align:right;">${formatPrice(row['단가'])}</td><td style="text-align:right;">${formatPrice(row['노무비'])}</td>`;
-        
+        const dispDae = row['대분류'] || '-'; const dispJung = row['중분류'] || dispDae;
+        tr.innerHTML = `<td>${dispDae}</td><td style="font-weight:bold; color:#1C5691;">${dispJung}</td><td>${row['소분류'] || '-'}</td><td>${row['용도'] || dispDae}</td><td>${row['구조'] || '-'}</td><td>${row['급수'] || '-'}</td><td style="text-align:right;">${formatPrice(row['단가'])}</td><td style="text-align:right;">${formatPrice(row['노무비'])}</td>`;
         const applyVal = (dispJung !== '-' && dispJung !== 'undefined') ? dispJung : dispDae;
         tr.onclick = () => { Array.from(tbody.children).forEach(c => c.style.background = c.dataset.origBg); tr.dataset.origBg = tr.style.background; tr.style.background = '#d6e4f0'; tbody.dataset.selectedCode = applyVal; };
         tr.ondblclick = () => { tbody.dataset.selectedCode = applyVal; applySelectedCode(); };
@@ -659,81 +561,44 @@ window.searchCodeData = function() {
 
 window.applySelectedCode = function() {
     const code = document.getElementById('codeSearchTbody').dataset.selectedCode;
-    if(!code || code === 'undefined') return alert("반영할 코드를 목록에서 선택해주세요.");
+    if(!code || code === 'undefined') return alert("반영할 코드를 선택해주세요.");
     if(!window.currentCodeTarget) return;
-    const {mode, siteName, gIdx, rIdx} = window.currentCodeTarget;
-    applyCodeToRecord(code, mode, siteName, gIdx, rIdx); 
+    applyCodeToRecord(code, window.currentCodeTarget.mode, window.currentCodeTarget.siteName, window.currentCodeTarget.gIdx, window.currentCodeTarget.rIdx); 
     closeCodeModal();
 };
 
-// ============================================================================
-// [7-5] ★ 물가지수 엑셀 로드 및 연동 (파이썬 완벽 호환)
-// ============================================================================
 window.loadIndexExcel = function(event) {
     const file = event.target.files[0];
     if(!file) return;
-    
-    const pathInput = document.getElementById('priceIndexPath');
-    if(pathInput) pathInput.value = file.name;
-    
+    document.getElementById('priceIndexPath').value = file.name;
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, {type: 'array'});
-            const sheetName = workbook.SheetNames[0]; 
-            const worksheet = workbook.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, {defval: "-"});
-            
-            window.kbState.indexData = jsonData;
+            window.kbState.indexData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {defval: "-"});
             alert(`✅ 건축물가지수 엑셀 분석 완료!`);
-            
             if(window.retroactiveApplyPriceIndex) window.retroactiveApplyPriceIndex();
-        } catch(err) {
-            alert("물가지수 파싱 중 오류가 발생했습니다.\n(에러: " + err + ")");
-        }
+        } catch(err) { alert("물가지수 파싱 중 오류 발생: " + err); }
     };
     reader.readAsArrayBuffer(file);
     event.target.value = ''; 
 };
-
-// 동적으로 엘리먼트를 찾아서 이벤트 리스너 부착
-setTimeout(() => {
-    const priceIndexFile = document.getElementById('priceIndexFile');
-    if(priceIndexFile) priceIndexFile.addEventListener('change', window.loadIndexExcel);
-}, 1000);
+setTimeout(() => { const priceIndexFile = document.getElementById('priceIndexFile'); if(priceIndexFile) priceIndexFile.addEventListener('change', window.loadIndexExcel); }, 1000);
 
 window.applyAutoPriceIndex = function(record) {
     if(!window.kbState.indexData || window.kbState.indexData.length === 0) return;
-    const nomuVal = parseFloat(record['노무비']) || 0;
-    if (nomuVal <= 0) return;
-
+    const nomuVal = parseFloat(record['노무비']) || 0; if (nomuVal <= 0) return;
     const targetYear = String(window.kbState.costBaseYear || new Date().getFullYear());
-
-    let yearCol = null;
-    let nomuCol = null;
-
-    const sampleRow = window.kbState.indexData[0] || {};
-    for(let key in sampleRow) {
+    let yearCol = null, nomuCol = null;
+    for(let key in window.kbState.indexData[0] || {}) {
         const cleanKey = String(key).replace(/\s/g, '');
         if (cleanKey.includes(targetYear)) yearCol = key;
         if (cleanKey.includes("인건비") || cleanKey.includes("노무비")) nomuCol = key;
     }
-
     if (!yearCol || !nomuCol) return;
-
-    const matched = window.kbState.indexData.find(row => {
-        const rowNomuStr = String(row[nomuCol] || "").replace(/,/g, '').split('.')[0];
-        const rowNomu = parseFloat(rowNomuStr);
-        return rowNomu === Math.floor(nomuVal);
-    });
-
-    if (matched) {
-        const indexVal = parseFloat(String(matched[yearCol]).replace(/,/g, ''));
-        if (!isNaN(indexVal)) {
-            record['물가지수'] = indexVal;
-        }
-    }
+    const matched = window.kbState.indexData.find(row => parseFloat(String(row[nomuCol] || "").replace(/,/g, '').split('.')[0]) === Math.floor(nomuVal));
+    if (matched && !isNaN(parseFloat(String(matched[yearCol]).replace(/,/g, '')))) record['물가지수'] = parseFloat(String(matched[yearCol]).replace(/,/g, ''));
 };
 
 window.retroactiveApplyPriceIndex = function() {
@@ -742,31 +607,19 @@ window.retroactiveApplyPriceIndex = function() {
         if (!window.kbState.evalData[mode]) return;
         Object.keys(window.kbState.evalData[mode]).forEach(siteName => {
             let groups = window.kbState.evalData[mode][siteName];
-            if (!Array.isArray(groups)) groups = Object.values(groups);
-            groups.forEach(group => {
-                const records = group.records || [group];
-                records.forEach(r => {
-                    if (r["단가"] > 0 || r["노무비"] > 0) {
-                        window.applyAutoPriceIndex(r);
-                        changed = true;
-                    }
-                });
+            (Array.isArray(groups) ? groups : Object.values(groups)).forEach(group => {
+                (group.records || [group]).forEach(r => { if (r["단가"] > 0 || r["노무비"] > 0) { window.applyAutoPriceIndex(r); changed = true; } });
             });
         });
     });
-    
     if (changed) {
-        ['title', 'floor', 'kfpa'].forEach(mode => {
-            Object.keys(window.kbState.evalData[mode] || {}).forEach(siteName => {
-                recalculateValuation(mode, siteName);
-            });
-        });
+        ['title', 'floor', 'kfpa'].forEach(mode => Object.keys(window.kbState.evalData[mode] || {}).forEach(siteName => recalculateValuation(mode, siteName)));
         runGroupedRenderTest();
     }
 };
 
 // ============================================================================
-// [8] ★ 화협 표준 감가율 연동 (모달창 데이터 주입)
+// [8] 감가율 연동 
 // ============================================================================
 window.applyDeprToRecord = function(rate, mode, siteName, gIdx, rIdx, skipRender=false) {
     const siteData = window.kbState.evalData[mode][siteName];
@@ -776,9 +629,7 @@ window.applyDeprToRecord = function(rate, mode, siteName, gIdx, rIdx, skipRender
         if(!siteData) return;
         if (Array.isArray(siteData)) siteData.forEach(group => group.records.forEach(updateRecord));
         else Object.values(siteData).forEach(group => group.records.forEach(updateRecord));
-    } else {
-        updateRecord(Array.isArray(siteData) ? siteData[gIdx].records[rIdx] : siteData[Object.keys(siteData)[gIdx]].records[rIdx]);
-    }
+    } else { updateRecord(Array.isArray(siteData) ? siteData[gIdx].records[rIdx] : siteData[Object.keys(siteData)[gIdx]].records[rIdx]); }
     recalculateValuation(mode, siteName); 
     if(!skipRender) renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
 };
@@ -788,10 +639,7 @@ window.openDeprModal = function(mode, siteName, gIdx, rIdx) {
     if(!siteName) return alert("선택된 사업장 탭이 없습니다.");
     window.currentDeprTarget = {mode, siteName, gIdx, rIdx};
     document.getElementById('deprSearchModal').style.display = 'flex';
-    
-    const tbody = document.getElementById('deprSearchTbody');
-    tbody.innerHTML = '';
-    
+    const tbody = document.getElementById('deprSearchTbody'); tbody.innerHTML = '';
     window.DEPRECIATION_DB.forEach((row, i) => {
         const tr = document.createElement('tr');
         tr.style.cursor = 'pointer'; tr.style.background = i % 2 === 0 ? '#fff' : '#f9f9fa';
@@ -801,84 +649,80 @@ window.openDeprModal = function(mode, siteName, gIdx, rIdx) {
         tbody.appendChild(tr);
     });
 };
-
-window.closeDeprModal = function() {
-    document.getElementById('deprSearchModal').style.display = 'none'; window.currentDeprTarget = null;
-};
-
+window.closeDeprModal = function() { document.getElementById('deprSearchModal').style.display = 'none'; window.currentDeprTarget = null; };
 window.applySelectedDepr = function() {
     const rate = document.getElementById('deprSearchTbody').dataset.selectedRate;
-    if(!rate) return alert("반영할 감가율을 목록에서 선택해주세요.");
+    if(!rate) return alert("반영할 감가율을 선택해주세요.");
     if(!window.currentDeprTarget) return;
-    const {mode, siteName, gIdx, rIdx} = window.currentDeprTarget;
-    applyDeprToRecord(rate, mode, siteName, gIdx, rIdx); 
+    applyDeprToRecord(rate, window.currentDeprTarget.mode, window.currentDeprTarget.siteName, window.currentDeprTarget.gIdx, window.currentDeprTarget.rIdx); 
     closeDeprModal();
 };
 
-// ============================================================================
-// [9] 부속비율 일괄적용 공통 함수
-// ============================================================================
 window.batchApplyRatio = function(mode, siteName) {
     if (!siteName) return alert("선택된 사업장 탭이 없습니다.");
     const val = prompt(`[${siteName}]의 모든 항목에 일괄 적용할 부속설비 비율(%)을 입력하세요:\n(예: 15)`, "20.0");
     if (val === null) return;
     const rate = parseFloat(val) || 0;
-    
     const siteData = window.kbState.evalData[mode][siteName];
     if (Array.isArray(siteData)) siteData.forEach(group => group.부속비율 = rate);
     else Object.values(siteData).forEach(group => group.부속비율 = rate);
-    
     recalculateValuation(mode, siteName);
     renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
     alert(`부속비율이 ${rate}%로 일괄 반영되었습니다.`);
 };
 
 // ============================================================================
-// [10] ★ 프로젝트 임시 저장 및 불러오기 (화면 완벽 복구 추가 및 하위호환성 유지)
+// [10] ★ 프로젝트 임시 저장 및 불러오기 (에러 방어 강화 및 엑셀 버튼 제거 본래 모습 유지)
 // ============================================================================
 window.quickSaveProject = function() {
-    const hasEvalData = Object.keys(window.kbState.evalData.title).length > 0 || 
-                        Object.keys(window.kbState.evalData.floor).length > 0 || 
-                        Object.keys(window.kbState.evalData.kfpa).length > 0;
-                        
-    if (Object.keys(window.kbState.fetchedData).length === 0 && !hasEvalData) {
-        alert("저장할 데이터가 존재하지 않습니다. 대장 조회나 평가를 먼저 진행해 주세요.");
-        return;
-    }
+    try {
+        const hasEvalData = Object.keys(window.kbState.evalData.title).length > 0 || 
+                            Object.keys(window.kbState.evalData.floor).length > 0 || 
+                            Object.keys(window.kbState.evalData.kfpa).length > 0;
+                            
+        if (Object.keys(window.kbState.fetchedData).length === 0 && !hasEvalData) {
+            alert("저장할 데이터가 존재하지 않습니다. 대장 조회나 평가를 먼저 진행해 주세요.");
+            return;
+        }
 
-    const contractorInputs = document.querySelectorAll('.contractor-sync');
-    const contractorName = contractorInputs.length > 0 ? contractorInputs[0].value : "";
-    const evalYearInput = document.getElementById('evalYear');
-    const evalYear = evalYearInput ? evalYearInput.value : new Date().getFullYear();
+        const contractorInputs = document.querySelectorAll('.contractor-sync');
+        const contractorName = contractorInputs.length > 0 ? contractorInputs[0].value : "";
+        const evalYearInput = document.getElementById('evalYear');
+        const evalYear = evalYearInput ? evalYearInput.value : new Date().getFullYear();
 
-    // ★ 현재 화면에 있는 소재지(주소) 목록 데이터 긁어오기
-    const locations = [];
-    document.querySelectorAll('#locationListBox .list-row').forEach(row => {
-        locations.push({
-            name: row.querySelector('.input-short') ? row.querySelector('.input-short').value : '',
-            address: row.querySelector('.addr-input') ? row.querySelector('.addr-input').value : '',
-            checkedLedger: row.querySelector('.check-ledger') ? row.querySelector('.check-ledger').checked : true,
-            checkedKfpa: row.querySelector('.check-kfpa') ? row.querySelector('.check-kfpa').checked : true
+        const locations = [];
+        document.querySelectorAll('#locationListBox .list-row').forEach(row => {
+            locations.push({
+                name: row.querySelector('.input-short') ? row.querySelector('.input-short').value : '',
+                address: row.querySelector('.addr-input') ? row.querySelector('.addr-input').value : '',
+                checkedLedger: row.querySelector('.check-ledger') ? row.querySelector('.check-ledger').checked : true,
+                checkedKfpa: row.querySelector('.check-kfpa') ? row.querySelector('.check-kfpa').checked : true
+            });
         });
-    });
 
-    const projectData = {
-        version: "1.1", // 버전 업그레이드
-        contractor: contractorName,
-        evalYear: evalYear,
-        locations: locations, // 긁어온 주소 목록을 저장 데이터에 포함!
-        kbState: window.kbState 
-    };
+        const projectData = {
+            version: "1.2", 
+            contractor: contractorName,
+            evalYear: evalYear,
+            locations: locations, 
+            kbState: window.kbState 
+        };
 
-    const blob = new Blob([JSON.stringify(projectData)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    
-    const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, "");
-    a.download = `${contractorName || '가액평가'}_임시저장_${dateStr}.kbproj`;
-    a.click();
-    URL.revokeObjectURL(url);
+        const jsonString = JSON.stringify(projectData);
+        if(!jsonString) throw new Error("JSON 변환 실패");
+
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, "");
+        a.download = `${contractorName || '가액평가'}_임시저장_${dateStr}.kbproj`;
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        alert("저장 중 오류가 발생했습니다. 화면이 정상적인 상태인지 확인해주세요.\n(" + e.message + ")");
+    }
 };
 
 window.quickLoadProject = function(event) {
@@ -890,12 +734,8 @@ window.quickLoadProject = function(event) {
         try {
             const projectData = JSON.parse(e.target.result);
             
-            // 1. 상태 완전 복구
-            if (projectData.kbState) {
-                window.kbState = projectData.kbState;
-            }
+            if (projectData.kbState) window.kbState = projectData.kbState;
 
-            // 2. 일반정보 UI 복원
             if (projectData.contractor) {
                 document.querySelectorAll('.contractor-sync').forEach(el => el.value = projectData.contractor);
             }
@@ -904,7 +744,6 @@ window.quickLoadProject = function(event) {
                 if (evalYearInput) evalYearInput.value = projectData.evalYear;
             }
 
-            // 3. 저장된 주소 데이터를 바탕으로 HTML 소재지 목록 다시 그리기
             const listBox = document.getElementById('locationListBox');
             if (listBox) {
                 listBox.innerHTML = ''; 
@@ -917,12 +756,9 @@ window.quickLoadProject = function(event) {
                             <input type="text" class="input-short" value="${loc.name}" placeholder="예: 공장/지점명">
                             <button type="button" class="btn-blue" onclick="openAddressModal(this); return false;"><i class="fa-solid fa-magnifying-glass"></i> 주소 검색</button>
                             <span>주소</span><input type="text" class="input-long addr-input" value="${loc.address}" placeholder="주소를 검색해 주세요" readonly>
-                            <div class="check-group" style="display: inline-flex; align-items: center;">
+                            <div class="check-group">
                                 <label class="check-item"><input type="checkbox" class="check-ledger" ${loc.checkedLedger ? 'checked' : ''} onchange="updateMenuState()"> 건축물대장</label>
-                                <label class="check-item" style="margin-right: 5px;"><input type="checkbox" class="check-kfpa" ${loc.checkedKfpa ? 'checked' : ''} onchange="updateMenuState()"> 화협자료평가</label>
-                                <button type="button" class="btn-dark" style="background:#28a745; padding: 3px 8px; font-size:12px; border:none; border-radius:3px; cursor:pointer;" onclick="triggerKfpaUpload(this)">
-                                    <i class="fa-solid fa-file-excel"></i> 엑셀 첨부
-                                </button>
+                                <label class="check-item"><input type="checkbox" class="check-kfpa" ${loc.checkedKfpa ? 'checked' : ''} onchange="updateMenuState()"> 화협자료평가</label>
                             </div>
                         `;
                         listBox.appendChild(row);
@@ -932,12 +768,8 @@ window.quickLoadProject = function(event) {
                 } 
             }
 
-            // 4. 저장된 평가 데이터를 바탕으로 하단 테이블 전체 다시 그리기
             runGroupedRenderTest();
 
-            // =========================================================
-            // 5. ★ 건축물대장 표(Table) 화면 복구 로직 (한글 번역 및 정렬 적용)
-            // =========================================================
             if (window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
                 const dataContainer = document.getElementById('fetchedDataContainer');
                 const tabsContainer = document.getElementById('slide3Tabs');
@@ -949,7 +781,6 @@ window.quickLoadProject = function(event) {
                     dataContainer.innerHTML = ''; 
                     tabsContainer.innerHTML = '';
 
-                    // ★ API 영문 키값을 한글로 예쁘게 바꿔주는 번역 사전
                     const korMap = {
                         "platPlc": "대지위치", "bldNm": "건물명", "mainPurpsCdNm": "주용도",
                         "mainBldCnt": "주건축물수", "subBldCnt": "부속건축물수", "totArea": "연면적(㎡)",
@@ -961,7 +792,6 @@ window.quickLoadProject = function(event) {
 
                     let isFirst = true;
                     for (const [siteName, siteData] of Object.entries(window.kbState.fetchedData)) {
-                        // 1) 탭 생성
                         const tabBtn = document.createElement('div');
                         tabBtn.innerText = siteName;
                         tabBtn.style.cssText = `padding:10px 20px; cursor:pointer; font-weight:bold; border:1px solid #ddd; border-bottom:none; border-radius:4px 4px 0 0; margin-right:5px; background:${isFirst ? '#fff' : '#f8f9fa'}; color:${isFirst ? '#1C5691' : '#333'};`;
@@ -977,12 +807,10 @@ window.quickLoadProject = function(event) {
                         };
                         tabsContainer.appendChild(tabBtn);
 
-                        // 2) 데이터 테이블 생성
                         for (const [title, rows] of Object.entries(siteData)) {
                             if (title === 'address' || title === 'errors' || !Array.isArray(rows) || rows.length === 0) continue;
                             
                             const sectionTitle = document.createElement('h3');
-                            // 영문 타이틀도 한글로 변환
                             let korTitle = title === 'recap' ? '총괄표제부 정보' : (title === 'title' ? '표제부 상세' : (title === 'floor' ? '층별 개요' : title));
                             sectionTitle.innerText = `■ ${korTitle}`; 
                             sectionTitle.style.cssText = 'font-size:15px; margin: 20px 0 10px 0; color:#1C5691;';
@@ -1004,12 +832,11 @@ window.quickLoadProject = function(event) {
                             const cols = Object.keys(rows[0]);
                             cols.forEach(col => {
                                 const th = document.createElement('th');
-                                const korName = korMap[col] || col; // 사전에 없으면 원래 키값 사용
+                                const korName = korMap[col] || col;
                                 th.innerHTML = `${korName} <span style="font-size:10px; color:#ccc;">▲▼</span>`;
                                 th.style.cursor = 'pointer';
                                 th.title = "클릭 시 정렬됩니다.";
                                 
-                                // ★ 오름차순/내림차순 정렬 로직
                                 th.dataset.sortOrder = 'asc';
                                 th.onclick = () => {
                                     const isAsc = th.dataset.sortOrder === 'asc';
@@ -1029,7 +856,7 @@ window.quickLoadProject = function(event) {
                                         if(valA < valB) return isAsc ? -1 : 1;
                                         return 0;
                                     });
-                                    rowArray.forEach(tr => tbody.appendChild(tr)); // 화면 재배치
+                                    rowArray.forEach(tr => tbody.appendChild(tr)); 
                                 };
                                 headerRow.appendChild(th);
                             });
@@ -1058,18 +885,17 @@ window.quickLoadProject = function(event) {
                 }
             }
 
-            alert("✅ 임시 저장 데이터 로드 완료!\n(건축물대장 내용도 정상적으로 복구되었습니다.)");
+            alert("✅ 임시 저장 데이터 로드 완료!");
         } catch (err) {
-            alert("파일 형식이 잘못되었거나 읽을 수 없습니다.\n(" + err + ")");
+            alert("⚠️ 파일 형식이 잘못되었거나 과거의 손상된 저장 파일입니다.\n(새로 작업을 시작해 주세요! 에러: " + err.message + ")");
         }
     };
     reader.readAsText(file);
     event.target.value = ''; 
 };
 
-
 // ============================================================================
-// ★ 화협(KFPA) 탭(Tab) 기반 직관적 업로드 로직 (기획 의도 완벽 반영)
+// [11] ★ 화협(KFPA) 탭(Tab) 기반 직관적 업로드 로직 (기획 의도 완벽 반영)
 // ============================================================================
 window.targetKfpaSite = "";
 window.targetKfpaAddress = "";
@@ -1118,7 +944,7 @@ window.initKfpaScreen = function() {
             window.targetKfpaAddress = loc.addr;
             
             // 미리보기 초기화
-            document.getElementById('previewKfpaTbody').innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 60px; color:#999; font-size:14px;"><i class="fa-regular fa-folder-open" style="font-size:30px; margin-bottom:10px; display:block;"></i>우측 상단의 <b>[화협 엑셀 첨부]</b>를 눌러주세요.</td></tr>';
+            document.getElementById('previewKfpaTbody').innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 60px; color:#999; font-size:14px;"><i class="fa-regular fa-folder-open" style="font-size:30px; margin-bottom:10px; display:block;"></i>우측 상단의 <b>[해당 사업장 화협 엑셀 첨부]</b>를 눌러주세요.</td></tr>';
             document.getElementById('btnConfirmKfpa').style.display = 'none';
             window.tempKfpaRecords = null;
         };
@@ -1263,4 +1089,4 @@ window.confirmKfpaData = function() {
     renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
     
     alert(`🎉 [${siteName}] 화협자료 2.2.2 평가 테이블로 전송 완료!`);
-};};
+};
