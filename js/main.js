@@ -509,7 +509,13 @@ window.applyCodeToRecord = function(code, mode, siteName, gIdx, rIdx, skipRender
                 const allText = Object.values(row).map(v => String(v || "")).join(" ").toLowerCase();
                 return allText.includes(String(code).toLowerCase()) || (cleanCode && allText.replace(/-/g, "").includes(cleanCode));
             });
-            if(matched) { record['단가'] = matched['단가']; record['노무비'] = matched['노무비']; if(window.applyAutoPriceIndex) window.applyAutoPriceIndex(record); }
+            if(matched) { 
+                record['단가'] = matched['단가']; 
+                record['노무비'] = matched['노무비']; 
+                // ★ 단가표의 구조(F열) 또는 중분류(C열) 이름을 구조명으로 자동 업데이트
+                record['구조명'] = (matched['구조'] && matched['구조'] !== "-") ? matched['구조'] : matched['중분류'];
+                if(window.applyAutoPriceIndex) window.applyAutoPriceIndex(record); 
+            }
         }
     };
     if (gIdx === null || rIdx === null) { 
@@ -1067,7 +1073,7 @@ window.loadKfpaExcel = function(event) {
     event.target.value = ''; 
 };
 
-// 4. ★ 전체 다중 사업장 일괄 확정 후 Slide 7로 이동
+// 4. ★ 전체 다중 사업장 일괄 확정 후 Slide 7로 이동 (자동 매핑 포함)
 window.confirmAllKfpaData = function() {
     const sites = Object.keys(window.tempKfpaDataStore);
     if(sites.length === 0) return alert("반영할 데이터가 전혀 없습니다. 엑셀 파일을 먼저 업로드해주세요.");
@@ -1076,12 +1082,26 @@ window.confirmAllKfpaData = function() {
     
     // 바구니에 있는 모든 사업장을 돌면서 한방에 평가 데이터로 전송
     sites.forEach(siteName => {
-        // 합계/소계 행은 평가 계산에서 제외하고 실제 건축물 데이터만 필터링
         const records = window.tempKfpaDataStore[siteName].filter(r => !r.isSubtotal); 
         const titleRecords = window.kbState.evalData.title[siteName] || [];
         const siteGroups = {};
         
         records.forEach(r => {
+            // ★ 확정 시점에 단가표(costData)가 있다면 구조코드를 바탕으로 자동 매핑 실행!
+            if (r.구조코드 && r.구조코드 !== "-" && window.kbState.costData && window.kbState.costData.length > 0) {
+                const cleanCode = String(r.구조코드).replace(/-/g, "");
+                const matched = window.kbState.costData.find(row => {
+                    const allText = Object.values(row).map(v => String(v || "")).join(" ").toLowerCase();
+                    return allText.includes(String(r.구조코드).toLowerCase()) || (cleanCode && allText.replace(/-/g, "").includes(cleanCode));
+                });
+                if (matched) {
+                    r.구조명 = (matched['구조'] && matched['구조'] !== "-") ? matched['구조'] : matched['중분류'];
+                    r.단가 = matched['단가'];
+                    r.노무비 = matched['노무비'];
+                    if (window.applyAutoPriceIndex) window.applyAutoPriceIndex(r);
+                }
+            }
+
             const d = r.동명칭;
             let inheritedRatio = 20.0;
             const tGroup = titleRecords.find(g => (g.동명칭 || "") === d);
@@ -1107,5 +1127,5 @@ window.confirmAllKfpaData = function() {
     goToSlide('slide7');
     renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
     
-    alert(`🎉 총 ${sites.length}개 사업장의 화협자료가 평가 테이블로 일괄 전송되었습니다!\n(이제 임시저장을 하시면 데이터가 안전하게 보존됩니다.)`);
+    alert(`🎉 총 ${sites.length}개 사업장의 화협자료가 평가 테이블로 일괄 전송되었습니다!\n(엑셀 구조코드를 바탕으로 단가, 노무비, 물가지수 자동 매핑 완료)`);
 };
