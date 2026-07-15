@@ -1173,3 +1173,174 @@ window.loadKfpaExcel = function(event) {
     reader.readAsArrayBuffer(file);
     event.target.value = ''; // 같은 파일 재업로드 방지
 };
+
+// ============================================================================
+// ★ 화협(KFPA) 자료 파싱, 미리보기 및 확정 연동 로직
+// ============================================================================
+window.tempKfpaRecords = null; // 파싱된 데이터 임시 보관
+window.tempKfpaSite = "";      // 선택된 사업장 임시 보관
+
+// 1. 화면 진입 시 콤보박스에 사업장 목록 채우기
+window.initKfpaScreen = function() {
+    const select = document.getElementById('kfpaSiteSelect');
+    if(select) {
+        select.innerHTML = '<option value="">사업장 선택...</option>';
+        // 등록된 주소지나 조회된 대장 데이터를 바탕으로 사업장 목록 추출
+        const sites = Object.keys(window.kbState.evalData.title || window.kbState.fetchedData || {});
+        sites.forEach(site => {
+            const opt = document.createElement('option');
+            opt.value = site;
+            opt.innerText = site;
+            select.appendChild(opt);
+        });
+    }
+    goToSlide('slide6');
+};
+
+// 2. 파일 업로드 및 데이터 파싱 (미리보기 생성)
+window.loadKfpaExcel = function(event) {
+    const file = event.target.files[0];
+    if(!file) return;
+
+    const siteSelect = document.getElementById('kfpaSiteSelect');
+    const siteName = siteSelect ? siteSelect.value : "";
+    
+    if(!siteName) {
+        alert("먼저 데이터를 적용할 '사업장(소재지)'을 선택해 주세요.");
+        event.target.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, {defval: "-"});
+            if(jsonData.length === 0) return alert("엑셀 파일에 데이터가 없습니다.");
+
+            const headers = Object.keys(jsonData[0]);
+            const getCol = (keywords) => headers.find(h => keywords.some(k => String(h).includes(k)));
+
+            const colDong = getCol(["건물명", "동명", "건물번호", "동"]);
+            const colStrct = getCol(["구조(본)", "구조"]);
+            const colRoof = getCol(["지붕"]);
+            const colPurps = getCol(["용도"]);
+            const colYear = getCol(["신축년도", "건축년도", "준공"]);
+            const colArea = getCol(["면적", "연면적", "면적(m2)"]);
+
+            if(!colArea) return alert("면적 데이터를 찾을 수 없습니다. 화협 양식을 확인해주세요.");
+
+            const records = [];
+            
+            jsonData.forEach((row, idx) => {
+                let dongNm = String(row[colDong] || "").trim();
+                if(!dongNm || dongNm === "-" || dongNm === "undefined") dongNm = "본동";
+
+                let strct = String(row[colStrct] || "").trim();
+                let roof = String(row[colRoof] || "").trim();
+                let fullStrct = (strct !== "-" ? strct : "") + (roof !== "-" && roof ? " / " + roof : "");
+                if(!fullStrct || fullStrct === " / ") fullStrct = "확인필요";
+
+                let purps = String(row[colPurps] || "-").trim();
+                let area = parseFloat(String(row[colArea] || "0").replace(/,/g, ''));
+                if(isNaN(area)) area = 0.0;
+
+                let buildYear = new Date().getFullYear();
+                let yearStr = String(row[colYear] || "").replace(/[^0-9]/g, '');
+                if(yearStr.length >= 4) buildYear = parseInt(yearStr.substring(0, 4));
+
+                if(area > 0) {
+                    records.push({
+                        "일련번호": String(idx + 1), "동명칭": dongNm, "용도": purps,
+                        "연면적": area, "구조명": fullStrct, "준공연도": buildYear,
+                        "구조코드": "-", "단가": 0.0, "노무비": 0.0, "물가지수": 1.0,
+                        "감가율": 1.78, "재조달_건축": 0, "잔가율": 100.0, "현재_건축": 0
+                    });
+                }
+            });
+
+            if(records.length === 0) return alert("유효한 화협 데이터(면적 > 0)를 찾을 수 없습니다.");
+
+            // 임시 저장
+            window.tempKfpaRecords = records;
+            window.tempKfpaSite = siteName;
+
+            // 미리보기 표 렌더링
+            const tbody = document.getElementById('previewKfpaTbody');
+            tbody.innerHTML = '';
+            records.forEach(r => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${r.일련번호}</td>
+                    <td style="font-weight:bold; color:#1C5691;">${r.동명칭}</td>
+                    <td>${r.구조명}</td>
+                    <td>${r.용도}</td>
+                    <td>${r.준공연도}</td>
+                    <td style="text-align:right;">${r.연면적.toLocaleString('ko-KR', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // 확정 버튼 노출
+            document.getElementById('btnConfirmKfpa').style.display = 'block';
+            alert(`✅ 화협 엑셀 파싱 완료!\n아래 [미리보기] 표에서 데이터가 맞는지 확인하신 후,\n우측 상단의 [데이터 확정 및 가액평가 시작 ▶] 버튼을 눌러주세요.`);
+
+        } catch (err) {
+            alert("파일 읽기 중 오류 발생: " + err);
+        }
+    };
+    reader.readAsArrayBuffer(file);
+    event.target.value = ''; 
+};
+
+// 3. 데이터 최종 확정 및 평가 탭으로 연동 이동
+window.confirmKfpaData = function() {
+    if(!window.tempKfpaRecords || !window.tempKfpaSite) return alert("반영할 데이터가 없습니다.");
+    
+    const siteName = window.tempKfpaSite;
+    const records = window.tempKfpaRecords;
+    
+    // 표제부 상속 로직 (표제부에서 이미 작업한 '부속비율'이 있다면 동명칭 기준으로 자동 맵핑)
+    const titleRecords = window.kbState.evalData.title[siteName] || [];
+    const siteGroups = {};
+    
+    records.forEach(r => {
+        const d = r.동명칭;
+        let inheritedRatio = 20.0;
+        
+        const tGroup = titleRecords.find(g => (g.동명칭 || "") === d);
+        if (tGroup && tGroup.부속비율) inheritedRatio = tGroup.부속비율;
+
+        if(!siteGroups[d]) {
+            siteGroups[d] = {
+                "동명칭": d, "부속비율": inheritedRatio, "재조달_부속": 0, "재조달_합계": 0, "현재_부속": 0, "현재_합계": 0,
+                "records": []
+            };
+        }
+        siteGroups[d].records.push(r);
+    });
+
+    // 최종 데이터 덮어쓰기
+    if(!window.kbState.evalData.kfpa) window.kbState.evalData.kfpa = {};
+    window.kbState.evalData.kfpa[siteName] = Object.values(siteGroups);
+    window.kbState.activeSite.kfpa = siteName;
+
+    // 가액 재계산
+    recalculateValuation('kfpa', siteName);
+    
+    // 임시 보관소 초기화
+    window.tempKfpaRecords = null;
+    window.tempKfpaSite = "";
+    document.getElementById('btnConfirmKfpa').style.display = 'none';
+    document.getElementById('previewKfpaTbody').innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 60px; color:#999;">사업장을 선택하고 화협 자료 엑셀을 업로드해주세요.</td></tr>';
+
+    // 2.2.2 슬라이드(평가)로 화면 이동 및 렌더링
+    goToSlide('slide7');
+    renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
+    
+    alert(`🎉 [${siteName}] 화협자료 확정 완료!\n\n데이터가 2.2.2 평가 테이블로 연동되었습니다.\n구조코드와 감가율을 매핑하여 평가를 완료해 주세요.`);
+};
