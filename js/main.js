@@ -1063,3 +1063,113 @@ window.quickLoadProject = function(event) {
     reader.readAsText(file);
     event.target.value = ''; 
 };
+
+// ============================================================================
+// ★ [신규 추가] 화협(KFPA) 엑셀/CSV 데이터 파싱 및 평가 데이터로 변환
+// ============================================================================
+window.loadKfpaExcel = function(event) {
+    const file = event.target.files[0];
+    if(!file) return;
+
+    // 현재 작업 중인 사업장 이름 입력받기 (여러 개의 화협 자료를 올릴 수 있도록)
+    let siteName = prompt("이 화협자료를 적용할 사업장(소재지) 이름을 입력하세요.\n(예: 안산공장, 시흥공장 등)", "본점");
+    if(!siteName) { event.target.value = ''; return; }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            
+            // 헤더가 있는 JSON 형태로 변환
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, {defval: "-"});
+            if(jsonData.length === 0) return alert("엑셀 파일에 데이터가 없습니다.");
+
+            const headers = Object.keys(jsonData[0]);
+            
+            // 열(Column) 이름이 약간 달라도 찾아내는 헬퍼 함수
+            const getCol = (keywords) => headers.find(h => keywords.some(k => String(h).includes(k)));
+
+            // 엑셀에서 추출할 핵심 컬럼 탐색
+            const colDong = getCol(["건물명", "동명", "건물번호", "동"]);
+            const colStrct = getCol(["구조(본)", "구조"]);
+            const colRoof = getCol(["지붕"]);
+            const colPurps = getCol(["용도"]);
+            const colYear = getCol(["신축년도", "건축년도", "준공"]);
+            const colArea = getCol(["면적", "연면적"]);
+
+            if(!colArea) return alert("면적 데이터를 찾을 수 없습니다. 화협 양식을 확인해주세요.");
+
+            const records = [];
+            
+            // 데이터 행(Row) 순회하며 정규화 진행
+            jsonData.forEach((row, idx) => {
+                let dongNm = String(row[colDong] || "").trim();
+                if(!dongNm || dongNm === "-" || dongNm === "undefined") dongNm = "본동";
+
+                let strct = String(row[colStrct] || "").trim();
+                let roof = String(row[colRoof] || "").trim();
+                
+                // 파이썬 로직 차용: 구조와 지붕 명칭 결합
+                let fullStrct = (strct !== "-" ? strct : "") + (roof !== "-" && roof ? " / " + roof : "");
+                if(!fullStrct || fullStrct === " / ") fullStrct = "확인필요";
+
+                let purps = String(row[colPurps] || "-").trim();
+
+                let areaStr = String(row[colArea] || "0").replace(/,/g, '');
+                let area = parseFloat(areaStr);
+                if(isNaN(area)) area = 0.0;
+
+                let buildYear = new Date().getFullYear();
+                let yearStr = String(row[colYear] || "").replace(/[^0-9]/g, '');
+                if(yearStr.length >= 4) buildYear = parseInt(yearStr.substring(0, 4));
+
+                // 면적이 존재하는 유효한 데이터만 추가
+                if(area > 0) {
+                    records.push({
+                        "일련번호": String(idx + 1), "동명칭": dongNm, "용도": purps,
+                        "연면적": area, "구조명": fullStrct, "준공연도": buildYear,
+                        "구조코드": "-", "단가": 0.0, "노무비": 0.0, "물가지수": 1.0,
+                        "감가율": 1.78, "재조달_건축": 0, "잔가율": 100.0, "현재_건축": 0
+                    });
+                }
+            });
+
+            if(records.length === 0) return alert("유효한 화협 데이터(면적 > 0)를 찾을 수 없습니다.");
+
+            // 동명칭(dongNm) 기준으로 데이터를 그룹핑 (표제부/층별과 동일한 형태)
+            const siteGroups = {};
+            records.forEach(r => {
+                const d = r.동명칭;
+                if(!siteGroups[d]) {
+                    siteGroups[d] = {
+                        "동명칭": d, "부속비율": 20.0, "재조달_부속": 0, "재조달_합계": 0, "현재_부속": 0, "현재_합계": 0,
+                        "records": []
+                    };
+                }
+                siteGroups[d].records.push(r);
+            });
+
+            // 상태 저장소에 밀어넣기
+            if(!window.kbState.evalData.kfpa) window.kbState.evalData.kfpa = {};
+            window.kbState.evalData.kfpa[siteName] = Object.values(siteGroups);
+            window.kbState.activeSite.kfpa = siteName;
+
+            // 가액 재계산 및 렌더링
+            recalculateValuation('kfpa', siteName);
+            
+            alert(`✅ 화협자료 [${siteName}] 데이터 변환 완료! (총 ${records.length}건)\n이제 구조코드와 감가율을 매핑해 주세요.`);
+            
+            // 변환 완료 후 자동으로 2.2.2 평가 탭으로 화면 이동
+            if(typeof goToSlide === 'function') goToSlide('slide7');
+            renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
+
+        } catch (err) {
+            alert("파일 읽기 중 오류 발생: " + err);
+        }
+    };
+    reader.readAsArrayBuffer(file);
+    event.target.value = ''; // 같은 파일 재업로드 방지
+};
