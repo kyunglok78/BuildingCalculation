@@ -935,7 +935,7 @@ window.quickLoadProject = function(event) {
             // 4. 저장된 평가 데이터를 바탕으로 하단 테이블 전체 다시 그리기
             runGroupedRenderTest();
 
-// =========================================================
+            // =========================================================
             // 5. ★ 건축물대장 표(Table) 화면 복구 로직 (한글 번역 및 정렬 적용)
             // =========================================================
             if (window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
@@ -1069,43 +1069,80 @@ window.quickLoadProject = function(event) {
 
 
 // ============================================================================
-// ★ 화협(KFPA) 자료 파싱 - 1:1 직관적 업로드 및 자동 연동 로직
+// ★ 화협(KFPA) 탭(Tab) 기반 직관적 업로드 로직 (기획 의도 완벽 반영)
 // ============================================================================
 window.targetKfpaSite = "";
 window.targetKfpaAddress = "";
 window.tempKfpaRecords = null; 
 
-// 1. 일반정보 등록 화면에서 [엑셀 첨부] 버튼을 눌렀을 때 실행
-window.triggerKfpaUpload = function(btn) {
-    const row = btn.closest('.list-row'); // 클릭한 버튼이 속한 줄(row) 찾기
-    if(!row) return;
+// 1. 화협 불러오기(Slide 6) 진입 시 탭 자동 생성
+window.initKfpaScreen = function() {
+    const tabsContainer = document.getElementById('slide6Tabs');
+    const infoPanel = document.getElementById('kfpaActiveInfoPanel');
+    if(!tabsContainer) return;
+    tabsContainer.innerHTML = '';
     
-    const siteInput = row.querySelector('.input-short');
-    const addrInput = row.querySelector('.addr-input');
-    
-    const siteName = siteInput ? siteInput.value.trim() : "";
-    const address = addrInput ? addrInput.value.trim() : "";
-    
-    // 소재지 이름이 비어있으면 경고
-    if(!siteName) {
-        alert("엑셀을 업로드하기 전에 좌측에 '소재지명'을 먼저 입력해 주세요.\n(예: 안산공장, 시흥공장)");
-        if(siteInput) siteInput.focus();
+    // Slide 2(일반정보)에 등록된 주소지 리스트 긁어오기
+    const locations = [];
+    document.querySelectorAll('#locationListBox .list-row').forEach(row => {
+        const name = row.querySelector('.input-short') ? row.querySelector('.input-short').value.trim() : '';
+        const addr = row.querySelector('.addr-input') ? row.querySelector('.addr-input').value.trim() : '';
+        const checkedKfpa = row.querySelector('.check-kfpa') ? row.querySelector('.check-kfpa').checked : false;
+        if(name && checkedKfpa) locations.push({name, addr});
+    });
+
+    if(locations.length === 0) {
+        tabsContainer.innerHTML = '<div style="padding: 15px; color: #dc3545; font-weight: bold;">등록된 사업장이 없거나 화협자료평가 체크가 해제되어 있습니다. (1.1 일반정보 등록을 확인하세요)</div>';
+        infoPanel.style.display = 'none';
+        goToSlide('slide6');
         return;
     }
+
+    infoPanel.style.display = 'block';
+    let isFirst = true;
+
+    // 사업장 개수만큼 탭(Tab) 생성
+    locations.forEach(loc => {
+        const tabBtn = document.createElement('div');
+        tabBtn.innerText = loc.name;
+        tabBtn.style.cssText = `padding:10px 20px; cursor:pointer; font-weight:bold; border:1px solid #ddd; border-bottom:none; border-radius:4px 4px 0 0; margin-right:5px; background:${isFirst ? '#fff' : '#f8f9fa'}; color:${isFirst ? '#1C5691' : '#333'};`;
+        
+        tabBtn.onclick = () => {
+            Array.from(tabsContainer.children).forEach(c => { c.style.background = '#f8f9fa'; c.style.color = '#333'; });
+            tabBtn.style.background = '#fff'; tabBtn.style.color = '#1C5691';
+            
+            // 탭 클릭 시 상단 정보 갱신
+            document.getElementById('kfpaPreviewSite').value = loc.name;
+            document.getElementById('kfpaPreviewAddress').value = loc.addr;
+            window.targetKfpaSite = loc.name;
+            window.targetKfpaAddress = loc.addr;
+            
+            // 미리보기 초기화
+            document.getElementById('previewKfpaTbody').innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 60px; color:#999; font-size:14px;"><i class="fa-regular fa-folder-open" style="font-size:30px; margin-bottom:10px; display:block;"></i>우측 상단의 <b>[화협 엑셀 첨부]</b>를 눌러주세요.</td></tr>';
+            document.getElementById('btnConfirmKfpa').style.display = 'none';
+            window.tempKfpaRecords = null;
+        };
+        tabsContainer.appendChild(tabBtn);
+
+        if(isFirst) {
+            tabBtn.click(); // 첫 번째 탭 강제 클릭
+            isFirst = false;
+        }
+    });
     
-    // 임시 변수에 이름과 주소 저장 후 숨겨진 파일 인풋 강제 클릭
-    window.targetKfpaSite = siteName;
-    window.targetKfpaAddress = address;
-    document.getElementById('globalKfpaFileInput').click();
+    goToSlide('slide6');
 };
 
-// 2. 엑셀 파일이 선택되면 파싱하고 Slide 6 화면으로 자동 이동
+// 2. 엑셀 파일 파싱 (현재 선택된 탭 기준)
 window.loadKfpaExcel = function(event) {
     const file = event.target.files[0];
     if(!file) return;
 
     const siteName = window.targetKfpaSite;
-    const address = window.targetKfpaAddress;
+    if(!siteName) {
+        alert("선택된 사업장 탭이 없습니다.");
+        event.target.value = ''; return;
+    }
 
     const reader = new FileReader();
     reader.onload = function(e) {
@@ -1159,17 +1196,9 @@ window.loadKfpaExcel = function(event) {
 
             if(records.length === 0) return alert("유효한 화협 데이터(면적 > 0)를 찾을 수 없습니다.");
 
-            // 임시 저장
             window.tempKfpaRecords = records;
-            window.tempKfpaSite = siteName;
 
-            // Slide 6 UI에 이름과 주소 자동으로 꽂아넣기!
-            const siteLabel = document.getElementById('kfpaPreviewSite');
-            const addrLabel = document.getElementById('kfpaPreviewAddress');
-            if(siteLabel) siteLabel.value = siteName;
-            if(addrLabel) addrLabel.value = address || "등록된 주소 없음";
-
-            // 미리보기 표 렌더링
+            // 미리보기 렌더링
             const tbody = document.getElementById('previewKfpaTbody');
             tbody.innerHTML = '';
             records.forEach(r => {
@@ -1185,10 +1214,8 @@ window.loadKfpaExcel = function(event) {
                 tbody.appendChild(tr);
             });
 
-            // 화면을 Slide 6으로 짠! 하고 이동
-            goToSlide('slide6');
             document.getElementById('btnConfirmKfpa').style.display = 'block';
-            alert(`✅ [${siteName}] 화협 엑셀 파싱 완료!\n아래 데이터가 맞는지 확인하신 후, [확정] 버튼을 눌러주세요.`);
+            alert(`✅ [${siteName}] 탭에 화협 엑셀 로드 완료!\n아래 데이터 확인 후, [확정] 버튼을 눌러주세요.`);
 
         } catch (err) {
             alert("파일 읽기 중 오류 발생: " + err);
@@ -1198,21 +1225,19 @@ window.loadKfpaExcel = function(event) {
     event.target.value = ''; 
 };
 
-// 3. 데이터 최종 확정 및 평가 탭으로 연동 이동
+// 3. 확정 후 Slide 7로 이동
 window.confirmKfpaData = function() {
-    if(!window.tempKfpaRecords || !window.tempKfpaSite) return alert("반영할 데이터가 없습니다.");
+    if(!window.tempKfpaRecords || !window.targetKfpaSite) return alert("반영할 데이터가 없습니다.");
     
-    const siteName = window.tempKfpaSite;
+    const siteName = window.targetKfpaSite;
     const records = window.tempKfpaRecords;
     
-    // 표제부 상속 로직 (표제부에서 이미 작업한 '부속비율'이 있다면 동명칭 기준으로 자동 맵핑)
     const titleRecords = window.kbState.evalData.title[siteName] || [];
     const siteGroups = {};
     
     records.forEach(r => {
         const d = r.동명칭;
         let inheritedRatio = 20.0;
-        
         const tGroup = titleRecords.find(g => (g.동명칭 || "") === d);
         if (tGroup && tGroup.부속비율) inheritedRatio = tGroup.부속비율;
 
@@ -1225,23 +1250,17 @@ window.confirmKfpaData = function() {
         siteGroups[d].records.push(r);
     });
 
-    // 최종 데이터 덮어쓰기
     if(!window.kbState.evalData.kfpa) window.kbState.evalData.kfpa = {};
     window.kbState.evalData.kfpa[siteName] = Object.values(siteGroups);
     window.kbState.activeSite.kfpa = siteName;
 
-    // 가액 재계산
     recalculateValuation('kfpa', siteName);
     
-    // 임시 보관소 초기화
     window.tempKfpaRecords = null;
-    window.tempKfpaSite = "";
     document.getElementById('btnConfirmKfpa').style.display = 'none';
-    document.getElementById('previewKfpaTbody').innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 60px; color:#999;">사업장을 선택하고 화협 자료 엑셀을 업로드해주세요.</td></tr>';
-
-    // 2.2.2 슬라이드(평가)로 화면 이동 및 렌더링
+    
     goToSlide('slide7');
     renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
     
-    alert(`🎉 [${siteName}] 화협자료 확정 완료!\n\n데이터가 2.2.2 평가 테이블로 연동되었습니다.\n구조코드와 감가율을 매핑하여 평가를 완료해 주세요.`);
-};
+    alert(`🎉 [${siteName}] 화협자료 2.2.2 평가 테이블로 전송 완료!`);
+};};
