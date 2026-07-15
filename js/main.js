@@ -976,33 +976,46 @@ window.loadKfpaExcel = function(event) {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, {type: 'array'});
             const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, {defval: "-"});
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, {defval: ""}); // 빈칸은 빈 문자열로 처리
             
             if(jsonData.length === 0) return alert("엑셀 파일에 데이터가 없습니다.");
 
             const headers = Object.keys(jsonData[0]);
             const getCol = (keywords) => headers.find(h => keywords.some(k => String(h).includes(k)));
 
-            const colDong = getCol(["건물명", "동명", "건물번호", "동"]);
-            const colStrct = getCol(["구조(본)", "구조"]);
-            const colRoof = getCol(["지붕"]);
-            const colPurps = getCol(["용도"]);
-            const colYear = getCol(["신축년도", "건축년도", "준공"]);
-            const colArea = getCol(["면적", "연면적", "면적(m2)"]);
+            // 엑셀 헤더 키워드 매핑
+            const colSerial = getCol(["일련번호"]);
+            const colDongNo = getCol(["동번호"]);
+            const colDongNm = getCol(["동명", "건물명"]);
+            const colYear = getCol(["준공"]);
+            const colFloor = getCol(["층", "층수"]);
+            const colStrct = getCol(["건물구조", "구조코드", "구조"]);
+            const colArea = getCol(["면적"]);
+            const colPurps = getCol(["용도", "특기사항"]);
 
             if(!colArea) return alert("면적 데이터를 찾을 수 없습니다. 화협 양식을 확인해주세요.");
 
             const records = [];
+            
+            // ★ 빈칸 채우기(Forward-Fill)를 위한 임시 변수
+            let lastDongNo = "-";
+            let lastDongNm = "본동";
+
             jsonData.forEach((row, idx) => {
-                let dongNm = String(row[colDong] || "").trim();
-                if(!dongNm || dongNm === "-" || dongNm === "undefined") dongNm = "본동";
+                let serial = String(row[colSerial] || "").trim();
+                
+                // 동번호, 동명이 비어있지 않으면 갱신, 비어있으면 이전 값(lastDongNm) 유지
+                let dNo = String(row[colDongNo] || "").trim();
+                let dNm = String(row[colDongNm] || "").trim();
+                if(dNo && dNo !== "-" && dNo !== "undefined") lastDongNo = dNo;
+                if(dNm && dNm !== "-" && dNm !== "undefined") lastDongNm = dNm;
 
-                let strct = String(row[colStrct] || "").trim();
-                let roof = String(row[colRoof] || "").trim();
-                let fullStrct = (strct !== "-" ? strct : "") + (roof !== "-" && roof ? " / " + roof : "");
-                if(!fullStrct || fullStrct === " / ") fullStrct = "확인필요";
+                // 일련번호가 아예 없는 행(예: 동면적합계)은 평가 데이터에서 제외
+                if(!serial || serial === "-" || serial === "undefined") return;
 
+                let strctCode = String(row[colStrct] || "").trim();
                 let purps = String(row[colPurps] || "-").trim();
+                let floorStr = String(row[colFloor] || "").trim();
                 let area = parseFloat(String(row[colArea] || "0").replace(/,/g, ''));
                 if(isNaN(area)) area = 0.0;
 
@@ -1010,32 +1023,47 @@ window.loadKfpaExcel = function(event) {
                 let yearStr = String(row[colYear] || "").replace(/[^0-9]/g, '');
                 if(yearStr.length >= 4) buildYear = parseInt(yearStr.substring(0, 4));
 
+                // 유효한 데이터만 저장
                 if(area > 0) {
                     records.push({
-                        "일련번호": String(idx + 1), "동명칭": dongNm, "용도": purps,
-                        "연면적": area, "구조명": fullStrct, "준공연도": buildYear,
-                        "구조코드": "-", "단가": 0.0, "노무비": 0.0, "물가지수": 1.0,
+                        // UI 미리보기 및 출력용 추가 필드
+                        "일련번호": serial,
+                        "동번호": lastDongNo,
+                        "층수": floorStr,
+                        
+                        // 공통 평가 엔진 연동 필드
+                        "동명칭": lastDongNm,
+                        "용도": purps,
+                        "연면적": area,
+                        "구조명": strctCode,     // 화면 표출용 (화협은 코드가 곧 구조명 역할)
+                        "구조코드": strctCode,   // 단가 매핑용
+                        "준공연도": buildYear,
+                        
+                        // 계산 기본값
+                        "단가": 0.0, "노무비": 0.0, "물가지수": 1.0,
                         "감가율": 1.78, "재조달_건축": 0, "잔가율": 100.0, "현재_건축": 0
                     });
                 }
             });
 
-            if(records.length === 0) return alert("유효한 화협 데이터(면적 > 0)를 찾을 수 없습니다.");
+            if(records.length === 0) return alert("유효한 화협 데이터(일련번호 및 면적 존재)를 찾을 수 없습니다.");
 
             window.tempKfpaRecords = records;
 
-            // 미리보기 렌더링
+            // ★ 요청하신 순서대로 미리보기 렌더링
             const tbody = document.getElementById('previewKfpaTbody');
             tbody.innerHTML = '';
             records.forEach(r => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${r.일련번호}</td>
+                    <td style="font-weight:bold;">${r.일련번호}</td>
+                    <td>${r.동번호}</td>
                     <td style="font-weight:bold; color:#1C5691;">${r.동명칭}</td>
-                    <td>${r.구조명}</td>
-                    <td>${r.용도}</td>
                     <td>${r.준공연도}</td>
+                    <td>${r.층수}</td>
+                    <td>${r.구조코드}</td>
                     <td style="text-align:right;">${r.연면적.toLocaleString('ko-KR', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+                    <td style="text-align:left;">${r.용도}</td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -1044,7 +1072,7 @@ window.loadKfpaExcel = function(event) {
             alert(`✅ [${siteName}] 탭에 화협 엑셀 로드 완료!\n아래 데이터 확인 후, [확정] 버튼을 눌러주세요.`);
 
         } catch (err) {
-            alert("파일 읽기 중 오류 발생: " + err);
+            alert("파일 파싱 중 오류 발생: " + err);
         }
     };
     reader.readAsArrayBuffer(file);
