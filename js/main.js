@@ -918,12 +918,12 @@ window.quickLoadProject = function(event) {
                             <button type="button" class="btn-blue" onclick="openAddressModal(this); return false;"><i class="fa-solid fa-magnifying-glass"></i> 주소 검색</button>
                             <span>주소</span><input type="text" class="input-long addr-input" value="${loc.address}" placeholder="주소를 검색해 주세요" readonly>
                             <div class="check-group" style="display: inline-flex; align-items: center;">
-                                  <label class="check-item"><input type="checkbox" class="check-ledger" ${loc.checkedLedger ? 'checked' : ''} onchange="updateMenuState()"> 건축물대장</label>
-                                  <label class="check-item" style="margin-right: 5px;"><input type="checkbox" class="check-kfpa" ${loc.checkedKfpa ? 'checked' : ''} onchange="updateMenuState()"> 화협자료평가</label>
-                                  <button type="button" class="btn-dark" style="background:#28a745; padding: 3px 8px; font-size:12px; border:none; border-radius:3px; cursor:pointer;" onclick="triggerKfpaUpload(this)">
-                                       <i class="fa-solid fa-file-excel"></i> 엑셀 첨부
-                                   </button>
-                              </div>
+                                <label class="check-item"><input type="checkbox" class="check-ledger" ${loc.checkedLedger ? 'checked' : ''} onchange="updateMenuState()"> 건축물대장</label>
+                                <label class="check-item" style="margin-right: 5px;"><input type="checkbox" class="check-kfpa" ${loc.checkedKfpa ? 'checked' : ''} onchange="updateMenuState()"> 화협자료평가</label>
+                                <button type="button" class="btn-dark" style="background:#28a745; padding: 3px 8px; font-size:12px; border:none; border-radius:3px; cursor:pointer;" onclick="triggerKfpaUpload(this)">
+                                    <i class="fa-solid fa-file-excel"></i> 엑셀 첨부
+                                </button>
+                            </div>
                         `;
                         listBox.appendChild(row);
                     });
