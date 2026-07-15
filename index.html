@@ -379,12 +379,13 @@
                 </div>
             </div>
 
-            <div class="flex-between mb-10">
+            <div class="flex-between mb-10" style="align-items: flex-end;">
                 <span class="bold" style="color:#1C5691;">🔍 데이터 변환 미리보기 (검증)</span>
-                <button type="button" class="btn-exec" id="btnConfirmKfpa" style="display:none; background:#0056b3;" onclick="confirmKfpaData()">데이터 확정 및 가액평가 시작 ▶</button>
+                <button type="button" class="btn-exec" id="btnConfirmKfpa" style="display:none; background:#0056b3; font-size:15px; padding: 10px 20px;" onclick="confirmAllKfpaData()">⚡ 전체 사업장 데이터 일괄 확정 및 가액평가 시작 ▶</button>
             </div>
-            <div class="data-table-wrapper" style="height: 400px; border-top: none; overflow-y: auto;">
-                <table class="data-table" id="previewKfpaTable">
+            
+            <div class="data-table-wrapper" style="height: 400px; border: 1px solid #ddd; overflow-y: auto;">
+                <table class="data-table" id="previewKfpaTable" style="margin: 0; border: none;">
                     <thead style="position: sticky; top: 0; z-index: 1;">
                         <tr>
                             <th>일련번호</th>
@@ -405,7 +406,6 @@
         </div>
     </div>
 </div>
-
 <div class="slide-container" id="slide7" style="display: none;">
     <div class="window-header"><div class="window-title"><i class="fa-solid fa-bolt"></i> KB손해보험 건물 가액평가 시스템</div><div class="window-controls"><i class="fa-solid fa-minus"></i><i class="fa-regular fa-square"></i><i class="fa-solid fa-xmark"></i></div></div>
     <div class="app-window">
