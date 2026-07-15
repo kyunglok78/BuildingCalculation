@@ -678,16 +678,19 @@ window.batchApplyRatio = function(mode, siteName) {
 };
 
 // ============================================================================
-// [10] ★ 프로젝트 임시 저장 및 불러오기 (에러 방어 강화 및 엑셀 버튼 제거 본래 모습 유지)
+// [10] ★ 프로젝트 임시 저장 및 불러오기 (평가지수 및 화협 임시데이터 완벽 저장)
 // ============================================================================
 window.quickSaveProject = function() {
     try {
         const hasEvalData = Object.keys(window.kbState.evalData.title).length > 0 || 
                             Object.keys(window.kbState.evalData.floor).length > 0 || 
                             Object.keys(window.kbState.evalData.kfpa).length > 0;
+        
+        // 확정 전 화협 임시 데이터가 있는지도 체크
+        const hasTempKfpa = Object.keys(window.tempKfpaDataStore || {}).length > 0;
                             
-        if (Object.keys(window.kbState.fetchedData).length === 0 && !hasEvalData) {
-            alert("저장할 데이터가 존재하지 않습니다. 대장 조회나 평가를 먼저 진행해 주세요.");
+        if (Object.keys(window.kbState.fetchedData).length === 0 && !hasEvalData && !hasTempKfpa) {
+            alert("저장할 데이터가 존재하지 않습니다. 대장 조회나 엑셀 업로드를 먼저 진행해 주세요.");
             return;
         }
 
@@ -706,11 +709,15 @@ window.quickSaveProject = function() {
             });
         });
 
+        // ★ 저장 항목에 단가표/물가지수 경로와 화협 임시 바구니 추가!
         const projectData = {
-            version: "1.2", 
+            version: "1.3", 
             contractor: contractorName,
             evalYear: evalYear,
             locations: locations, 
+            unitCostPath: document.getElementById('unitCostPath') ? document.getElementById('unitCostPath').value : "",
+            priceIndexPath: document.getElementById('priceIndexPath') ? document.getElementById('priceIndexPath').value : "",
+            tempKfpaDataStore: window.tempKfpaDataStore || {},
             kbState: window.kbState 
         };
 
@@ -740,8 +747,13 @@ window.quickLoadProject = function(event) {
         try {
             const projectData = JSON.parse(e.target.result);
             
+            // 핵심 상태 데이터 복구
             if (projectData.kbState) window.kbState = projectData.kbState;
+            
+            // ★ 화협 임시 바구니 복구
+            if (projectData.tempKfpaDataStore) window.tempKfpaDataStore = projectData.tempKfpaDataStore;
 
+            // 일반 정보 복구
             if (projectData.contractor) {
                 document.querySelectorAll('.contractor-sync').forEach(el => el.value = projectData.contractor);
             }
@@ -749,7 +761,18 @@ window.quickLoadProject = function(event) {
                 const evalYearInput = document.getElementById('evalYear');
                 if (evalYearInput) evalYearInput.value = projectData.evalYear;
             }
+            
+            // ★ 평가지수 파일 경로 텍스트 복구
+            if (projectData.unitCostPath) {
+                const uPath = document.getElementById('unitCostPath');
+                if (uPath) uPath.value = projectData.unitCostPath;
+            }
+            if (projectData.priceIndexPath) {
+                const pPath = document.getElementById('priceIndexPath');
+                if (pPath) pPath.value = projectData.priceIndexPath;
+            }
 
+            // 소재지 리스트 화면 복구
             const listBox = document.getElementById('locationListBox');
             if (listBox) {
                 listBox.innerHTML = ''; 
@@ -776,6 +799,7 @@ window.quickLoadProject = function(event) {
 
             runGroupedRenderTest();
 
+            // 공공데이터(대장) 탭 복구 로직
             if (window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
                 const dataContainer = document.getElementById('fetchedDataContainer');
                 const tabsContainer = document.getElementById('slide3Tabs');
@@ -841,7 +865,6 @@ window.quickLoadProject = function(event) {
                                 const korName = korMap[col] || col;
                                 th.innerHTML = `${korName} <span style="font-size:10px; color:#ccc;">▲▼</span>`;
                                 th.style.cursor = 'pointer';
-                                th.title = "클릭 시 정렬됩니다.";
                                 
                                 th.dataset.sortOrder = 'asc';
                                 th.onclick = () => {
@@ -891,9 +914,9 @@ window.quickLoadProject = function(event) {
                 }
             }
 
-            alert("✅ 임시 저장 데이터 로드 완료!");
+            alert("✅ 임시 저장 데이터 완벽 로드 완료!\n(화협 데이터와 평가지수 파일 기록도 복구되었습니다.)");
         } catch (err) {
-            alert("⚠️ 파일 형식이 잘못되었거나 과거의 손상된 저장 파일입니다.\n(새로 작업을 시작해 주세요! 에러: " + err.message + ")");
+            alert("⚠️ 파일 형식이 잘못되었거나 과거의 손상된 저장 파일입니다.\n(에러: " + err.message + ")");
         }
     };
     reader.readAsText(file);
