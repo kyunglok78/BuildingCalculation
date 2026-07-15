@@ -678,7 +678,7 @@ window.batchApplyRatio = function(mode, siteName) {
 };
 
 // ============================================================================
-// [10] ★ 프로젝트 임시 저장 및 불러오기 (평가지수 및 화협 임시데이터 완벽 저장)
+// [10] ★ 프로젝트 임시 저장 및 불러오기 (평가지수 파일명, 화협 임시데이터 완벽 보존)
 // ============================================================================
 window.quickSaveProject = function() {
     try {
@@ -686,11 +686,14 @@ window.quickSaveProject = function() {
                             Object.keys(window.kbState.evalData.floor).length > 0 || 
                             Object.keys(window.kbState.evalData.kfpa).length > 0;
         
-        // 확정 전 화협 임시 데이터가 있는지도 체크
+        // ★ 화협 엑셀을 올려두기만 하고 확정하지 않은 임시 데이터가 있는지도 체크
         const hasTempKfpa = Object.keys(window.tempKfpaDataStore || {}).length > 0;
+        
+        // ★ 단가표나 물가지수를 올린 기록이 있는지도 체크
+        const hasCostData = window.kbState.costData && window.kbState.costData.length > 0;
                             
-        if (Object.keys(window.kbState.fetchedData).length === 0 && !hasEvalData && !hasTempKfpa) {
-            alert("저장할 데이터가 존재하지 않습니다. 대장 조회나 엑셀 업로드를 먼저 진행해 주세요.");
+        if (Object.keys(window.kbState.fetchedData).length === 0 && !hasEvalData && !hasTempKfpa && !hasCostData) {
+            alert("저장할 데이터가 존재하지 않습니다. 대장 조회, 엑셀 업로드 등을 먼저 진행해 주세요.");
             return;
         }
 
@@ -709,15 +712,18 @@ window.quickSaveProject = function() {
             });
         });
 
-        // ★ 저장 항목에 단가표/물가지수 경로와 화협 임시 바구니 추가!
+        // ★ 저장 항목에 단가표/물가지수 파일명 텍스트와 화협 임시 바구니를 모조리 포함!
+        // (단가표 데이터 자체는 kbState 안에 이미 포함되어 함께 자동 저장됩니다)
         const projectData = {
-            version: "1.3", 
+            version: "1.4", 
             contractor: contractorName,
             evalYear: evalYear,
             locations: locations, 
             unitCostPath: document.getElementById('unitCostPath') ? document.getElementById('unitCostPath').value : "",
             priceIndexPath: document.getElementById('priceIndexPath') ? document.getElementById('priceIndexPath').value : "",
             tempKfpaDataStore: window.tempKfpaDataStore || {},
+            targetKfpaSite: window.targetKfpaSite || "",
+            targetKfpaAddress: window.targetKfpaAddress || "",
             kbState: window.kbState 
         };
 
@@ -747,13 +753,15 @@ window.quickLoadProject = function(event) {
         try {
             const projectData = JSON.parse(e.target.result);
             
-            // 핵심 상태 데이터 복구
+            // 1. 핵심 상태 데이터 복구 (단가표 데이터, 물가지수 데이터도 여기서 복구됨)
             if (projectData.kbState) window.kbState = projectData.kbState;
-            
-            // ★ 화협 임시 바구니 복구
-            if (projectData.tempKfpaDataStore) window.tempKfpaDataStore = projectData.tempKfpaDataStore;
 
-            // 일반 정보 복구
+            // 2. ★ 화협 임시 바구니 완벽 복구 (엑셀 올려두고 확정 안 한 상태 그대로!)
+            if (projectData.tempKfpaDataStore) window.tempKfpaDataStore = projectData.tempKfpaDataStore;
+            if (projectData.targetKfpaSite) window.targetKfpaSite = projectData.targetKfpaSite;
+            if (projectData.targetKfpaAddress) window.targetKfpaAddress = projectData.targetKfpaAddress;
+
+            // 3. 일반 정보 복구
             if (projectData.contractor) {
                 document.querySelectorAll('.contractor-sync').forEach(el => el.value = projectData.contractor);
             }
@@ -761,8 +769,8 @@ window.quickLoadProject = function(event) {
                 const evalYearInput = document.getElementById('evalYear');
                 if (evalYearInput) evalYearInput.value = projectData.evalYear;
             }
-            
-            // ★ 평가지수 파일 경로 텍스트 복구
+
+            // 4. ★ 평가지수 파일명 텍스트 복구 (화면에 이름이 그대로 표시됨!)
             if (projectData.unitCostPath) {
                 const uPath = document.getElementById('unitCostPath');
                 if (uPath) uPath.value = projectData.unitCostPath;
@@ -772,7 +780,7 @@ window.quickLoadProject = function(event) {
                 if (pPath) pPath.value = projectData.priceIndexPath;
             }
 
-            // 소재지 리스트 화면 복구
+            // 5. 소재지 리스트 화면 복구
             const listBox = document.getElementById('locationListBox');
             if (listBox) {
                 listBox.innerHTML = ''; 
@@ -799,7 +807,7 @@ window.quickLoadProject = function(event) {
 
             runGroupedRenderTest();
 
-            // 공공데이터(대장) 탭 복구 로직
+            // 6. 공공데이터(대장) 탭 복구 로직
             if (window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
                 const dataContainer = document.getElementById('fetchedDataContainer');
                 const tabsContainer = document.getElementById('slide3Tabs');
@@ -914,7 +922,7 @@ window.quickLoadProject = function(event) {
                 }
             }
 
-            alert("✅ 임시 저장 데이터 완벽 로드 완료!\n(화협 데이터와 평가지수 파일 기록도 복구되었습니다.)");
+            alert("✅ 임시 저장 데이터 완벽 로드 완료!\n(화협 데이터, 평가지수 파일명 등 모든 상태가 복구되었습니다.)");
         } catch (err) {
             alert("⚠️ 파일 형식이 잘못되었거나 과거의 손상된 저장 파일입니다.\n(에러: " + err.message + ")");
         }
@@ -922,6 +930,7 @@ window.quickLoadProject = function(event) {
     reader.readAsText(file);
     event.target.value = ''; 
 };
+
 
 // ============================================================================
 // [11] ★ 화협(KFPA) 다중 사업장 바구니 보존 및 일괄 확정 로직
