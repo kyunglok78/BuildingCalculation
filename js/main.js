@@ -289,6 +289,102 @@ function syncTitleData() {
     alert("표제부 데이터 연동이 완료되었습니다.");
 }
 
+// ============================================================================
+// ★ [신규 추가] 층별 데이터 연동 및 표제부 데이터(구조, 감가, 부속비율) 자동 상속
+// ============================================================================
+window.syncFloorData = function() {
+    const fetchedData = window.kbState.fetchedData;
+    if (!fetchedData || Object.keys(fetchedData).length === 0) {
+        alert("연동할 수 없습니다. 먼저 [건축물대장 조회시작]을 완료해 주세요."); return;
+    }
+    if (Object.keys(window.kbState.evalData.floor || {}).length > 0) {
+        if (!confirm("기존에 작업 중이던 층별 평가 데이터가 초기화됩니다. 계속하시겠습니까?")) return;
+    }
+    
+    const newFloorData = {};
+    
+    Object.keys(fetchedData).forEach(siteName => {
+        const siteData = fetchedData[siteName];
+        const dfFloor = siteData["floor"] || siteData["층별 개요"] || [];
+        const dfRecap = siteData["recap"] || siteData["총괄표제부 정보"] || [];
+        
+        let fallbackYear = 2000;
+        if (dfRecap.length > 0 && dfRecap[0]["useAprDay"]) {
+            const aprDate = String(dfRecap[0]["useAprDay"]).replace(/[-/]/g, "").trim();
+            if (aprDate.length >= 4 && !isNaN(aprDate.substring(0, 4))) fallbackYear = parseInt(aprDate.substring(0, 4));
+        }
+        
+        // ★ 1. 표제부(Title) 평가 데이터 가져오기 (매칭용)
+        const titleRecords = window.kbState.evalData.title[siteName] || [];
+        
+        const siteGroups = {}; // 동별로 그룹핑
+        
+        dfFloor.forEach((row, idx) => {
+            let dongNm = (row["dongNm"] || "").trim(); 
+            if (!dongNm || dongNm === "-" || dongNm === "nan") dongNm = "본동";
+            
+            const area = isNaN(parseFloat(String(row["area"] || "0").replace(/,/g, "").trim())) ? 0.0 : parseFloat(String(row["area"] || "0").replace(/,/g, "").trim());
+            const strct = (row["strctCdNm"] || "-").trim(); 
+            
+            const flrGb = (row["flrGbCdNm"] || "").trim();
+            const flrNo = (row["flrNoNm"] || "").trim();
+            const etcPurps = (row["etcPurps"] || "-").trim();
+            const flrText = flrNo ? `${flrGb} ${flrNo}층` : "";
+            const purps = flrText ? `[${flrText}] ${etcPurps}` : etcPurps;
+            
+            let buildYear = fallbackYear;
+            const rowAprDate = String(row["useAprDay"] || "").replace(/[-/]/g, "").trim();
+            if (rowAprDate.length >= 4 && !isNaN(rowAprDate.substring(0, 4))) {
+                buildYear = parseInt(rowAprDate.substring(0, 4));
+            }
+            
+            // 기본 레코드 뼈대 생성
+            const record = {
+                "일련번호": String(idx + 1), "동명칭": dongNm, "용도": purps, "연면적": area, "구조명": strct,
+                "준공연도": buildYear, "구조코드": "-", "단가": 0.0, "노무비": 0.0, "물가지수": 1.0,
+                "감가율": 1.78, "재조달_건축": 0, "잔가율": 100.0, "현재_건축": 0
+            };
+            
+            // ★ 2. 표제부 상속 로직 (핵심 포인트)
+            let inheritedRatio = 20.0; // 기본 부속비율
+            
+            // 현재 층의 '동명칭'과 일치하는 표제부 건물을 찾음
+            const tGroup = titleRecords.find(g => g.동명칭 === dongNm);
+            if (tGroup) {
+                const tReq = tGroup.records[0]; // 표제부의 실제 입력 데이터
+                record["구조코드"] = tReq["구조코드"];
+                record["단가"] = tReq["단가"];
+                record["노무비"] = tReq["노무비"];
+                record["물가지수"] = tReq["물가지수"];
+                record["감가율"] = tReq["감가율"];
+                if (tGroup["부속비율"]) inheritedRatio = tGroup["부속비율"];
+            }
+            
+            // 그룹(동) 단위로 층별 데이터 묶어주기
+            if (!siteGroups[dongNm]) {
+                siteGroups[dongNm] = {
+                    "동명칭": dongNm, "부속비율": inheritedRatio, "재조달_부속": 0, "재조달_합계": 0, "현재_부속": 0, "현재_합계": 0,
+                    "records": []
+                };
+            }
+            siteGroups[dongNm].records.push(record);
+        });
+        
+        if (Object.keys(siteGroups).length > 0) {
+            newFloorData[siteName] = Object.values(siteGroups);
+        }
+    });
+    
+    window.kbState.evalData.floor = newFloorData;
+    window.kbState.activeSite.floor = Object.keys(newFloorData)[0] || null;
+    
+    // 복사된 데이터로 가액 자동 재계산 및 화면 렌더링
+    Object.keys(newFloorData).forEach(siteName => recalculateValuation('floor', siteName));
+    renderEvalTabsAndTable('floor', 'tbodyFloorEval', 'tabsFloorEval');
+    
+    alert("✅ 층별 데이터 연동 완료!\n\n(표제부에서 작업하신 구조코드, 단가, 노무비, 감가율, 부속비율이 동명칭 기준으로 자동 상속되었습니다.)");
+};
+
 window.deleteEvalItem = function(mode, siteName, gIdx) {
     const siteData = window.kbState.evalData[mode][siteName];
     const targetName = Array.isArray(siteData) ? (siteData[gIdx].동명칭 || "선택항목") : Object.keys(siteData)[gIdx];
@@ -836,13 +932,13 @@ window.quickLoadProject = function(event) {
             // 4. 저장된 평가 데이터를 바탕으로 하단 테이블 전체 다시 그리기
             runGroupedRenderTest();
 
-            // =========================================================
-            // 5. ★ 건축물대장 표(Table) 화면 완벽 복구 로직 추가
+// =========================================================
+            // 5. ★ 건축물대장 표(Table) 화면 복구 로직 (한글 번역 및 정렬 적용)
             // =========================================================
             if (window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
-                const emptyMsg = document.getElementById('emptyStateMsg');
                 const dataContainer = document.getElementById('fetchedDataContainer');
                 const tabsContainer = document.getElementById('slide3Tabs');
+                const emptyMsg = document.getElementById('emptyStateMsg');
                 
                 if (emptyMsg) emptyMsg.style.display = 'none';
                 if (dataContainer && tabsContainer) {
@@ -850,20 +946,27 @@ window.quickLoadProject = function(event) {
                     dataContainer.innerHTML = ''; 
                     tabsContainer.innerHTML = '';
 
+                    // ★ API 영문 키값을 한글로 예쁘게 바꿔주는 번역 사전
+                    const korMap = {
+                        "platPlc": "대지위치", "bldNm": "건물명", "mainPurpsCdNm": "주용도",
+                        "mainBldCnt": "주건축물수", "subBldCnt": "부속건축물수", "totArea": "연면적(㎡)",
+                        "pmsDay": "허가일", "stcnsDay": "착공일", "useAprDay": "사용승인일",
+                        "dongNm": "동명칭", "grndFlrCnt": "지상층수", "ugrndFlrCnt": "지하층수",
+                        "heit": "높이(m)", "strctCdNm": "구조명", "roofCdNm": "지붕코드명",
+                        "flrGbCdNm": "층구분", "flrNoNm": "층번호", "area": "면적(㎡)", "etcPurps": "기타용도"
+                    };
+
                     let isFirst = true;
-                    // 저장된 데이터를 순회하며 탭과 표를 동적으로 생성
                     for (const [siteName, siteData] of Object.entries(window.kbState.fetchedData)) {
-                        // 5-1. 상단 탭(Tab) 버튼 생성
+                        // 1) 탭 생성
                         const tabBtn = document.createElement('div');
                         tabBtn.innerText = siteName;
                         tabBtn.style.cssText = `padding:10px 20px; cursor:pointer; font-weight:bold; border:1px solid #ddd; border-bottom:none; border-radius:4px 4px 0 0; margin-right:5px; background:${isFirst ? '#fff' : '#f8f9fa'}; color:${isFirst ? '#1C5691' : '#333'};`;
                         
-                        // 5-2. 데이터 표시 영역 생성
                         const contentDiv = document.createElement('div');
                         contentDiv.style.display = isFirst ? 'block' : 'none';
                         
-                        // 탭 클릭 이벤트 (화면 전환)
-                        tabBtn.onclick = () => {
+                        tabBtn.onclick = () => { 
                             Array.from(tabsContainer.children).forEach(c => { c.style.background = '#f8f9fa'; c.style.color = '#333'; });
                             Array.from(dataContainer.children).forEach(c => c.style.display = 'none');
                             tabBtn.style.background = '#fff'; tabBtn.style.color = '#1C5691';
@@ -871,24 +974,24 @@ window.quickLoadProject = function(event) {
                         };
                         tabsContainer.appendChild(tabBtn);
 
-                        // 5-3. 총괄표제부, 표제부 상세, 층별 개요 등 각 항목별 표 생성
+                        // 2) 데이터 테이블 생성
                         for (const [title, rows] of Object.entries(siteData)) {
-                            // address나 errors 등 배열이 아닌 메타데이터는 건너뜀
                             if (title === 'address' || title === 'errors' || !Array.isArray(rows) || rows.length === 0) continue;
                             
                             const sectionTitle = document.createElement('h3');
-                            sectionTitle.innerText = `■ ${title}`;
+                            // 영문 타이틀도 한글로 변환
+                            let korTitle = title === 'recap' ? '총괄표제부 정보' : (title === 'title' ? '표제부 상세' : (title === 'floor' ? '층별 개요' : title));
+                            sectionTitle.innerText = `■ ${korTitle}`; 
                             sectionTitle.style.cssText = 'font-size:15px; margin: 20px 0 10px 0; color:#1C5691;';
                             contentDiv.appendChild(sectionTitle);
 
                             const tableWrapper = document.createElement('div');
-                            tableWrapper.style.cssText = 'overflow-x:auto; margin-bottom:20px; border:1px solid #ddd; border-radius:4px; max-height: 300px; overflow-y: auto;';
+                            tableWrapper.style.cssText = 'overflow-x:auto; margin-bottom:20px; border:1px solid #ddd; max-height: 300px; overflow-y: auto;';
                             
                             const table = document.createElement('table');
-                            table.className = 'data-table';
+                            table.className = 'data-table'; 
                             table.style.margin = '0';
                             
-                            // 테이블 헤더 (컬럼명)
                             const thead = document.createElement('thead');
                             const headerRow = document.createElement('tr');
                             thead.style.position = 'sticky';
@@ -898,13 +1001,38 @@ window.quickLoadProject = function(event) {
                             const cols = Object.keys(rows[0]);
                             cols.forEach(col => {
                                 const th = document.createElement('th');
-                                th.innerText = col;
+                                const korName = korMap[col] || col; // 사전에 없으면 원래 키값 사용
+                                th.innerHTML = `${korName} <span style="font-size:10px; color:#ccc;">▲▼</span>`;
+                                th.style.cursor = 'pointer';
+                                th.title = "클릭 시 정렬됩니다.";
+                                
+                                // ★ 오름차순/내림차순 정렬 로직
+                                th.dataset.sortOrder = 'asc';
+                                th.onclick = () => {
+                                    const isAsc = th.dataset.sortOrder === 'asc';
+                                    th.dataset.sortOrder = isAsc ? 'desc' : 'asc';
+                                    
+                                    const tbody = table.querySelector('tbody');
+                                    const rowArray = Array.from(tbody.querySelectorAll('tr'));
+                                    const colIndex = Array.from(headerRow.children).indexOf(th);
+                                    
+                                    rowArray.sort((a, b) => {
+                                        const cellA = a.children[colIndex].innerText.replace(/,/g, '');
+                                        const cellB = b.children[colIndex].innerText.replace(/,/g, '');
+                                        const valA = isNaN(cellA) ? cellA : parseFloat(cellA);
+                                        const valB = isNaN(cellB) ? cellB : parseFloat(cellB);
+                                        
+                                        if(valA > valB) return isAsc ? 1 : -1;
+                                        if(valA < valB) return isAsc ? -1 : 1;
+                                        return 0;
+                                    });
+                                    rowArray.forEach(tr => tbody.appendChild(tr)); // 화면 재배치
+                                };
                                 headerRow.appendChild(th);
                             });
                             thead.appendChild(headerRow);
                             table.appendChild(thead);
                             
-                            // 테이블 본문 (데이터)
                             const tbody = document.createElement('tbody');
                             rows.forEach((row, rIdx) => {
                                 const tr = document.createElement('tr');
@@ -926,7 +1054,6 @@ window.quickLoadProject = function(event) {
                     }
                 }
             }
-            // =========================================================
 
             alert("✅ 임시 저장 데이터 로드 완료!\n(건축물대장 내용도 정상적으로 복구되었습니다.)");
         } catch (err) {
