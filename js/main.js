@@ -933,11 +933,15 @@ window.quickLoadProject = function(event) {
 
 
 // ============================================================================
-// [11] ★ 화협(KFPA) 다중 사업장 바구니 보존 및 일괄 확정 로직
+// [11] ★ 화협(KFPA) 다중 사업장 바구니 보존 및 일괄 확정 로직 (데이터 증발 완벽 방어)
 // ============================================================================
 window.targetKfpaSite = "";
 window.targetKfpaAddress = "";
-window.tempKfpaDataStore = {}; // ★ 다중 사업장 데이터를 각각 보관할 전역 바구니
+
+// ★ 전역 바구니가 없으면 만들고, 이미 있으면 절대 초기화하지 않도록 방어막 설정!
+if (typeof window.tempKfpaDataStore === 'undefined') {
+    window.tempKfpaDataStore = {};
+}
 
 // 1. 화협 불러오기 진입 시 탭 세팅
 window.initKfpaScreen = function() {
@@ -978,18 +982,29 @@ window.initKfpaScreen = function() {
             window.targetKfpaSite = loc.name;
             window.targetKfpaAddress = loc.addr;
             
-            // ★ 탭 이동 시, 바구니에 보관된 데이터가 있으면 화면에 다시 그려줌!
+            // ★ 메뉴를 이동했다 돌아와도 바구니(tempKfpaDataStore)에 있는 데이터를 그대로 화면에 그려줌!
+            if (typeof window.tempKfpaDataStore === 'undefined') window.tempKfpaDataStore = {};
             renderKfpaPreview(loc.name);
         };
         tabsContainer.appendChild(tabBtn);
 
-        if(isFirst) { tabBtn.click(); isFirst = false; }
+        // 화면 진입 시 기존에 보던 탭이 있다면 그 탭을, 없다면 첫 번째 탭을 강제 클릭
+        if (window.targetKfpaSite === loc.name) {
+            tabBtn.click();
+            isFirst = false;
+        } else if (isFirst && !window.targetKfpaSite) {
+            tabBtn.click();
+            isFirst = false;
+        }
     });
+    
+    // 일치하는 탭이 없어서 클릭 안 됐을 경우 첫번째 탭 강제 클릭 (버그 방어)
+    if (isFirst && tabsContainer.firstChild) tabsContainer.firstChild.click();
     
     goToSlide('slide6');
 };
 
-// 2. 화면 미리보기 렌더링 함수 (합계 줄 및 총면적 계산 포함)
+// 2. 화면 미리보기 렌더링 함수
 window.renderKfpaPreview = function(siteName) {
     const tbody = document.getElementById('previewKfpaTbody');
     const btnConfirm = document.getElementById('btnConfirmKfpa');
@@ -1003,27 +1018,29 @@ window.renderKfpaPreview = function(siteName) {
 
         records.forEach(r => {
             const tr = document.createElement('tr');
-            if(r.isSubtotal) { // 동면적합계 전용 UI
+            if(r.isSubtotal) { 
                 tr.style.background = '#e9ecef';
                 tr.style.fontWeight = 'bold';
                 tr.innerHTML = `<td></td><td></td><td colspan="4" style="color:#1C5691; text-align:center;">${r.동명칭}</td><td style="text-align:right; color:#1C5691;">${r.연면적.toLocaleString('ko-KR', {minimumFractionDigits:2, maximumFractionDigits:2})}</td><td></td>`;
-            } else { // 일반 행
+            } else { 
                 totalArea += r.연면적;
                 tr.innerHTML = `<td style="font-weight:bold;">${r.일련번호}</td><td>${r.동번호}</td><td style="font-weight:bold; color:#1C5691;">${r.동명칭}</td><td>${r.준공연도}</td><td>${r.층수}</td><td>${r.구조명}</td><td style="text-align:right;">${r.연면적.toLocaleString('ko-KR', {minimumFractionDigits:2, maximumFractionDigits:2})}</td><td style="text-align:left;">${r.용도}</td>`;
             }
             tbody.appendChild(tr);
         });
 
-        // ★ 총면적 합계 줄 추가
         const totalTr = document.createElement('tr');
         totalTr.style.background = '#cbd5e1'; totalTr.style.fontWeight = 'bold';
         totalTr.innerHTML = `<td colspan="6" style="text-align:center; color:#333;">${siteName} 사업장 총면적 합계</td><td style="text-align:right; color:#d32f2f;">${totalArea.toLocaleString('ko-KR', {minimumFractionDigits:2, maximumFractionDigits:2})}</td><td></td>`;
         tbody.appendChild(totalTr);
     }
 
-    // 데이터가 하나라도 있는 사업장이 있으면 일괄 확정 버튼 노출
-    if (Object.keys(window.tempKfpaDataStore).length > 0) btnConfirm.style.display = 'block';
-    else btnConfirm.style.display = 'none';
+    // 바구니에 전체 사업장 중 하나라도 데이터가 있다면 확정 버튼 노출
+    if (window.tempKfpaDataStore && Object.keys(window.tempKfpaDataStore).length > 0) {
+        btnConfirm.style.display = 'block';
+    } else {
+        btnConfirm.style.display = 'none';
+    }
 };
 
 // 3. 엑셀 파일 파싱 (빈칸 채우기 포함)
@@ -1061,14 +1078,11 @@ window.loadKfpaExcel = function(event) {
                 let dNo = String(row[colDongNo] || "").trim();
                 let dNm = String(row[colDongNm] || "").trim();
                 
-                // 합계 행인지 판별
                 let isSubtotal = dNm.includes("합계") || dNm.includes("소계") || serial.includes("합계");
 
-                // 빈칸 채우기 로직 (합계 행이 아닐 때만 이름 갱신)
                 if(dNo && dNo !== "-" && dNo !== "undefined") lastDongNo = dNo;
                 if(dNm && dNm !== "-" && dNm !== "undefined" && !isSubtotal) lastDongNm = dNm;
 
-                // 일련번호도 없고 합계도 아니면 무효 데이터로 버림
                 if((!serial || serial === "-" || serial === "undefined") && !isSubtotal) return;
 
                 let strctCode = String(row[colStrct] || "").trim(); let purps = String(row[colPurps] || "-").trim();
@@ -1085,7 +1099,7 @@ window.loadKfpaExcel = function(event) {
                         "일련번호": serial, "동번호": lastDongNo, "층수": floorStr,
                         "동명칭": isSubtotal ? dNm : lastDongNm, "용도": purps, "연면적": area,
                         "구조명": strctCode, "구조코드": strctCode, "준공연도": buildYear,
-                        "isSubtotal": isSubtotal, // 확정 시 걸러내기 위한 플래그
+                        "isSubtotal": isSubtotal, 
                         "단가": 0.0, "노무비": 0.0, "물가지수": 1.0, "감가율": 1.78, "재조달_건축": 0, "잔가율": 100.0, "현재_건축": 0
                     });
                 }
@@ -1094,10 +1108,11 @@ window.loadKfpaExcel = function(event) {
             if(records.length === 0) return alert("유효한 화협 데이터(일련번호 및 면적 존재)를 찾을 수 없습니다.");
 
             // ★ 해당 사업장 바구니에 안전하게 보관!
+            if (typeof window.tempKfpaDataStore === 'undefined') window.tempKfpaDataStore = {};
             window.tempKfpaDataStore[siteName] = records;
-            renderKfpaPreview(siteName); // 즉시 화면에 그리기
+            renderKfpaPreview(siteName); 
 
-            alert(`✅ [${siteName}] 화협 엑셀 로드 완료!\n상단의 다른 탭이 있다면 이동해서 마저 업로드하시거나,\n모두 올리셨다면 우측 [전체 사업장 데이터 확정]을 눌러주세요.`);
+            alert(`✅ [${siteName}] 화협 엑셀 로드 완료!\n상단의 다른 탭이 있다면 이동해서 마저 업로드하시거나,\n모두 올리셨다면 우측 [전체 확정]을 눌러주세요.`);
 
         } catch (err) { alert("파일 파싱 중 오류 발생: " + err); }
     };
@@ -1105,21 +1120,22 @@ window.loadKfpaExcel = function(event) {
     event.target.value = ''; 
 };
 
-// 4. ★ 전체 다중 사업장 일괄 확정 후 Slide 7로 이동 (자동 매핑 포함)
+// 4. ★ 전체 확정 후 Slide 7로 이동 (단가/노무비/구조명 자동 매핑 포함)
 window.confirmAllKfpaData = function() {
+    if(!window.tempKfpaDataStore) return alert("반영할 데이터가 전혀 없습니다. 엑셀 파일을 먼저 업로드해주세요.");
+    
     const sites = Object.keys(window.tempKfpaDataStore);
     if(sites.length === 0) return alert("반영할 데이터가 전혀 없습니다. 엑셀 파일을 먼저 업로드해주세요.");
 
     if(!window.kbState.evalData.kfpa) window.kbState.evalData.kfpa = {};
     
-    // 바구니에 있는 모든 사업장을 돌면서 한방에 평가 데이터로 전송
     sites.forEach(siteName => {
         const records = window.tempKfpaDataStore[siteName].filter(r => !r.isSubtotal); 
         const titleRecords = window.kbState.evalData.title[siteName] || [];
         const siteGroups = {};
         
         records.forEach(r => {
-            // ★ 확정 시점에 단가표(costData)가 있다면 구조코드를 바탕으로 자동 매핑 실행!
+            // ★ 확정 시점에 단가표가 있다면 엑셀의 구조코드를 바탕으로 자동 매핑 실행!
             if (r.구조코드 && r.구조코드 !== "-" && window.kbState.costData && window.kbState.costData.length > 0) {
                 const cleanCode = String(r.구조코드).replace(/-/g, "");
                 const matched = window.kbState.costData.find(row => {
@@ -1146,16 +1162,14 @@ window.confirmAllKfpaData = function() {
         });
 
         window.kbState.evalData.kfpa[siteName] = Object.values(siteGroups);
-        recalculateValuation('kfpa', siteName); // 가액 즉시 계산
+        recalculateValuation('kfpa', siteName); 
     });
 
-    // 화면 진입 시 첫 번째 탭으로 보이도록 세팅
     window.kbState.activeSite.kfpa = sites[0];
-
-    // 임시 보관 바구니 완전 비우기
+    
+    // ★ 일괄 확정이 무사히 끝났으므로 임시 바구니를 비워줌
     window.tempKfpaDataStore = {};
     
-    // 2.2.2 슬라이드로 화면 이동 및 평가 테이블 렌더링
     goToSlide('slide7');
     renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
     
