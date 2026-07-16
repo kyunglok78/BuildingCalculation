@@ -1368,4 +1368,4 @@ window.exportSummaryExcel = function() {
     } catch (error) {
         alert("엑셀 다운로드 중 오류가 발생했습니다.\n" + error.message);
     }
-};
+};};
