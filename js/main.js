@@ -332,6 +332,7 @@ window.syncFloorData = function() {
                 record["구조코드"] = tReq["구조코드"]; record["단가"] = tReq["단가"];
                 record["노무비"] = tReq["노무비"]; record["물가지수"] = tReq["물가지수"];
                 record["감가율"] = tReq["감가율"];
+                record["준공연도"] = tReq["준공연도"]; // ★ 표제부 준공연도 상속 (수정됨)
                 if (tGroup["부속비율"]) inheritedRatio = tGroup["부속비율"];
             }
             
@@ -350,7 +351,7 @@ window.syncFloorData = function() {
     window.kbState.activeSite.floor = Object.keys(newFloorData)[0] || null;
     Object.keys(newFloorData).forEach(siteName => recalculateValuation('floor', siteName));
     renderEvalTabsAndTable('floor', 'tbodyFloorEval', 'tabsFloorEval');
-    alert("✅ 층별 데이터 연동 완료!\n\n(표제부에서 작업하신 구조코드, 단가, 노무비, 감가율, 부속비율이 동명칭 기준으로 자동 상속되었습니다.)");
+    alert("✅ 층별 데이터 연동 완료!\n\n(표제부에서 작업하신 구조코드, 단가, 준공연도 등이 자동 상속되었습니다.)");
 };
 
 window.deleteEvalItem = function(mode, siteName, gIdx) {
@@ -1231,7 +1232,6 @@ window.renderSummary = function(mode, tabElement) {
 
         if (groupArray.length === 0) continue;
 
-        // ★ 동(Group) 병합을 위해 해당 사업장이 가진 '총 줄(Row) 수'를 먼저 계산합니다.
         let siteRowSpan = 0;
         groupArray.forEach(g => {
             const rCount = (g.records && g.records.length > 0) ? g.records.length : 1;
@@ -1264,7 +1264,7 @@ window.renderSummary = function(mode, tabElement) {
                 
             const dongCellHtml = `<td rowspan="${dongRowSpan}" style="vertical-align:middle; font-weight:bold; color:#1C5691; background:#fff; border-right:1px solid #ddd;">${dongName}</td>`;
 
-            // ★ 1. 건축공사비(세부 층/항목) 전체 리스트업 렌더링
+            // 1. 건축공사비(세부 층/항목) 렌더링
             if (records.length === 0) {
                 tbody.innerHTML += `
                     <tr style="background:#fff;">
@@ -1276,7 +1276,6 @@ window.renderSummary = function(mode, tabElement) {
             } else {
                 records.forEach((r, rIdx) => {
                     const isFirstRecord = (rIdx === 0);
-                    // 층별 모드일 경우 r.용도 안에 "[1층] 작업장" 형태로 들어있으므로 아주 예쁘게 출력됩니다.
                     const gubunText = r.용도 || '건축공사비';
 
                     tbody.innerHTML += `
@@ -1292,7 +1291,7 @@ window.renderSummary = function(mode, tabElement) {
                 });
             }
 
-            // ★ 2. [동별] 부속설비 행
+            // 2. [동별] 부속설비 행
             tbody.innerHTML += `
                 <tr style="background:#f8f9fa;">
                     <td style="text-align:left; color:#666;">└ 부속설비 (${accRate}%)</td>
@@ -1302,7 +1301,7 @@ window.renderSummary = function(mode, tabElement) {
                 </tr>
             `;
             
-            // ★ 3. [동별] 소계 행 (강제 배경색 지정으로 색상 엇갈림 방어!)
+            // 3. [동별] 소계 행 (색상 고정)
             tbody.innerHTML += `
                 <tr style="background:#e2e8f0; font-weight:bold;">
                     <td style="text-align:center; color:#111;">[${dongName}] 소계</td>
@@ -1328,19 +1327,45 @@ window.renderSummary = function(mode, tabElement) {
         `;
     }
 
-    // 5. [전체] 총계 행 (맨 아래, 글자색 황금색 유지)
+    // 5. [전체] 총계 행 (맨 아래, 글자색 강제 고정 !important 적용)
     if (Object.keys(dataObj).length > 1) { 
         tbody.innerHTML += `
             <tr style="background:#1C5691; font-weight:bold; font-size:15px;">
-                <td colspan="3" style="text-align:center; color:#ffffff;">전체 사업장 총 평가액</td>
-                <td style="text-align:right; color:#FFD700;">${formatArea(grandTotalArea)}</td>
-                <td style="text-align:right; color:#FFD700;">${formatPrice(grandTotalReco)}</td>
-                <td style="text-align:right; color:#FFD700;">${formatPrice(grandTotalCur)}</td>
+                <td colspan="3" style="text-align:center; color:#ffffff !important;">전체 사업장 총 평가액</td>
+                <td style="text-align:right; color:#FFD700 !important;">${formatArea(grandTotalArea)}</td>
+                <td style="text-align:right; color:#FFD700 !important;">${formatPrice(grandTotalReco)}</td>
+                <td style="text-align:right; color:#FFD700 !important;">${formatPrice(grandTotalCur)}</td>
             </tr>
         `;
     }
 };
 
+// ★ 총괄표 엑셀 다운로드 기능 완벽 구현
 window.exportSummaryExcel = function() {
-    alert("엑셀 다운로드 기능은 다음 단계에서 구현할 예정입니다! ^^");
+    const table = document.getElementById('summaryTable');
+    // 표에 헤더(1줄)와 빈 안내문구(1줄)밖에 없으면 데이터가 없는 것
+    if(!table || table.rows.length <= 2) {
+        return alert("다운로드할 총괄표 데이터가 없습니다. 먼저 좌측 메뉴에서 평가를 완료해 주세요.");
+    }
+
+    // 현재 열려있는 탭 이름 찾기 (예: '표제부 기반 총괄표')
+    let activeTabName = "총괄표";
+    const tabs = document.querySelectorAll('#summaryTabs .summary-tab');
+    tabs.forEach(tab => {
+        if (tab.style.fontWeight === 'bold') activeTabName = tab.innerText;
+    });
+
+    try {
+        // HTML 테이블을 통째로 엑셀 워크시트로 변환
+        const wb = XLSX.utils.table_to_book(table, {sheet: "가액평가_총괄표"});
+        
+        // 파일명에 오늘 날짜 추가
+        const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, "");
+        const fileName = `KB손해보험_${activeTabName}_${dateStr}.xlsx`;
+        
+        // 다운로드 실행
+        XLSX.writeFile(wb, fileName);
+    } catch (error) {
+        alert("엑셀 다운로드 중 오류가 발생했습니다.\n" + error.message);
+    }
 };
