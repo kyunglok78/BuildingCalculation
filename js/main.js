@@ -1177,10 +1177,9 @@ window.confirmAllKfpaData = function() {
 };
 
 // ============================================================================
-// [12] ★ 통합 총괄표(Summary Table) 렌더링 로직 (오류 방어 및 친절한 안내 추가)
+// [12] ★ 통합 총괄표(Summary Table) 렌더링 로직 (세부 항목 전체 펼침 모드 & 배경색 고정)
 // ============================================================================
 
-// ★ 자동 패치: 사용자가 HTML을 일일이 수정할 필요 없이, 모든 사이드바의 '총괄표' 메뉴 클릭 이벤트를 자동으로 올바르게 연결해 줍니다.
 setTimeout(() => {
     document.querySelectorAll('.menu-l1, .menu-l2, .menu-l3').forEach(menu => {
         if (menu.innerText.includes('3. 총괄표 작성')) {
@@ -1189,17 +1188,13 @@ setTimeout(() => {
     });
 }, 500);
 
-// 총괄표 화면 진입 (기본적으로 표제부 탭 렌더링)
 window.initSummaryScreen = function() {
     goToSlide('slide8');
     const firstTab = document.querySelector('#summaryTabs .summary-tab');
-    if (firstTab) {
-        renderSummary('title', firstTab); // 화면 이동 시 강제로 첫 번째 탭의 표를 그리도록 지시!
-    }
+    if (firstTab) renderSummary('title', firstTab); 
 };
 
 window.renderSummary = function(mode, tabElement) {
-    // 1. 탭 UI 스타일 변경
     if (tabElement) {
         document.querySelectorAll('#summaryTabs .summary-tab').forEach(t => {
             t.style.background = '#f8f9fa'; t.style.color = '#666'; 
@@ -1214,7 +1209,6 @@ window.renderSummary = function(mode, tabElement) {
     
     const dataObj = window.kbState.evalData[mode];
     
-    // ★ 데이터가 비어있을 때, 사용자에게 어디서 무엇을 해야 하는지 정확히 알려주는 친절한 가이드 메시지 추가
     if (!dataObj || Object.keys(dataObj).length === 0) {
         let guideMsg = "";
         if (mode === 'title') guideMsg = "▶ [2.1.2 표제부 평가] 메뉴로 이동하여 <b>'표제부 데이터 연동하기'</b> 버튼을 눌러주세요.";
@@ -1231,24 +1225,31 @@ window.renderSummary = function(mode, tabElement) {
 
     let grandTotalArea = 0, grandTotalReco = 0, grandTotalCur = 0;
 
-    // 2. 사업장(Site)별 데이터 순회
     for (const [siteName, groups] of Object.entries(dataObj)) {
         let siteTotalArea = 0, siteTotalReco = 0, siteTotalCur = 0;
         const groupArray = Array.isArray(groups) ? groups : Object.values(groups);
 
         if (groupArray.length === 0) continue;
 
-        // 3. 동(Group)별 데이터 순회
+        // ★ 동(Group) 병합을 위해 해당 사업장이 가진 '총 줄(Row) 수'를 먼저 계산합니다.
+        let siteRowSpan = 0;
+        groupArray.forEach(g => {
+            const rCount = (g.records && g.records.length > 0) ? g.records.length : 1;
+            siteRowSpan += (rCount + 2); // (실제 층/항목 수) + (부속설비 1줄) + (소계 1줄)
+        });
+
         groupArray.forEach((group, gIdx) => {
+            const records = group.records || [];
+            const rCount = records.length > 0 ? records.length : 1;
+            const dongRowSpan = rCount + 2;
+
             let groupArea = 0;
-            (group.records || []).forEach(r => groupArea += (parseFloat(r.연면적) || 0));
+            records.forEach(r => groupArea += (parseFloat(r.연면적) || 0));
 
             const recoTotal = parseFloat(group.재조달_합계 || 0);
             const curTotal = parseFloat(group.현재_합계 || 0);
             const recoSub = parseFloat(group.재조달_부속 || 0);
             const curSub = parseFloat(group.현재_부속 || 0);
-            const recoArch = recoTotal - recoSub;
-            const curArch = curTotal - curSub;
 
             siteTotalArea += groupArea;
             siteTotalReco += recoTotal;
@@ -1257,35 +1258,54 @@ window.renderSummary = function(mode, tabElement) {
             const dongName = group.동명칭 || '-';
             const accRate = parseFloat(group.부속비율 || 20.0).toFixed(1);
 
-            // 해당 사업장의 첫 번째 동(Group)일 때만 소재지명 컬럼에 rowspan을 줍니다.
             const siteCellHtml = (gIdx === 0) 
-                ? `<td rowspan="${groupArray.length * 3}" style="vertical-align:middle; font-weight:bold; background:#fff;">${siteName}</td>` 
+                ? `<td rowspan="${siteRowSpan}" style="vertical-align:middle; font-weight:bold; background:#fff; border-right:1px solid #ddd;">${siteName}</td>` 
                 : '';
+                
+            const dongCellHtml = `<td rowspan="${dongRowSpan}" style="vertical-align:middle; font-weight:bold; color:#1C5691; background:#fff; border-right:1px solid #ddd;">${dongName}</td>`;
 
-            // [동별] 건축공사비 행
-            tbody.innerHTML += `
-                <tr style="background:#fff;">
-                    ${siteCellHtml}
-                    <td rowspan="3" style="vertical-align:middle; font-weight:bold; color:#1C5691;">${dongName}</td>
-                    <td>건축공사비</td>
-                    <td style="text-align:right;">${formatArea(groupArea)}</td>
-                    <td style="text-align:right;">${formatPrice(recoArch)}</td>
-                    <td style="text-align:right;">${formatPrice(curArch)}</td>
-                </tr>
-            `;
-            // [동별] 부속설비 행
+            // ★ 1. 건축공사비(세부 층/항목) 전체 리스트업 렌더링
+            if (records.length === 0) {
+                tbody.innerHTML += `
+                    <tr style="background:#fff;">
+                        ${siteCellHtml} ${dongCellHtml}
+                        <td style="text-align:left;">세부항목 없음</td>
+                        <td style="text-align:right;">0</td><td style="text-align:right;">0</td><td style="text-align:right;">0</td>
+                    </tr>
+                `;
+            } else {
+                records.forEach((r, rIdx) => {
+                    const isFirstRecord = (rIdx === 0);
+                    // 층별 모드일 경우 r.용도 안에 "[1층] 작업장" 형태로 들어있으므로 아주 예쁘게 출력됩니다.
+                    const gubunText = r.용도 || '건축공사비';
+
+                    tbody.innerHTML += `
+                        <tr style="background:#fff;">
+                            ${isFirstRecord ? siteCellHtml : ''}
+                            ${isFirstRecord ? dongCellHtml : ''}
+                            <td style="text-align:left; color:#444;">${gubunText}</td>
+                            <td style="text-align:right;">${formatArea(r.연면적)}</td>
+                            <td style="text-align:right;">${formatPrice(r.재조달_건축)}</td>
+                            <td style="text-align:right;">${formatPrice(r.현재_건축)}</td>
+                        </tr>
+                    `;
+                });
+            }
+
+            // ★ 2. [동별] 부속설비 행
             tbody.innerHTML += `
                 <tr style="background:#f8f9fa;">
-                    <td>부속설비 (${accRate}%)</td>
+                    <td style="text-align:left; color:#666;">└ 부속설비 (${accRate}%)</td>
                     <td style="text-align:right; color:#999;">-</td>
                     <td style="text-align:right;">${formatPrice(recoSub)}</td>
                     <td style="text-align:right;">${formatPrice(curSub)}</td>
                 </tr>
             `;
-            // [동별] 소계 행
+            
+            // ★ 3. [동별] 소계 행 (강제 배경색 지정으로 색상 엇갈림 방어!)
             tbody.innerHTML += `
                 <tr style="background:#e2e8f0; font-weight:bold;">
-                    <td>소계</td>
+                    <td style="text-align:center; color:#111;">[${dongName}] 소계</td>
                     <td style="text-align:right;">${formatArea(groupArea)}</td>
                     <td style="text-align:right; color:#1C5691;">${formatPrice(recoTotal)}</td>
                     <td style="text-align:right; color:#1C5691;">${formatPrice(curTotal)}</td>
@@ -1293,14 +1313,14 @@ window.renderSummary = function(mode, tabElement) {
             `;
         });
 
-        // [사업장별] 합계 행
+        // 4. [사업장별] 합계 행
         grandTotalArea += siteTotalArea;
         grandTotalReco += siteTotalReco;
         grandTotalCur += siteTotalCur;
 
         tbody.innerHTML += `
             <tr style="background:#cbd5e1; font-weight:bold;">
-                <td colspan="3" style="text-align:center;">[${siteName}] 평가 합계</td>
+                <td colspan="3" style="text-align:center;">[${siteName}] 평가액 합계</td>
                 <td style="text-align:right; color:#d32f2f;">${formatArea(siteTotalArea)}</td>
                 <td style="text-align:right; color:#d32f2f;">${formatPrice(siteTotalReco)}</td>
                 <td style="text-align:right; color:#d32f2f;">${formatPrice(siteTotalCur)}</td>
@@ -1308,7 +1328,7 @@ window.renderSummary = function(mode, tabElement) {
         `;
     }
 
-    // 4. [전체] 총계 행 (맨 아래)
+    // 5. [전체] 총계 행 (맨 아래, 글자색 황금색 유지)
     if (Object.keys(dataObj).length > 1) { 
         tbody.innerHTML += `
             <tr style="background:#1C5691; font-weight:bold; font-size:15px;">
