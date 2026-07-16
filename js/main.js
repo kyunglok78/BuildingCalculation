@@ -1286,17 +1286,17 @@ window.renderSummary = function(mode, tabElement) {
         `;
     }
 
-    // 4. [전체] 총계 행 (맨 아래)
-    if (Object.keys(dataObj).length > 1) { // 사업장이 2개 이상일 때만 전체 총계 표시
-        tbody.innerHTML += `
-            <tr style="background:#1C5691; color:#fff; font-weight:bold; font-size:15px;">
-                <td colspan="3" style="text-align:center;">전체 사업장 총 평가액</td>
-                <td style="text-align:right;">${formatArea(grandTotalArea)}</td>
-                <td style="text-align:right;">${formatPrice(grandTotalReco)}</td>
-                <td style="text-align:right;">${formatPrice(grandTotalCur)}</td>
-            </tr>
-        `;
-    }
+     // 4. [전체] 총계 행 (맨 아래)
+        if (Object.keys(dataObj).length > 1) { // 사업장이 2개 이상일 때만 전체 총계 표시
+            tbody.innerHTML += `
+                <tr style="background:#1C5691; font-weight:bold; font-size:15px;">
+                    <td colspan="3" style="text-align:center; color:#ffffff;">전체 사업장 총 평가액</td>
+                    <td style="text-align:right; color:#FFD700;">${formatArea(grandTotalArea)}</td>
+                    <td style="text-align:right; color:#FFD700;">${formatPrice(grandTotalReco)}</td>
+                    <td style="text-align:right; color:#FFD700;">${formatPrice(grandTotalCur)}</td>
+                </tr>
+            `;
+        }
 };
 
 window.exportSummaryExcel = function() {
