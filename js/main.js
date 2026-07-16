@@ -681,16 +681,32 @@ window.batchApplyRatio = function(mode, siteName) {
 // ============================================================================
 // [10] ★ 프로젝트 임시 저장 및 불러오기 (평가지수 파일명, 화협 임시데이터 완벽 보존)
 // ============================================================================
+
+// ★ 전역 CSS 탭 스타일 강제 주입 (다른 화면에서 대장을 새로 조회해도 무조건 탭 색상 유지)
+(function enforceTabColors() {
+    if(document.getElementById('kb-tab-colors')) return;
+    const style = document.createElement('style');
+    style.id = 'kb-tab-colors';
+    style.innerHTML = `
+        #slide3Tabs div[style*="background: #fff"], #slide3Tabs div[style*="background:#fff"], #slide3Tabs div[style*="background: rgb(255, 255, 255)"],
+        #slide6Tabs div[style*="background: #fff"], #slide6Tabs div[style*="background:#fff"], #slide6Tabs div[style*="background: rgb(255, 255, 255)"] {
+            background: #1C5691 !important; color: #ffffff !important; font-weight: bold !important; border-color: #1C5691 !important;
+        }
+        #slide3Tabs div[style*="background: #f8f9fa"], #slide3Tabs div[style*="background:#f8f9fa"], #slide3Tabs div[style*="background: rgb(248, 249, 250)"],
+        #slide6Tabs div[style*="background: #f8f9fa"], #slide6Tabs div[style*="background:#f8f9fa"], #slide6Tabs div[style*="background: rgb(248, 249, 250)"] {
+            background: #f1f5f9 !important; color: #94a3b8 !important; font-weight: normal !important; border-color: #e2e8f0 !important;
+        }
+    `;
+    document.head.appendChild(style);
+})();
+
 window.quickSaveProject = function() {
     try {
         const hasEvalData = Object.keys(window.kbState.evalData.title).length > 0 || 
                             Object.keys(window.kbState.evalData.floor).length > 0 || 
                             Object.keys(window.kbState.evalData.kfpa).length > 0;
         
-        // ★ 화협 엑셀을 올려두기만 하고 확정하지 않은 임시 데이터가 있는지도 체크
         const hasTempKfpa = Object.keys(window.tempKfpaDataStore || {}).length > 0;
-        
-        // ★ 단가표나 물가지수를 올린 기록이 있는지도 체크
         const hasCostData = window.kbState.costData && window.kbState.costData.length > 0;
                             
         if (Object.keys(window.kbState.fetchedData).length === 0 && !hasEvalData && !hasTempKfpa && !hasCostData) {
@@ -713,8 +729,6 @@ window.quickSaveProject = function() {
             });
         });
 
-        // ★ 저장 항목에 단가표/물가지수 파일명 텍스트와 화협 임시 바구니를 모조리 포함!
-        // (단가표 데이터 자체는 kbState 안에 이미 포함되어 함께 자동 저장됩니다)
         const projectData = {
             version: "1.4", 
             contractor: contractorName,
@@ -754,15 +768,11 @@ window.quickLoadProject = function(event) {
         try {
             const projectData = JSON.parse(e.target.result);
             
-            // 1. 핵심 상태 데이터 복구 (단가표 데이터, 물가지수 데이터도 여기서 복구됨)
             if (projectData.kbState) window.kbState = projectData.kbState;
-
-            // 2. ★ 화협 임시 바구니 완벽 복구 (엑셀 올려두고 확정 안 한 상태 그대로!)
             if (projectData.tempKfpaDataStore) window.tempKfpaDataStore = projectData.tempKfpaDataStore;
             if (projectData.targetKfpaSite) window.targetKfpaSite = projectData.targetKfpaSite;
             if (projectData.targetKfpaAddress) window.targetKfpaAddress = projectData.targetKfpaAddress;
 
-            // 3. 일반 정보 복구
             if (projectData.contractor) {
                 document.querySelectorAll('.contractor-sync').forEach(el => el.value = projectData.contractor);
             }
@@ -771,7 +781,6 @@ window.quickLoadProject = function(event) {
                 if (evalYearInput) evalYearInput.value = projectData.evalYear;
             }
 
-            // 4. ★ 평가지수 파일명 텍스트 복구 (화면에 이름이 그대로 표시됨!)
             if (projectData.unitCostPath) {
                 const uPath = document.getElementById('unitCostPath');
                 if (uPath) uPath.value = projectData.unitCostPath;
@@ -781,7 +790,6 @@ window.quickLoadProject = function(event) {
                 if (pPath) pPath.value = projectData.priceIndexPath;
             }
 
-            // 5. 소재지 리스트 화면 복구
             const listBox = document.getElementById('locationListBox');
             if (listBox) {
                 listBox.innerHTML = ''; 
@@ -808,7 +816,6 @@ window.quickLoadProject = function(event) {
 
             runGroupedRenderTest();
 
-            // 6. 공공데이터(대장) 탭 복구 로직
             if (window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
                 const dataContainer = document.getElementById('fetchedDataContainer');
                 const tabsContainer = document.getElementById('slide3Tabs');
@@ -833,15 +840,16 @@ window.quickLoadProject = function(event) {
                     for (const [siteName, siteData] of Object.entries(window.kbState.fetchedData)) {
                         const tabBtn = document.createElement('div');
                         tabBtn.innerText = siteName;
-                        tabBtn.style.cssText = `padding:10px 20px; cursor:pointer; font-weight:bold; border:1px solid #ddd; border-bottom:none; border-radius:4px 4px 0 0; margin-right:5px; background:${isFirst ? '#fff' : '#f8f9fa'}; color:${isFirst ? '#1C5691' : '#333'};`;
+                        // ★ 대장 탭 UI 확 띄게 (남색/흰색 강제)
+                        tabBtn.style.cssText = `padding:10px 20px; cursor:pointer; font-weight:${isFirst ? 'bold' : 'normal'}; border:1px solid ${isFirst ? '#1C5691' : '#e2e8f0'}; border-bottom:none; border-radius:4px 4px 0 0; margin-right:5px; background:${isFirst ? '#1C5691' : '#f1f5f9'}; color:${isFirst ? '#ffffff' : '#94a3b8'};`;
                         
                         const contentDiv = document.createElement('div');
                         contentDiv.style.display = isFirst ? 'block' : 'none';
                         
                         tabBtn.onclick = () => { 
-                            Array.from(tabsContainer.children).forEach(c => { c.style.background = '#f8f9fa'; c.style.color = '#333'; });
+                            Array.from(tabsContainer.children).forEach(c => { c.style.background = '#f1f5f9'; c.style.color = '#94a3b8'; c.style.fontWeight = 'normal'; c.style.borderColor = '#e2e8f0'; });
                             Array.from(dataContainer.children).forEach(c => c.style.display = 'none');
-                            tabBtn.style.background = '#fff'; tabBtn.style.color = '#1C5691';
+                            tabBtn.style.background = '#1C5691'; tabBtn.style.color = '#ffffff'; tabBtn.style.fontWeight = 'bold'; tabBtn.style.borderColor = '#1C5691';
                             contentDiv.style.display = 'block';
                         };
                         tabsContainer.appendChild(tabBtn);
@@ -923,7 +931,20 @@ window.quickLoadProject = function(event) {
                 }
             }
 
-            alert("✅ 임시 저장 데이터 완벽 로드 완료!\n(화협 데이터, 평가지수 파일명 등 모든 상태가 복구되었습니다.)");
+            // ★ 최상단 헤더 영역에 [현재 작업파일] 뱃지 고정 표시!
+            const loadTime = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+            document.querySelectorAll('.window-title').forEach(title => {
+                let badge = title.querySelector('.loaded-badge');
+                if(!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'loaded-badge';
+                    title.appendChild(badge);
+                }
+                badge.style.cssText = 'margin-left: 20px; padding: 4px 15px; background: #e74c3c; color: white; border-radius: 20px; font-size: 13px; font-weight: bold; vertical-align: middle; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.2); border: 1px solid #c0392b;';
+                badge.innerHTML = `<i class="fa-solid fa-folder-open"></i> 최근 로드: ${file.name} (${loadTime})`;
+            });
+
+            alert("✅ 임시 저장 데이터 완벽 로드 완료!\n(화상단에 현재 로드한 파일 이름이 표시됩니다.)");
         } catch (err) {
             alert("⚠️ 파일 형식이 잘못되었거나 과거의 손상된 저장 파일입니다.\n(에러: " + err.message + ")");
         }
@@ -932,14 +953,12 @@ window.quickLoadProject = function(event) {
     event.target.value = ''; 
 };
 
-
 // ============================================================================
 // [11] ★ 화협(KFPA) 다중 사업장 바구니 보존 및 일괄 확정 로직 (데이터 증발 완벽 방어)
 // ============================================================================
 window.targetKfpaSite = "";
 window.targetKfpaAddress = "";
 
-// ★ 전역 바구니가 없으면 만들고, 이미 있으면 절대 초기화하지 않도록 방어막 설정!
 if (typeof window.tempKfpaDataStore === 'undefined') {
     window.tempKfpaDataStore = {};
 }
@@ -972,24 +991,23 @@ window.initKfpaScreen = function() {
     locations.forEach(loc => {
         const tabBtn = document.createElement('div');
         tabBtn.innerText = loc.name;
-        tabBtn.style.cssText = `padding:10px 20px; cursor:pointer; font-weight:bold; border:1px solid #ddd; border-bottom:none; border-radius:4px 4px 0 0; margin-right:5px; background:${isFirst ? '#fff' : '#f8f9fa'}; color:${isFirst ? '#1C5691' : '#333'};`;
+        // ★ 화협 탭 UI 확 띄게 (남색/흰색 강제)
+        tabBtn.style.cssText = `padding:10px 20px; cursor:pointer; font-weight:${isFirst ? 'bold' : 'normal'}; border:1px solid ${isFirst ? '#1C5691' : '#e2e8f0'}; border-bottom:none; border-radius:4px 4px 0 0; margin-right:5px; background:${isFirst ? '#1C5691' : '#f1f5f9'}; color:${isFirst ? '#ffffff' : '#94a3b8'};`;
         
         tabBtn.onclick = () => {
-            Array.from(tabsContainer.children).forEach(c => { c.style.background = '#f8f9fa'; c.style.color = '#333'; });
-            tabBtn.style.background = '#fff'; tabBtn.style.color = '#1C5691';
+            Array.from(tabsContainer.children).forEach(c => { c.style.background = '#f1f5f9'; c.style.color = '#94a3b8'; c.style.fontWeight = 'normal'; c.style.borderColor = '#e2e8f0'; });
+            tabBtn.style.background = '#1C5691'; tabBtn.style.color = '#ffffff'; tabBtn.style.fontWeight = 'bold'; tabBtn.style.borderColor = '#1C5691';
             
             document.getElementById('kfpaPreviewSite').value = loc.name;
             document.getElementById('kfpaPreviewAddress').value = loc.addr;
             window.targetKfpaSite = loc.name;
             window.targetKfpaAddress = loc.addr;
             
-            // ★ 메뉴를 이동했다 돌아와도 바구니(tempKfpaDataStore)에 있는 데이터를 그대로 화면에 그려줌!
             if (typeof window.tempKfpaDataStore === 'undefined') window.tempKfpaDataStore = {};
             renderKfpaPreview(loc.name);
         };
         tabsContainer.appendChild(tabBtn);
 
-        // 화면 진입 시 기존에 보던 탭이 있다면 그 탭을, 없다면 첫 번째 탭을 강제 클릭
         if (window.targetKfpaSite === loc.name) {
             tabBtn.click();
             isFirst = false;
@@ -999,7 +1017,6 @@ window.initKfpaScreen = function() {
         }
     });
     
-    // 일치하는 탭이 없어서 클릭 안 됐을 경우 첫번째 탭 강제 클릭 (버그 방어)
     if (isFirst && tabsContainer.firstChild) tabsContainer.firstChild.click();
     
     goToSlide('slide6');
@@ -1036,7 +1053,6 @@ window.renderKfpaPreview = function(siteName) {
         tbody.appendChild(totalTr);
     }
 
-    // 바구니에 전체 사업장 중 하나라도 데이터가 있다면 확정 버튼 노출
     if (window.tempKfpaDataStore && Object.keys(window.tempKfpaDataStore).length > 0) {
         btnConfirm.style.display = 'block';
     } else {
@@ -1108,7 +1124,6 @@ window.loadKfpaExcel = function(event) {
 
             if(records.length === 0) return alert("유효한 화협 데이터(일련번호 및 면적 존재)를 찾을 수 없습니다.");
 
-            // ★ 해당 사업장 바구니에 안전하게 보관!
             if (typeof window.tempKfpaDataStore === 'undefined') window.tempKfpaDataStore = {};
             window.tempKfpaDataStore[siteName] = records;
             renderKfpaPreview(siteName); 
@@ -1121,7 +1136,7 @@ window.loadKfpaExcel = function(event) {
     event.target.value = ''; 
 };
 
-// 4. ★ 전체 확정 후 Slide 7로 이동 (단가/노무비/구조명 자동 매핑 포함)
+// 4. 전체 다중 사업장 일괄 확정 후 Slide 7로 이동
 window.confirmAllKfpaData = function() {
     if(!window.tempKfpaDataStore) return alert("반영할 데이터가 전혀 없습니다. 엑셀 파일을 먼저 업로드해주세요.");
     
@@ -1136,7 +1151,6 @@ window.confirmAllKfpaData = function() {
         const siteGroups = {};
         
         records.forEach(r => {
-            // ★ 확정 시점에 단가표가 있다면 엑셀의 구조코드를 바탕으로 자동 매핑 실행!
             if (r.구조코드 && r.구조코드 !== "-" && window.kbState.costData && window.kbState.costData.length > 0) {
                 const cleanCode = String(r.구조코드).replace(/-/g, "");
                 const matched = window.kbState.costData.find(row => {
@@ -1167,8 +1181,6 @@ window.confirmAllKfpaData = function() {
     });
 
     window.kbState.activeSite.kfpa = sites[0];
-    
-    // ★ 일괄 확정이 무사히 끝났으므로 임시 바구니를 비워줌
     window.tempKfpaDataStore = {};
     
     goToSlide('slide7');
