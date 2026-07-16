@@ -1177,14 +1177,25 @@ window.confirmAllKfpaData = function() {
 };
 
 // ============================================================================
-// [12] ★ 통합 총괄표(Summary Table) 렌더링 로직
+// [12] ★ 통합 총괄표(Summary Table) 렌더링 로직 (오류 방어 및 친절한 안내 추가)
 // ============================================================================
+
+// ★ 자동 패치: 사용자가 HTML을 일일이 수정할 필요 없이, 모든 사이드바의 '총괄표' 메뉴 클릭 이벤트를 자동으로 올바르게 연결해 줍니다.
+setTimeout(() => {
+    document.querySelectorAll('.menu-l1, .menu-l2, .menu-l3').forEach(menu => {
+        if (menu.innerText.includes('3. 총괄표 작성')) {
+            menu.onclick = function() { window.initSummaryScreen(); };
+        }
+    });
+}, 500);
 
 // 총괄표 화면 진입 (기본적으로 표제부 탭 렌더링)
 window.initSummaryScreen = function() {
     goToSlide('slide8');
     const firstTab = document.querySelector('#summaryTabs .summary-tab');
-    if (firstTab) firstTab.click();
+    if (firstTab) {
+        renderSummary('title', firstTab); // 화면 이동 시 강제로 첫 번째 탭의 표를 그리도록 지시!
+    }
 };
 
 window.renderSummary = function(mode, tabElement) {
@@ -1202,8 +1213,19 @@ window.renderSummary = function(mode, tabElement) {
     tbody.innerHTML = '';
     
     const dataObj = window.kbState.evalData[mode];
+    
+    // ★ 데이터가 비어있을 때, 사용자에게 어디서 무엇을 해야 하는지 정확히 알려주는 친절한 가이드 메시지 추가
     if (!dataObj || Object.keys(dataObj).length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 60px; color:#999; font-size:15px;"><i class="fa-solid fa-folder-open" style="font-size:30px; margin-bottom:10px; display:block;"></i>${mode === 'title' ? '표제부' : mode === 'floor' ? '층별' : '화협자료'} 평가 데이터가 아직 없습니다.</td></tr>`;
+        let guideMsg = "";
+        if (mode === 'title') guideMsg = "▶ [2.1.2 표제부 평가] 메뉴로 이동하여 <b>'표제부 데이터 연동하기'</b> 버튼을 눌러주세요.";
+        else if (mode === 'floor') guideMsg = "▶ [2.1.3 층별 평가] 메뉴로 이동하여 <b>'층별 데이터 연동하기'</b> 버튼을 눌러주세요.";
+        else if (mode === 'kfpa') guideMsg = "▶ [2.2.1 화협 불러오기] 메뉴에서 엑셀을 업로드하고 확정을 진행해 주세요.";
+
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 60px; color:#999; font-size:15px; line-height: 1.8;">
+            <i class="fa-solid fa-triangle-exclamation" style="font-size:35px; margin-bottom:15px; display:block; color:#f39c12;"></i>
+            ${mode === 'title' ? '표제부' : mode === 'floor' ? '층별' : '화협자료'} 평가 데이터가 아직 없습니다.<br>
+            <span style="color:#d32f2f; font-weight:bold;">${guideMsg}</span>
+        </td></tr>`;
         return;
     }
 
@@ -1286,17 +1308,17 @@ window.renderSummary = function(mode, tabElement) {
         `;
     }
 
-     // 4. [전체] 총계 행 (맨 아래)
-        if (Object.keys(dataObj).length > 1) { // 사업장이 2개 이상일 때만 전체 총계 표시
-            tbody.innerHTML += `
-                <tr style="background:#1C5691; font-weight:bold; font-size:15px;">
-                    <td colspan="3" style="text-align:center; color:#ffffff;">전체 사업장 총 평가액</td>
-                    <td style="text-align:right; color:#FFD700;">${formatArea(grandTotalArea)}</td>
-                    <td style="text-align:right; color:#FFD700;">${formatPrice(grandTotalReco)}</td>
-                    <td style="text-align:right; color:#FFD700;">${formatPrice(grandTotalCur)}</td>
-                </tr>
-            `;
-        }
+    // 4. [전체] 총계 행 (맨 아래)
+    if (Object.keys(dataObj).length > 1) { 
+        tbody.innerHTML += `
+            <tr style="background:#1C5691; font-weight:bold; font-size:15px;">
+                <td colspan="3" style="text-align:center; color:#ffffff;">전체 사업장 총 평가액</td>
+                <td style="text-align:right; color:#FFD700;">${formatArea(grandTotalArea)}</td>
+                <td style="text-align:right; color:#FFD700;">${formatPrice(grandTotalReco)}</td>
+                <td style="text-align:right; color:#FFD700;">${formatPrice(grandTotalCur)}</td>
+            </tr>
+        `;
+    }
 };
 
 window.exportSummaryExcel = function() {
