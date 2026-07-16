@@ -238,7 +238,7 @@ function runGroupedRenderTest() {
     renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
 }
 
-function syncTitleData() {
+window.syncTitleData = function() {
     const fetchedData = window.kbState.fetchedData;
     if (!fetchedData || Object.keys(fetchedData).length === 0) {
         alert("연동할 수 없습니다. 먼저 [건축물대장 조회시작]을 완료해 주세요."); return;
@@ -265,8 +265,11 @@ function syncTitleData() {
             const rowAprDate = String(row["useAprDay"] || "").replace(/[-/]/g, "").trim();
             if (rowAprDate.length >= 4 && !isNaN(rowAprDate.substring(0, 4))) buildYear = parseInt(rowAprDate.substring(0, 4));
             
+            // ★ 면적 검사소: 연면적이 300 이하이면 부속비율 0%, 초과면 20%
+            const autoRatio = (area <= 300 && area > 0) ? 0.0 : 20.0;
+
             siteRecords.push({
-                "동명칭": dongNm, "부속비율": 20.0, "재조달_부속": 0, "재조달_합계": 0, "현재_부속": 0, "현재_합계": 0,
+                "동명칭": dongNm, "부속비율": autoRatio, "재조달_부속": 0, "재조달_합계": 0, "현재_부속": 0, "현재_합계": 0,
                 "records": [{
                     "일련번호": String(idx + 1), "동명칭": dongNm, "용도": purps, "연면적": area, "구조명": strct,
                     "준공연도": buildYear, "구조코드": "-", "단가": 0.0, "노무비": 0.0, "물가지수": 1.0,
@@ -279,7 +282,7 @@ function syncTitleData() {
     window.kbState.evalData.title = newTitleData;
     window.kbState.activeSite.title = Object.keys(newTitleData)[0] || null;
     renderEvalTabsAndTable('title', 'tbodyTitleEval', 'tabsTitleEval');
-    alert("표제부 데이터 연동이 완료되었습니다.");
+    alert("표제부 데이터 연동이 완료되었습니다.\n(연면적 300㎡ 이하 건물은 부속비율이 0%로 자동 세팅되었습니다.)");
 }
 
 window.syncFloorData = function() {
@@ -301,6 +304,16 @@ window.syncFloorData = function() {
             const aprDate = String(dfRecap[0]["useAprDay"]).replace(/[-/]/g, "").trim();
             if (aprDate.length >= 4 && !isNaN(aprDate.substring(0, 4))) fallbackYear = parseInt(aprDate.substring(0, 4));
         }
+        
+        // ★ 층별 합산 면적 사전 계산 (300㎡ 검사 용도)
+        const floorAreaMap = {};
+        dfFloor.forEach(row => {
+            let d = (row["dongNm"] || "").trim();
+            if (!d || d === "-" || d === "nan") d = "본동";
+            const a = isNaN(parseFloat(String(row["area"] || "0").replace(/,/g, "").trim())) ? 0.0 : parseFloat(String(row["area"] || "0").replace(/,/g, "").trim());
+            floorAreaMap[d] = (floorAreaMap[d] || 0) + a;
+        });
+
         const titleRecords = window.kbState.evalData.title[siteName] || [];
         const siteGroups = {}; 
         
@@ -325,15 +338,16 @@ window.syncFloorData = function() {
                 "감가율": 1.78, "재조달_건축": 0, "잔가율": 100.0, "현재_건축": 0
             };
             
-            let inheritedRatio = 20.0; 
+            // ★ 해당 동의 층별 면적 합계가 300 이하면 0% 자동 적용
+            let inheritedRatio = (floorAreaMap[dongNm] <= 300 && floorAreaMap[dongNm] > 0) ? 0.0 : 20.0; 
+            
             const tGroup = titleRecords.find(g => g.동명칭 === dongNm);
             if (tGroup) {
                 const tReq = tGroup.records[0];
                 record["구조코드"] = tReq["구조코드"]; record["단가"] = tReq["단가"];
                 record["노무비"] = tReq["노무비"]; record["물가지수"] = tReq["물가지수"];
-                record["감가율"] = tReq["감가율"];
-                record["준공연도"] = tReq["준공연도"]; // ★ 표제부 준공연도 상속 (수정됨)
-                if (tGroup["부속비율"]) inheritedRatio = tGroup["부속비율"];
+                record["감가율"] = tReq["감가율"]; record["준공연도"] = tReq["준공연도"]; 
+                if (tGroup["부속비율"] !== undefined) inheritedRatio = tGroup["부속비율"]; // 표제부에서 수정했다면 그 값을 우선
             }
             
             if (!siteGroups[dongNm]) {
@@ -351,7 +365,7 @@ window.syncFloorData = function() {
     window.kbState.activeSite.floor = Object.keys(newFloorData)[0] || null;
     Object.keys(newFloorData).forEach(siteName => recalculateValuation('floor', siteName));
     renderEvalTabsAndTable('floor', 'tbodyFloorEval', 'tabsFloorEval');
-    alert("✅ 층별 데이터 연동 완료!\n\n(표제부에서 작업하신 구조코드, 단가, 준공연도 등이 자동 상속되었습니다.)");
+    alert("✅ 층별 데이터 연동 완료!\n\n(총면적 300㎡ 이하 건물은 부속비율 0%가 자동 적용되었습니다.)");
 };
 
 window.deleteEvalItem = function(mode, siteName, gIdx) {
@@ -954,7 +968,7 @@ window.quickLoadProject = function(event) {
 };
 
 // ============================================================================
-// [11] ★ 화협(KFPA) 다중 사업장 바구니 보존 및 일괄 확정 로직 (데이터 증발 완벽 방어)
+// [11] ★ 화협(KFPA) 다중 사업장 바구니 보존 및 일괄 확정 로직 (데이터 증발 방어 & 300㎡ 자동체크)
 // ============================================================================
 window.targetKfpaSite = "";
 window.targetKfpaAddress = "";
@@ -991,7 +1005,6 @@ window.initKfpaScreen = function() {
     locations.forEach(loc => {
         const tabBtn = document.createElement('div');
         tabBtn.innerText = loc.name;
-        // ★ 화협 탭 UI 확 띄게 (남색/흰색 강제)
         tabBtn.style.cssText = `padding:10px 20px; cursor:pointer; font-weight:${isFirst ? 'bold' : 'normal'}; border:1px solid ${isFirst ? '#1C5691' : '#e2e8f0'}; border-bottom:none; border-radius:4px 4px 0 0; margin-right:5px; background:${isFirst ? '#1C5691' : '#f1f5f9'}; color:${isFirst ? '#ffffff' : '#94a3b8'};`;
         
         tabBtn.onclick = () => {
@@ -1018,7 +1031,6 @@ window.initKfpaScreen = function() {
     });
     
     if (isFirst && tabsContainer.firstChild) tabsContainer.firstChild.click();
-    
     goToSlide('slide6');
 };
 
@@ -1037,8 +1049,7 @@ window.renderKfpaPreview = function(siteName) {
         records.forEach(r => {
             const tr = document.createElement('tr');
             if(r.isSubtotal) { 
-                tr.style.background = '#e9ecef';
-                tr.style.fontWeight = 'bold';
+                tr.style.background = '#e9ecef'; tr.style.fontWeight = 'bold';
                 tr.innerHTML = `<td></td><td></td><td colspan="4" style="color:#1C5691; text-align:center;">${r.동명칭}</td><td style="text-align:right; color:#1C5691;">${r.연면적.toLocaleString('ko-KR', {minimumFractionDigits:2, maximumFractionDigits:2})}</td><td></td>`;
             } else { 
                 totalArea += r.연면적;
@@ -1053,18 +1064,14 @@ window.renderKfpaPreview = function(siteName) {
         tbody.appendChild(totalTr);
     }
 
-    if (window.tempKfpaDataStore && Object.keys(window.tempKfpaDataStore).length > 0) {
-        btnConfirm.style.display = 'block';
-    } else {
-        btnConfirm.style.display = 'none';
-    }
+    if (window.tempKfpaDataStore && Object.keys(window.tempKfpaDataStore).length > 0) btnConfirm.style.display = 'block';
+    else btnConfirm.style.display = 'none';
 };
 
-// 3. 엑셀 파일 파싱 (빈칸 채우기 포함)
+// 3. 엑셀 파일 파싱
 window.loadKfpaExcel = function(event) {
     const file = event.target.files[0];
     if(!file) return;
-
     const siteName = window.targetKfpaSite;
     if(!siteName) { alert("선택된 사업장 탭이 없습니다."); event.target.value = ''; return; }
 
@@ -1094,7 +1101,6 @@ window.loadKfpaExcel = function(event) {
                 let serial = String(row[colSerial] || "").trim();
                 let dNo = String(row[colDongNo] || "").trim();
                 let dNm = String(row[colDongNm] || "").trim();
-                
                 let isSubtotal = dNm.includes("합계") || dNm.includes("소계") || serial.includes("합계");
 
                 if(dNo && dNo !== "-" && dNo !== "undefined") lastDongNo = dNo;
@@ -1127,7 +1133,6 @@ window.loadKfpaExcel = function(event) {
             if (typeof window.tempKfpaDataStore === 'undefined') window.tempKfpaDataStore = {};
             window.tempKfpaDataStore[siteName] = records;
             renderKfpaPreview(siteName); 
-
             alert(`✅ [${siteName}] 화협 엑셀 로드 완료!\n상단의 다른 탭이 있다면 이동해서 마저 업로드하시거나,\n모두 올리셨다면 우측 [전체 확정]을 눌러주세요.`);
 
         } catch (err) { alert("파일 파싱 중 오류 발생: " + err); }
@@ -1136,7 +1141,7 @@ window.loadKfpaExcel = function(event) {
     event.target.value = ''; 
 };
 
-// 4. 전체 다중 사업장 일괄 확정 후 Slide 7로 이동
+// 4. 전체 다중 사업장 일괄 확정 (300㎡ 면적 체크 포함)
 window.confirmAllKfpaData = function() {
     if(!window.tempKfpaDataStore) return alert("반영할 데이터가 전혀 없습니다. 엑셀 파일을 먼저 업로드해주세요.");
     
@@ -1149,6 +1154,13 @@ window.confirmAllKfpaData = function() {
         const records = window.tempKfpaDataStore[siteName].filter(r => !r.isSubtotal); 
         const titleRecords = window.kbState.evalData.title[siteName] || [];
         const siteGroups = {};
+        
+        // ★ 화협 데이터 동별 면적 합산 (300㎡ 이하 판별용)
+        const dongAreaMap = {};
+        records.forEach(r => {
+            const d = r.동명칭;
+            dongAreaMap[d] = (dongAreaMap[d] || 0) + (parseFloat(r.연면적) || 0);
+        });
         
         records.forEach(r => {
             if (r.구조코드 && r.구조코드 !== "-" && window.kbState.costData && window.kbState.costData.length > 0) {
@@ -1166,9 +1178,12 @@ window.confirmAllKfpaData = function() {
             }
 
             const d = r.동명칭;
-            let inheritedRatio = 20.0;
+            
+            // ★ 면적 300 이하이면 0% 자동 적용
+            let inheritedRatio = (dongAreaMap[d] <= 300 && dongAreaMap[d] > 0) ? 0.0 : 20.0;
+            
             const tGroup = titleRecords.find(g => (g.동명칭 || "") === d);
-            if (tGroup && tGroup.부속비율) inheritedRatio = tGroup.부속비율;
+            if (tGroup && tGroup.부속비율 !== undefined) inheritedRatio = tGroup.부속비율; // 표제부에서 세팅했다면 표제부 우선
 
             if(!siteGroups[d]) {
                 siteGroups[d] = { "동명칭": d, "부속비율": inheritedRatio, "재조달_부속": 0, "재조달_합계": 0, "현재_부속": 0, "현재_합계": 0, "records": [] };
@@ -1186,7 +1201,7 @@ window.confirmAllKfpaData = function() {
     goToSlide('slide7');
     renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
     
-    alert(`🎉 총 ${sites.length}개 사업장의 화협자료가 평가 테이블로 일괄 전송되었습니다!\n(엑셀 구조코드를 바탕으로 단가, 노무비, 물가지수 자동 매핑 완료)`);
+    alert(`🎉 총 ${sites.length}개 사업장의 화협자료가 일괄 전송되었습니다!\n(총면적 300㎡ 이하 건물은 부속비율 0%가 자동 적용되었습니다.)`);
 };
 
 // ============================================================================
