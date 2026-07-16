@@ -1178,7 +1178,7 @@ window.confirmAllKfpaData = function() {
 };
 
 // ============================================================================
-// [12] ★ 통합 총괄표(Summary Table) 렌더링 로직 (세부 항목 전체 펼침 모드 & 배경색 고정)
+// [12] ★ 통합 총괄표(Summary Table) 렌더링 로직 (세부 항목 전체 펼침 모드 & 배경색 강제 고정)
 // ============================================================================
 
 setTimeout(() => {
@@ -1258,19 +1258,22 @@ window.renderSummary = function(mode, tabElement) {
             const dongName = group.동명칭 || '-';
             const accRate = parseFloat(group.부속비율 || 20.0).toFixed(1);
 
+            // ★ td 자체에 background 속성을 !important로 강제 주입하여 얼룩말 무늬 방어
             const siteCellHtml = (gIdx === 0) 
-                ? `<td rowspan="${siteRowSpan}" style="vertical-align:middle; font-weight:bold; background:#fff; border-right:1px solid #ddd;">${siteName}</td>` 
+                ? `<td rowspan="${siteRowSpan}" style="vertical-align:middle; font-weight:bold; background:#ffffff !important; border-right:1px solid #ddd;">${siteName}</td>` 
                 : '';
                 
-            const dongCellHtml = `<td rowspan="${dongRowSpan}" style="vertical-align:middle; font-weight:bold; color:#1C5691; background:#fff; border-right:1px solid #ddd;">${dongName}</td>`;
+            const dongCellHtml = `<td rowspan="${dongRowSpan}" style="vertical-align:middle; font-weight:bold; color:#1C5691; background:#ffffff !important; border-right:1px solid #ddd;">${dongName}</td>`;
 
             // 1. 건축공사비(세부 층/항목) 렌더링
             if (records.length === 0) {
                 tbody.innerHTML += `
-                    <tr style="background:#fff;">
+                    <tr>
                         ${siteCellHtml} ${dongCellHtml}
-                        <td style="text-align:left;">세부항목 없음</td>
-                        <td style="text-align:right;">0</td><td style="text-align:right;">0</td><td style="text-align:right;">0</td>
+                        <td style="text-align:left; background:#ffffff !important;">세부항목 없음</td>
+                        <td style="text-align:right; background:#ffffff !important;">0</td>
+                        <td style="text-align:right; background:#ffffff !important;">0</td>
+                        <td style="text-align:right; background:#ffffff !important;">0</td>
                     </tr>
                 `;
             } else {
@@ -1279,13 +1282,13 @@ window.renderSummary = function(mode, tabElement) {
                     const gubunText = r.용도 || '건축공사비';
 
                     tbody.innerHTML += `
-                        <tr style="background:#fff;">
+                        <tr>
                             ${isFirstRecord ? siteCellHtml : ''}
                             ${isFirstRecord ? dongCellHtml : ''}
-                            <td style="text-align:left; color:#444;">${gubunText}</td>
-                            <td style="text-align:right;">${formatArea(r.연면적)}</td>
-                            <td style="text-align:right;">${formatPrice(r.재조달_건축)}</td>
-                            <td style="text-align:right;">${formatPrice(r.현재_건축)}</td>
+                            <td style="text-align:left; color:#444; background:#ffffff !important;">${gubunText}</td>
+                            <td style="text-align:right; background:#ffffff !important;">${formatArea(r.연면적)}</td>
+                            <td style="text-align:right; background:#ffffff !important;">${formatPrice(r.재조달_건축)}</td>
+                            <td style="text-align:right; background:#ffffff !important;">${formatPrice(r.현재_건축)}</td>
                         </tr>
                     `;
                 });
@@ -1293,62 +1296,60 @@ window.renderSummary = function(mode, tabElement) {
 
             // 2. [동별] 부속설비 행
             tbody.innerHTML += `
-                <tr style="background:#f8f9fa;">
-                    <td style="text-align:left; color:#666;">└ 부속설비 (${accRate}%)</td>
-                    <td style="text-align:right; color:#999;">-</td>
-                    <td style="text-align:right;">${formatPrice(recoSub)}</td>
-                    <td style="text-align:right;">${formatPrice(curSub)}</td>
+                <tr>
+                    <td style="text-align:left; color:#666; background:#f8f9fa !important;">└ 부속설비 (${accRate}%)</td>
+                    <td style="text-align:right; color:#999; background:#f8f9fa !important;">-</td>
+                    <td style="text-align:right; background:#f8f9fa !important;">${formatPrice(recoSub)}</td>
+                    <td style="text-align:right; background:#f8f9fa !important;">${formatPrice(curSub)}</td>
                 </tr>
             `;
             
-            // 3. [동별] 소계 행 (색상 고정)
+            // 3. [동별] 소계 행 (색상 완벽 고정)
             tbody.innerHTML += `
-                <tr style="background:#e2e8f0; font-weight:bold;">
-                    <td style="text-align:center; color:#111;">[${dongName}] 소계</td>
-                    <td style="text-align:right;">${formatArea(groupArea)}</td>
-                    <td style="text-align:right; color:#1C5691;">${formatPrice(recoTotal)}</td>
-                    <td style="text-align:right; color:#1C5691;">${formatPrice(curTotal)}</td>
+                <tr style="font-weight:bold;">
+                    <td style="text-align:center; color:#111; background:#e2e8f0 !important;">[${dongName}] 소계</td>
+                    <td style="text-align:right; background:#e2e8f0 !important;">${formatArea(groupArea)}</td>
+                    <td style="text-align:right; color:#1C5691; background:#e2e8f0 !important;">${formatPrice(recoTotal)}</td>
+                    <td style="text-align:right; color:#1C5691; background:#e2e8f0 !important;">${formatPrice(curTotal)}</td>
                 </tr>
             `;
         });
 
-        // 4. [사업장별] 합계 행
+        // 4. [사업장별] 합계 행 (색상 완벽 고정)
         grandTotalArea += siteTotalArea;
         grandTotalReco += siteTotalReco;
         grandTotalCur += siteTotalCur;
 
         tbody.innerHTML += `
-            <tr style="background:#cbd5e1; font-weight:bold;">
-                <td colspan="3" style="text-align:center;">[${siteName}] 평가액 합계</td>
-                <td style="text-align:right; color:#d32f2f;">${formatArea(siteTotalArea)}</td>
-                <td style="text-align:right; color:#d32f2f;">${formatPrice(siteTotalReco)}</td>
-                <td style="text-align:right; color:#d32f2f;">${formatPrice(siteTotalCur)}</td>
+            <tr style="font-weight:bold;">
+                <td colspan="3" style="text-align:center; background:#cbd5e1 !important;">[${siteName}] 평가액 합계</td>
+                <td style="text-align:right; color:#d32f2f; background:#cbd5e1 !important;">${formatArea(siteTotalArea)}</td>
+                <td style="text-align:right; color:#d32f2f; background:#cbd5e1 !important;">${formatPrice(siteTotalReco)}</td>
+                <td style="text-align:right; color:#d32f2f; background:#cbd5e1 !important;">${formatPrice(siteTotalCur)}</td>
             </tr>
         `;
     }
 
-    // 5. [전체] 총계 행 (맨 아래, 글자색 강제 고정 !important 적용)
+    // 5. [전체] 총계 행 (맨 아래 파란 바탕 및 황금색 글자 완벽 고정)
     if (Object.keys(dataObj).length > 1) { 
         tbody.innerHTML += `
-            <tr style="background:#1C5691; font-weight:bold; font-size:15px;">
-                <td colspan="3" style="text-align:center; color:#ffffff !important;">전체 사업장 총 평가액</td>
-                <td style="text-align:right; color:#FFD700 !important;">${formatArea(grandTotalArea)}</td>
-                <td style="text-align:right; color:#FFD700 !important;">${formatPrice(grandTotalReco)}</td>
-                <td style="text-align:right; color:#FFD700 !important;">${formatPrice(grandTotalCur)}</td>
+            <tr style="font-weight:bold; font-size:15px;">
+                <td colspan="3" style="text-align:center; color:#ffffff !important; background:#1C5691 !important;">전체 사업장 총 평가액</td>
+                <td style="text-align:right; color:#FFD700 !important; background:#1C5691 !important;">${formatArea(grandTotalArea)}</td>
+                <td style="text-align:right; color:#FFD700 !important; background:#1C5691 !important;">${formatPrice(grandTotalReco)}</td>
+                <td style="text-align:right; color:#FFD700 !important; background:#1C5691 !important;">${formatPrice(grandTotalCur)}</td>
             </tr>
         `;
     }
 };
 
-// ★ 총괄표 엑셀 다운로드 기능 완벽 구현
+// ★ 총괄표 엑셀 다운로드 기능
 window.exportSummaryExcel = function() {
     const table = document.getElementById('summaryTable');
-    // 표에 헤더(1줄)와 빈 안내문구(1줄)밖에 없으면 데이터가 없는 것
     if(!table || table.rows.length <= 2) {
         return alert("다운로드할 총괄표 데이터가 없습니다. 먼저 좌측 메뉴에서 평가를 완료해 주세요.");
     }
 
-    // 현재 열려있는 탭 이름 찾기 (예: '표제부 기반 총괄표')
     let activeTabName = "총괄표";
     const tabs = document.querySelectorAll('#summaryTabs .summary-tab');
     tabs.forEach(tab => {
@@ -1356,14 +1357,9 @@ window.exportSummaryExcel = function() {
     });
 
     try {
-        // HTML 테이블을 통째로 엑셀 워크시트로 변환
         const wb = XLSX.utils.table_to_book(table, {sheet: "가액평가_총괄표"});
-        
-        // 파일명에 오늘 날짜 추가
         const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, "");
         const fileName = `KB손해보험_${activeTabName}_${dateStr}.xlsx`;
-        
-        // 다운로드 실행
         XLSX.writeFile(wb, fileName);
     } catch (error) {
         alert("엑셀 다운로드 중 오류가 발생했습니다.\n" + error.message);
