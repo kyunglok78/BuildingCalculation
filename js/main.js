@@ -1155,7 +1155,7 @@ window.loadKfpaExcel = function(event) {
     event.target.value = ''; 
 };
 
-// 4. 전체 다중 사업장 일괄 확정 (300㎡ 면적 체크 포함)
+// 4. 전체 다중 사업장 일괄 확정 (300㎡ 면적 체크 포함 + 2.2.1 원본 유지)
 window.confirmAllKfpaData = function() {
     if(!window.tempKfpaDataStore) return alert("반영할 데이터가 전혀 없습니다. 엑셀 파일을 먼저 업로드해주세요.");
     
@@ -1177,21 +1177,24 @@ window.confirmAllKfpaData = function() {
         });
         
         records.forEach(r => {
-            if (r.구조코드 && r.구조코드 !== "-" && window.kbState.costData && window.kbState.costData.length > 0) {
-                const cleanCode = String(r.구조코드).replace(/-/g, "");
+            // ★ [중요] 2.2.1 원본과 2.2.2 평가 데이터가 서로 간섭하지 않도록 복사본(Clone) 생성
+            let evalRecord = JSON.parse(JSON.stringify(r));
+
+            if (evalRecord.구조코드 && evalRecord.구조코드 !== "-" && window.kbState.costData && window.kbState.costData.length > 0) {
+                const cleanCode = String(evalRecord.구조코드).replace(/-/g, "");
                 const matched = window.kbState.costData.find(row => {
                     const allText = Object.values(row).map(v => String(v || "")).join(" ").toLowerCase();
-                    return allText.includes(String(r.구조코드).toLowerCase()) || (cleanCode && allText.replace(/-/g, "").includes(cleanCode));
+                    return allText.includes(String(evalRecord.구조코드).toLowerCase()) || (cleanCode && allText.replace(/-/g, "").includes(cleanCode));
                 });
                 if (matched) {
-                    r.구조명 = (matched['구조'] && matched['구조'] !== "-") ? matched['구조'] : matched['중분류'];
-                    r.단가 = matched['단가'];
-                    r.노무비 = matched['노무비'];
-                    if (window.applyAutoPriceIndex) window.applyAutoPriceIndex(r);
+                    evalRecord.구조명 = (matched['구조'] && matched['구조'] !== "-") ? matched['구조'] : matched['중분류'];
+                    evalRecord.단가 = matched['단가'];
+                    evalRecord.노무비 = matched['노무비'];
+                    if (window.applyAutoPriceIndex) window.applyAutoPriceIndex(evalRecord);
                 }
             }
 
-            const d = r.동명칭;
+            const d = evalRecord.동명칭;
             
             // ★ 면적 300 이하이면 0% 자동 적용
             let inheritedRatio = (dongAreaMap[d] <= 300 && dongAreaMap[d] > 0) ? 0.0 : 20.0;
@@ -1202,7 +1205,7 @@ window.confirmAllKfpaData = function() {
             if(!siteGroups[d]) {
                 siteGroups[d] = { "동명칭": d, "부속비율": inheritedRatio, "재조달_부속": 0, "재조달_합계": 0, "현재_부속": 0, "현재_합계": 0, "records": [] };
             }
-            siteGroups[d].records.push(r);
+            siteGroups[d].records.push(evalRecord);
         });
 
         window.kbState.evalData.kfpa[siteName] = Object.values(siteGroups);
@@ -1210,7 +1213,9 @@ window.confirmAllKfpaData = function() {
     });
 
     window.kbState.activeSite.kfpa = sites[0];
-    window.tempKfpaDataStore = {};
+    
+    // ★ [수정됨] 2.2.1 화면 비교를 위해 임시 바구니를 비우지 않고 그대로 유지합니다.
+    // window.tempKfpaDataStore = {}; 
     
     goToSlide('slide7');
     renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
