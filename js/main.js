@@ -783,7 +783,13 @@ window.quickLoadProject = function(event) {
             const projectData = JSON.parse(e.target.result);
             
             if (projectData.kbState) window.kbState = projectData.kbState;
-            if (projectData.tempKfpaDataStore) window.tempKfpaDataStore = projectData.tempKfpaDataStore;
+            
+            // ★ 화협(KFPA) 임시 바구니 데이터 완벽 복구
+            if (projectData.tempKfpaDataStore) {
+                window.tempKfpaDataStore = projectData.tempKfpaDataStore;
+            } else {
+                window.tempKfpaDataStore = {};
+            }
             if (projectData.targetKfpaSite) window.targetKfpaSite = projectData.targetKfpaSite;
             if (projectData.targetKfpaAddress) window.targetKfpaAddress = projectData.targetKfpaAddress;
 
@@ -957,6 +963,14 @@ window.quickLoadProject = function(event) {
                 badge.style.cssText = 'margin-left: 20px; padding: 4px 15px; background: #e74c3c; color: white; border-radius: 20px; font-size: 13px; font-weight: bold; vertical-align: middle; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.2); border: 1px solid #c0392b;';
                 badge.innerHTML = `<i class="fa-solid fa-folder-open"></i> 최근 로드: ${file.name} (${loadTime})`;
             });
+
+            // ★ 화협(KFPA) 바구니 백그라운드 렌더링 강제 실행 (빈 화면 방지)
+            if (window.targetKfpaSite && typeof window.renderKfpaPreview === 'function') {
+                window.renderKfpaPreview(window.targetKfpaSite);
+            }
+            if (typeof updateMenuState === 'function') {
+                updateMenuState();
+            }
 
             alert("✅ 임시 저장 데이터 완벽 로드 완료!\n(화상단에 현재 로드한 파일 이름이 표시됩니다.)");
         } catch (err) {
