@@ -26,31 +26,38 @@
         :root { --kb-yellow: #FFCC00; --kb-gray: #4A4A4A; --kb-dark: #2C2C2C; --kb-blue: #1C5691; --bg-color: #f4f6f8; --border-color: #e2e8f0; }
         body { font-family: 'Noto Sans KR', sans-serif; background-color: var(--bg-color); margin: 0; display: flex; height: 100vh; overflow: hidden; color: #333; }
 
-        /* 사이드바 영역 (디자인 이식) */
+        /* 사이드바 영역 */
         .sidebar { width: 280px; background-color: var(--kb-dark); color: white; display: flex; flex-direction: column; box-shadow: 2px 0 10px rgba(0,0,0,0.1); z-index: 10; overflow-y: auto; flex-shrink: 0; }
         .sidebar-header { padding: 25px 20px; background-color: #1a1a1a; border-bottom: 3px solid var(--kb-yellow); }
         .sidebar-header h2 { margin: 0; font-size: 18px; font-weight: 700; line-height: 1.4; color: white; }
         .sidebar-header h2 span { color: var(--kb-yellow); }
         
         .sidebar-menu-wrapper { padding: 20px 10px; flex: 1; }
-        .menu-group { margin-bottom: 20px; }
-        .menu-group-title { font-size: 13px; color: #888; font-weight: 700; margin-bottom: 10px; padding-left: 15px; display: flex; align-items: center; gap: 8px; }
-        .menu-item { padding: 12px 15px 12px 30px; margin-bottom: 4px; font-size: 14px; font-weight: 500; color: #ccc; cursor: pointer; border-radius: 6px; transition: all 0.2s; display: flex; align-items: center; gap: 10px; }
+        .menu-group { margin-bottom: 25px; }
+        /* 대분류 폰트 크기 확대 및 노란색 강조 */
+        .menu-group-title { font-size: 15px; color: var(--kb-yellow); font-weight: 900; margin-bottom: 12px; padding-left: 10px; padding-bottom: 8px; border-bottom: 1px solid #444; display: flex; align-items: center; gap: 8px; }
+        .menu-item { padding: 12px 15px 12px 25px; margin-bottom: 4px; font-size: 14px; font-weight: 500; color: #ddd; cursor: pointer; border-radius: 6px; transition: all 0.2s; display: flex; align-items: center; gap: 10px; }
         .menu-item:hover { background-color: rgba(255, 255, 255, 0.05); color: #fff; }
         .menu-item.active { background-color: rgba(255, 255, 255, 0.15); color: #fff; border-left: 4px solid var(--kb-yellow); font-weight: 700; }
         .menu-item.disabled { color: #666; cursor: not-allowed; }
         .menu-item.disabled:hover { background-color: transparent; color: #666; }
 
+        /* 상태 뱃지 (진행, 대기, 미평가) */
+        .status-badge { font-size: 11px; padding: 3px 6px; border-radius: 4px; font-weight: 700; margin-left: auto; line-height: 1; }
+        .status-ing { background: var(--kb-yellow); color: #000; }
+        .status-wait { background: #666; color: #fff; }
+        .status-none { background: #dc3545; color: #fff; } /* 미평가 빨간색 */
+
         /* 하단 저장 버튼 영역 */
         .sidebar-bottom { padding: 20px; background-color: #1a1a1a; display: flex; flex-direction: column; gap: 10px; }
 
-        /* 메인 컨텐츠 영역 (SPA 구조) */
+        /* 메인 컨텐츠 영역 */
         .main-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; padding: 40px; position: relative; background: var(--bg-color); }
-        .page-section { display: none; } /* 비활성 섹션 숨김 */
+        .page-section { display: none; } 
         .page-section.active { display: flex; flex-direction: column; animation: fadeIn 0.3s ease; height: 100%; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* 카드 UI (새로운 설정 화면용) */
+        /* 카드 UI 및 테이블 */
         .card { background: #fff; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); border: 1px solid var(--border-color); margin-bottom: 25px; overflow: hidden; }
         .card-header { background-color: #f8fafc; padding: 18px 25px; border-bottom: 1px solid var(--border-color); font-weight: 700; font-size: 16px; color: var(--kb-blue); display: flex; justify-content: space-between; align-items: center; }
         .card-body { padding: 25px; }
@@ -58,7 +65,6 @@
         .global-toggle { display: flex; align-items: center; gap: 10px; background: #f0fdf4; padding: 10px 20px; border: 1px solid #bbf7d0; border-radius: 6px; color: #166534; font-weight: 700; cursor: pointer; }
         .global-toggle input[type="checkbox"] { width: 18px; height: 18px; accent-color: #166534; cursor: pointer; }
 
-        /* 소재지 테이블 (새로운 디자인 적용) */
         .location-table { width: 100%; border-collapse: collapse; }
         .location-table th, .location-table td { border: 1px solid var(--border-color); padding: 10px; vertical-align: middle; }
         .location-table th { background-color: #f1f5f9; font-size: 13px; color: var(--kb-gray); text-align: center; font-weight: bold; }
@@ -167,37 +173,34 @@
             <!-- 1. 프로젝트 기본 설정 -->
             <div class="menu-group">
                 <div class="menu-group-title"><i class="fa-solid fa-gear"></i> 1. 프로젝트 기본 설정</div>
-                <div class="menu-item active" id="nav-sec-1-1" onclick="switchSection('sec-1-1')">1.1 일반정보 및 대상 등록</div>
-                <div class="menu-item" id="nav-sec-1-2" onclick="switchSection('sec-1-2')">1.2 평가지수 불러오기</div>
+                <div class="menu-item active" id="nav-sec-1-1" onclick="switchSection('sec-1-1')">1.1 일반정보 등록<span class="status-badge status-ing">진행</span></div>
+                <div class="menu-item" id="nav-sec-1-2" onclick="switchSection('sec-1-2')">1.2 평가지수 등록<span class="status-badge status-wait">대기</span></div>
             </div>
 
-            <!-- 2. 평가 모듈 수행 (기존 기능 매핑) -->
+            <!-- 2. 평가 모듈 수행 -->
             <div class="menu-group">
                 <div class="menu-group-title"><i class="fa-solid fa-calculator"></i> 2. 평가 모듈 수행</div>
                 
-                <!-- 건물 가액평가 하위 -->
-                <div style="padding-left: 10px; margin-bottom: 5px; font-size: 13px; color:#888;">[건축 가액평가]</div>
-                <div class="menu-item" id="nav-sec-2-1-1" onclick="switchSection('sec-2-1-1')">2.1.1 대장 불러오기</div>
-                <div class="menu-item" id="nav-sec-2-1-2" onclick="switchSection('sec-2-1-2')">2.1.2 표제부 평가</div>
-                <div class="menu-item" id="nav-sec-2-1-3" onclick="switchSection('sec-2-1-3')">2.1.3 층별 평가</div>
+                <div style="padding-left: 10px; margin-bottom: 5px; font-size: 13px; color:#888;">[건축물대장 평가]</div>
+                <div class="menu-item" id="nav-sec-2-1-1" onclick="switchSection('sec-2-1-1')">2.1.1 대장 불러오기<span class="status-badge status-wait">대기</span></div>
+                <div class="menu-item" id="nav-sec-2-1-2" onclick="switchSection('sec-2-1-2')">2.1.2 표제부 평가<span class="status-badge status-wait">대기</span></div>
+                <div class="menu-item" id="nav-sec-2-1-3" onclick="switchSection('sec-2-1-3')">2.1.3 층별 평가<span class="status-badge status-wait">대기</span></div>
                 
                 <div style="padding-left: 10px; margin: 15px 0 5px 0; font-size: 13px; color:#888;">[화협자료 평가]</div>
-                <!-- 화협 불러오기는 기존 initKfpaScreen 연동을 위해 onclick 조정 -->
-                <div class="menu-item" id="nav-sec-2-2-1" onclick="initKfpaScreen(); switchSection('sec-2-2-1')">2.2.1 화협 불러오기</div>
-                <div class="menu-item" id="nav-sec-2-2-2" onclick="switchSection('sec-2-2-2')">2.2.2 화협자료 평가</div>
+                <div class="menu-item" id="nav-sec-2-2-1" onclick="initKfpaScreen(); switchSection('sec-2-2-1')">2.2.1 화협 불러오기<span class="status-badge status-wait">대기</span></div>
+                <div class="menu-item" id="nav-sec-2-2-2" onclick="switchSection('sec-2-2-2')">2.2.2 화협자료 평가<span class="status-badge status-wait">대기</span></div>
 
-                <!-- 신규 추가 모듈 껍데기 -->
-                <div class="menu-item disabled" id="nav-sec-2-3" style="margin-top:15px;"><i class="fa-solid fa-arrow-trend-up"></i> 2.3 물가보정 평가</div>
-                <div class="menu-item disabled" id="nav-sec-2-4"><i class="fa-solid fa-industry"></i> 2.4 BI (기업휴지) 평가</div>
+                <div style="padding-left: 10px; margin: 15px 0 5px 0; font-size: 13px; color:#888;">[추가 모듈 평가]</div>
+                <div class="menu-item disabled" id="nav-sec-2-3"><i class="fa-solid fa-arrow-trend-up"></i> 2.3 물가보정 평가<span class="status-badge status-none">미평가</span></div>
+                <div class="menu-item disabled" id="nav-sec-2-4"><i class="fa-solid fa-industry"></i> 2.4 BI 평가<span class="status-badge status-none">미평가</span></div>
             </div>
 
             <!-- 3. 결과 및 보고서 -->
             <div class="menu-group">
                 <div class="menu-group-title"><i class="fa-solid fa-file-signature"></i> 3. 결과 및 보고서</div>
-                <div class="menu-item" id="nav-sec-3-1" onclick="initSummaryScreen(); switchSection('sec-3-1')">3.1 종합 총괄표 작성</div>
-                <div class="menu-item disabled" id="nav-sec-3-2">3.2 최종 보고서 출력</div>
+                <div class="menu-item" id="nav-sec-3-1" onclick="initSummaryScreen(); switchSection('sec-3-1')">3.1 총괄표 작성<span class="status-badge status-wait">대기</span></div>
+                <div class="menu-item disabled" id="nav-sec-3-2">3.2 보고서 출력<span class="status-badge status-wait">대기</span></div>
             </div>
-
         </div>
         
         <div class="sidebar-bottom">
@@ -207,20 +210,19 @@
         </div>
     </nav>
 
-
 <!-- ============================================================================ -->
 <!-- [SEC-5] ★ 우측 메인 작업 영역 (모든 기존 기능 Section으로 이식 완료!) -->
 <!-- ============================================================================ -->
     <main class="main-content">
         
-        <!-- [SEC-5-1] 1.1 일반정보 등록 (새로운 테이블 + BI 스위치 + 단일 주소조회 버튼 적용) -->
+<!-- [SEC-5-1] 1.1 일반정보 등록 (다중 추가 및 분리된 체크박스 적용) -->
         <section id="sec-1-1" class="page-section active">
             <div class="page-title" style="border:none; margin-bottom:20px; padding:0; font-size:22px;"><i class="fa-solid fa-pen-to-square"></i> 1.1 프로젝트 기본 정보 및 대상 등록</div>
             
             <div class="card">
                 <div class="card-header"><span><i class="fa-solid fa-user-tie"></i> 1. 프로젝트 공통 기본 정보</span></div>
                 <div class="card-body">
-                    <div class="input-row" style="margin:0;">
+                    <div class="input-row" style="margin:0; align-items:center;">
                         <span class="input-label">보험계약자명</span>
                         <input type="text" class="input-box contractor-sync" placeholder="예: (주)고려호이스트" style="width: 300px;" oninput="syncContractor(this.value)">
                         
@@ -235,21 +237,28 @@
             <div class="card">
                 <div class="card-header">
                     <span><i class="fa-solid fa-map-location-dot"></i> 2. 소재지 등록 및 개별 평가 설정</span>
-                    <button class="btn-add" onclick="addLocationRow()"><i class="fa-solid fa-plus"></i> 소재지 추가</button>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <span style="font-size:13px; color:var(--kb-gray);">소재지 개수:</span>
+                        <input type="number" id="locationCount" value="1" min="1" max="100" style="width: 60px; padding:6px; border:1px solid #ccc; border-radius:4px;">
+                        <button class="btn-search" style="background:#4A4A4A;" onclick="generateLocationRows()">적용</button>
+                        <button class="btn-add" onclick="addLocationRow()"><i class="fa-solid fa-plus"></i> 추가</button>
+                    </div>
                 </div>
                 <div class="card-body" style="padding: 15px;">
+                    <div style="font-size:12px; color:#dc3545; text-align:right; margin-bottom:10px;">* 평가 항목의 체크를 해제하면 좌측 메뉴가 잠금(미평가) 처리됩니다.</div>
                     <table class="location-table">
                         <thead>
                             <tr>
-                                <th style="width: 150px;">소재지명 (지점명)</th>
+                                <th style="width: 130px;">소재지명 (지점명)</th>
                                 <th>주소 (API / 지도 검색)</th>
-                                <th style="width: 100px;">건물 평가</th>
-                                <th style="width: 100px;">물가보정</th>
+                                <th style="width: 90px;">건축물대장</th>
+                                <th style="width: 90px;">화협자료</th>
+                                <th style="width: 90px;">물가보정</th>
                                 <th style="width: 60px;">삭제</th>
                             </tr>
                         </thead>
                         <tbody id="locationTbody">
-                            <!-- [SEC-6] 스크립트에서 동적 생성됨 (버튼 통합 반영) -->
+                            <!-- [SEC-6] 동적 생성됨 -->
                         </tbody>
                     </table>
                 </div>
@@ -448,44 +457,50 @@
     </main>
 
 <!-- ============================================================================ -->
-<!-- [SEC-6] ★ JavaScript (SPA 라우팅 및 외부 JS 연결) -->
+<!-- [SEC-6] ★ JavaScript (다중 생성 및 뱃지 상태 연동) -->
 <!-- ============================================================================ -->
     <script>
         let locationIndex = 0;
 
         window.onload = function() {
-            addLocationRow(); // 페이지 로드 시 첫 번째 소재지 행 추가
+            generateLocationRows(); // 페이지 로드 시 인풋박스 숫자(기본 1)만큼 소재지 생성
         };
 
-        // 6-1. 좌측 메뉴 클릭 시 SPA 화면 전환 (기존의 goToSlide 대체)
         function switchSection(sectionId) {
-            // 모든 섹션 숨기기
-            const sections = document.querySelectorAll('.page-section');
-            sections.forEach(sec => sec.classList.remove('active'));
-            
-            // 모든 메뉴 active 제거
-            const menuItems = document.querySelectorAll('.menu-item');
-            menuItems.forEach(menu => menu.classList.remove('active'));
-
-            // 타겟 섹션 보이기 및 메뉴 하이라이트
             const targetSection = document.getElementById(sectionId);
-            if(targetSection) targetSection.classList.add('active');
-            
             const targetMenu = document.getElementById('nav-' + sectionId);
+            
+            // disabled된 메뉴는 클릭 무시
+            if(targetMenu && targetMenu.classList.contains('disabled')) return;
+
+            document.querySelectorAll('.page-section').forEach(sec => sec.classList.remove('active'));
+            document.querySelectorAll('.menu-item').forEach(menu => menu.classList.remove('active'));
+
+            if(targetSection) targetSection.classList.add('active');
             if(targetMenu) targetMenu.classList.add('active');
         }
 
-        // 6-2. 소재지 동적 행 추가 (주소조회 단일 버튼 & 기존 로직 연동)
+        // 입력된 숫자만큼 행 일괄 생성
+        function generateLocationRows() {
+            const count = parseInt(document.getElementById('locationCount').value) || 1;
+            const tbody = document.getElementById('locationTbody');
+            tbody.innerHTML = ''; 
+            locationIndex = 0;
+            for(let i = 0; i < count; i++) {
+                addLocationRow();
+            }
+        }
+
+        // 소재지 동적 행 추가 (건축물/화협 분리 반영)
         function addLocationRow() {
             locationIndex++;
             const tbody = document.getElementById('locationTbody');
             const tr = document.createElement('tr');
             tr.id = `loc_row_${locationIndex}`;
             
-            // 주의: 기존 location.js의 로직이 동작하도록 btn-blue 및 openAddressModal(this) 등 속성 유지
             tr.innerHTML = `
                 <td>
-                    <input type="text" class="form-control loc-name input-short" placeholder="예: 공장/지점명" value="소재지 ${locationIndex}" style="width:100%; box-sizing:border-box;">
+                    <input type="text" class="form-control loc-name input-short" placeholder="예: 공장명" value="소재지 ${locationIndex}" style="width:100%; box-sizing:border-box;">
                 </td>
                 <td>
                     <div style="display: flex; gap: 8px;">
@@ -495,15 +510,10 @@
                         <input type="text" class="form-control loc-addr addr-input" id="addr_${locationIndex}" placeholder="주소를 검색해 주세요" readonly style="flex:1;">
                     </div>
                 </td>
-                <td style="text-align: center;">
-                    <label class="eval-check-wrap"><input type="checkbox" class="chk-building check-ledger" checked onchange="updateMenuStatus()"> 대상</label>
-                </td>
-                <td style="text-align: center;">
-                    <label class="eval-check-wrap"><input type="checkbox" class="chk-inflation check-kfpa" onchange="updateMenuStatus()"> 대상</label>
-                </td>
-                <td style="text-align: center;">
-                    <button type="button" class="btn-remove" onclick="removeLocationRow(${locationIndex})"><i class="fa-solid fa-trash-can"></i></button>
-                </td>
+                <td style="text-align: center;"><label class="eval-check-wrap"><input type="checkbox" class="chk-ledger" checked onchange="updateMenuStatus()"> 대상</label></td>
+                <td style="text-align: center;"><label class="eval-check-wrap"><input type="checkbox" class="chk-kfpa" checked onchange="updateMenuStatus()"> 대상</label></td>
+                <td style="text-align: center;"><label class="eval-check-wrap"><input type="checkbox" class="chk-inflation" onchange="updateMenuStatus()"> 대상</label></td>
+                <td style="text-align: center;"><button type="button" class="btn-remove" onclick="removeLocationRow(${locationIndex})"><i class="fa-solid fa-trash-can"></i></button></td>
             `;
             tbody.appendChild(tr);
             updateMenuStatus();
@@ -515,10 +525,46 @@
             updateMenuStatus();
         }
 
-        // 6-3. 체크박스 상태에 따른 메뉴 잠금(Disabled) 동적 제어
+        // 체크 상태에 따른 좌측 메뉴 뱃지 변경 및 잠금 제어
         function updateMenuStatus() {
-            // (추후 모듈 확장시 여기에 활성화/비활성화 로직 연동 가능)
-            // 현재는 뼈대 디자인 유지용입니다.
+            let useLedger = false;
+            let useKfpa = false;
+            let useInflation = false;
+            let useBI = document.getElementById('chkGlobalBI') ? document.getElementById('chkGlobalBI').checked : false;
+
+            document.querySelectorAll('.chk-ledger').forEach(cb => { if(cb.checked) useLedger = true; });
+            document.querySelectorAll('.chk-kfpa').forEach(cb => { if(cb.checked) useKfpa = true; });
+            document.querySelectorAll('.chk-inflation').forEach(cb => { if(cb.checked) useInflation = true; });
+
+            // 헬퍼 함수: 특정 메뉴들의 상태를 일괄 변경
+            function setMenuState(menuIds, isActive) {
+                menuIds.forEach(id => {
+                    const menu = document.getElementById(id);
+                    if(!menu) return;
+                    
+                    let badge = menu.querySelector('.status-badge');
+                    
+                    if(isActive) {
+                        menu.classList.remove('disabled');
+                        if(badge && badge.classList.contains('status-none')) {
+                            badge.className = 'status-badge status-wait';
+                            badge.textContent = '대기';
+                        }
+                    } else {
+                        menu.classList.add('disabled');
+                        if(badge) {
+                            badge.className = 'status-badge status-none';
+                            badge.textContent = '미평가';
+                        }
+                    }
+                });
+            }
+
+            // 각 모듈별 메뉴 ID 배열
+            setMenuState(['nav-sec-2-1-1', 'nav-sec-2-1-2', 'nav-sec-2-1-3'], useLedger);
+            setMenuState(['nav-sec-2-2-1', 'nav-sec-2-2-2'], useKfpa);
+            setMenuState(['nav-sec-2-3'], useInflation);
+            setMenuState(['nav-sec-2-4'], useBI);
         }
     </script>
 
