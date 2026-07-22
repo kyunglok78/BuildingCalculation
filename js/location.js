@@ -1,9 +1,11 @@
 // ============================================================================
 // location.js - 소재지 동적 추가 및 삭제 제어 (최종 완성본)
 // ============================================================================
-let locationCounter = 1;
+if (typeof window.locationCounter === 'undefined') {
+    window.locationCounter = 1;
+}
 
-// 페이지가 완전히 로드되거나 스크립트가 읽히는 즉시 1행 자동 생성 보장
+// 페이지 로드 시 1행 자동 생성 보장
 document.addEventListener("DOMContentLoaded", function() {
     setTimeout(() => {
         const tbody = document.getElementById('locationTbody');
