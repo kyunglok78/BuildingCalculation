@@ -1,3 +1,8 @@
+// ============================================================================
+// location.js - 소재지 동적 추가 및 삭제 제어 (One-Stop 버전)
+// ============================================================================
+let locationCounter = 1;
+
 function syncContractor(val) {
     document.querySelectorAll('.contractor-sync').forEach(input => {
         if (input !== document.activeElement) input.value = val;
@@ -5,58 +10,65 @@ function syncContractor(val) {
 }
 
 function createLocationRowHTML(index) {
-    // [기능 4] 더미 데이터 문자열 제거 및 공백 placeholder 지정
     return `
-        <div class="list-row">
-            <input type="checkbox" class="row-checkbox"><span>소재지 ${index}</span>
-            <input type="text" class="input-short" value="" placeholder="예: 공장/건물명">
-            <button type="button" class="btn-blue" onclick="openAddressModal(this); return false;"><i class="fa-solid fa-magnifying-glass"></i> 주소 검색</button>
-            <span>주소</span><input type="text" class="input-long addr-input" value="" placeholder="주소를 검색해주세요" readonly>
-            <div class="check-group">
-                <label class="check-item"><input type="checkbox" class="check-ledger" checked onchange="updateMenuState()"> 건축물대장</label>
-                <label class="check-item"><input type="checkbox" class="check-kfpa" checked onchange="updateMenuState()"> 화협자료평가</label>
-            </div>
-        </div>
+        <tr id="loc_row_${index}">
+            <td>
+                <input type="text" class="form-control loc-name input-short" placeholder="예: 공장/지점명" value="소재지 ${index}" style="width:100%; box-sizing:border-box;">
+            </td>
+            <td>
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" class="btn-search btn-blue" onclick="openAddressModal(this); return false;" style="background-color: var(--kb-blue); padding: 5px 10px; border-radius: 4px; color: white; border: none; cursor: pointer; font-size: 13px; white-space: nowrap;">
+                        <i class="fa-solid fa-magnifying-glass-location"></i> 주소조회
+                    </button>
+                    <input type="text" class="form-control loc-addr addr-input input-long" id="addr_${index}" placeholder="주소를 검색해주세요" readonly style="flex:1; padding: 5px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+            </td>
+            <td style="text-align: center;"><label class="eval-check-wrap"><input type="checkbox" class="chk-ledger check-ledger" checked onchange="updateMenuState()"> 대상</label></td>
+            <td style="text-align: center;"><label class="eval-check-wrap"><input type="checkbox" class="chk-kfpa check-kfpa" checked onchange="updateMenuState()"> 대상</label></td>
+            <td style="text-align: center;"><label class="eval-check-wrap"><input type="checkbox" class="chk-inflation" onchange="updateMenuState()"> 대상</label></td>
+            <td style="text-align: center;"><button type="button" class="btn-remove" onclick="removeLocationRow(${index})" style="background-color: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;"><i class="fa-solid fa-trash-can"></i></button></td>
+        </tr>
     `;
 }
 
 function generateLocationRows() {
     const countInput = document.getElementById('locationCount');
     const targetCount = parseInt(countInput.value, 10);
-    const listBox = document.getElementById('locationListBox');
-    const currentCount = listBox.querySelectorAll('.list-row').length;
+    const tbody = document.getElementById('locationTbody');
     
-    if (isNaN(targetCount) || targetCount < 1) { countInput.value = currentCount; return; }
-    
-    if (targetCount > currentCount) {
-        for (let i = currentCount + 1; i <= targetCount; i++) listBox.insertAdjacentHTML('beforeend', createLocationRowHTML(i));
-    } else if (targetCount < currentCount) {
-        for (let i = 0; i < currentCount - targetCount; i++) listBox.lastElementChild.remove();
+    if (isNaN(targetCount) || targetCount < 1) { 
+        countInput.value = tbody.children.length || 1; 
+        return; 
     }
-    locationCounter = targetCount;
+    
+    tbody.innerHTML = '';
+    locationCounter = 0;
+    for (let i = 1; i <= targetCount; i++) {
+        tbody.insertAdjacentHTML('beforeend', createLocationRowHTML(i));
+        locationCounter = i;
+    }
     updateMenuState();
 }
 
 function addLocationRow() {
     locationCounter++;
-    document.getElementById('locationListBox').insertAdjacentHTML('beforeend', createLocationRowHTML(locationCounter));
-    document.getElementById('locationCount').value = document.getElementById('locationListBox').children.length;
+    document.getElementById('locationTbody').insertAdjacentHTML('beforeend', createLocationRowHTML(locationCounter));
+    document.getElementById('locationCount').value = document.getElementById('locationTbody').children.length;
     updateMenuState();
 }
 
-function deleteSelectedLocations() {
-    const rows = document.getElementById('locationListBox').querySelectorAll('.list-row');
-    let deletedCount = 0;
-    rows.forEach(row => { if (row.querySelector('.row-checkbox').checked) { row.remove(); deletedCount++; }});
-    if (deletedCount > 0) {
-        document.getElementById('locationListBox').querySelectorAll('.list-row').forEach((row, index) => {
-            const span = row.querySelector('span');
-            if(span && span.textContent.startsWith('소재지')) span.textContent = `소재지 ${index + 1}`;
-        });
-        locationCounter = document.getElementById('locationListBox').children.length;
-        document.getElementById('locationCount').value = locationCounter;
-        updateMenuState();
-    } else {
-        alert('삭제할 소재지를 선택해주세요.');
-    }
+function removeLocationRow(index) {
+    const tr = document.getElementById(`loc_row_${index}`);
+    if (tr) tr.remove();
+    
+    // 번호 재정렬
+    const rows = document.getElementById('locationTbody').querySelectorAll('tr');
+    rows.forEach((row, i) => {
+        const input = row.querySelector('.loc-name');
+        if(input && input.value.startsWith('소재지')) input.value = `소재지 ${i + 1}`;
+    });
+    
+    locationCounter = rows.length;
+    document.getElementById('locationCount').value = locationCounter;
+    updateMenuState();
 }

@@ -999,8 +999,9 @@ window.initKfpaScreen = function() {
     tabsContainer.innerHTML = '';
     
     const locations = [];
-    document.querySelectorAll('#locationListBox .list-row').forEach(row => {
-        const name = row.querySelector('.input-short') ? row.querySelector('.input-short').value.trim() : '';
+    // [핵심 변경점] 새로운 HTML 테이블(locationTbody)에서 행을 찾도록 변경
+    document.querySelectorAll('#locationTbody tr').forEach(row => {
+        const name = row.querySelector('.loc-name') ? row.querySelector('.loc-name').value.trim() : '';
         const addr = row.querySelector('.addr-input') ? row.querySelector('.addr-input').value.trim() : '';
         const checkedKfpa = row.querySelector('.check-kfpa') ? row.querySelector('.check-kfpa').checked : false;
         if(name && checkedKfpa) locations.push({name, addr});
@@ -1009,7 +1010,7 @@ window.initKfpaScreen = function() {
     if(locations.length === 0) {
         tabsContainer.innerHTML = '<div style="padding: 15px; color: #dc3545; font-weight: bold;">등록된 사업장이 없거나 화협자료평가 체크가 해제되어 있습니다. (1.1 일반정보 확인)</div>';
         infoPanel.style.display = 'none';
-        goToSlide('slide6');
+        switchSection('sec-2-2-1'); // [변경점] goToSlide 대체
         return;
     }
 
@@ -1045,7 +1046,7 @@ window.initKfpaScreen = function() {
     });
     
     if (isFirst && tabsContainer.firstChild) tabsContainer.firstChild.click();
-    goToSlide('slide6');
+    switchSection('sec-2-2-1'); // [변경점] goToSlide 대체
 };
 
 // 2. 화면 미리보기 렌더링 함수

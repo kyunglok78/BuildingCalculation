@@ -113,7 +113,9 @@ async function simulateApiFetch() {
     const emptyMsg = document.getElementById('emptyStateMsg');
     const dataContainer = document.getElementById('fetchedDataContainer');
     const tabsContainer = document.getElementById('slide3Tabs');
-    const rows = document.getElementById('locationListBox').querySelectorAll('.list-row');
+    
+    // [변경점] 새로운 HTML 테이블에서 행을 찾도록 변경
+    const rows = document.getElementById('locationTbody').querySelectorAll('tr');
     
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 실시간 연동 중...';
     btn.disabled = true;
@@ -124,8 +126,10 @@ async function simulateApiFetch() {
     for (let index = 0; index < rows.length; index++) {
         const row = rows[index];
         if(!row.querySelector('.check-ledger').checked) continue;
-        const locName = row.querySelector('.input-short').value || `소재지 ${index+1}`;
-        const locAddr = row.querySelector('.input-long').value || ``;
+        
+        // [변경점] 클래스 이름(loc-name, addr-input)에 맞게 데이터 추출
+        const locName = row.querySelector('.loc-name').value || `소재지 ${index+1}`;
+        const locAddr = row.querySelector('.addr-input').value || ``;
         if (!locAddr) continue;
         
         let isSuccess = false;

@@ -1,21 +1,38 @@
+// ============================================================================
+// ui.js - 화면 전환(SPA), 모달 제어, 임시저장 관리 (One-Stop 버전)
+// ============================================================================
+
+function switchSection(sectionId) {
+    const targetSection = document.getElementById(sectionId);
+    const targetMenu = document.getElementById('nav-' + sectionId);
+    
+    // 비활성화된 메뉴는 클릭 방지
+    if(targetMenu && targetMenu.classList.contains('disabled')) return;
+
+    document.querySelectorAll('.page-section').forEach(sec => sec.classList.remove('active'));
+    document.querySelectorAll('.menu-item').forEach(menu => menu.classList.remove('active'));
+
+    if(targetSection) targetSection.classList.add('active');
+    if(targetMenu) targetMenu.classList.add('active');
+    
+    // 화면 최상단으로 이동
+    window.scrollTo(0, 0);
+}
+
+// 과거의 goToSlide 호출을 새로운 SPA 함수로 자동 매핑해주는 호환성 헬퍼
 function goToSlide(slideId) {
-    const slides = document.querySelectorAll('.slide-container');
-    slides.forEach(slide => { slide.style.display = 'none'; });
-    const targetSlide = document.getElementById(slideId);
-    if (targetSlide) {
-        targetSlide.style.display = 'block';
-        window.scrollTo(0, 0);
-    }
+    const slideMap = {
+        'slide2': 'sec-1-1', 'slide3': 'sec-2-1-1', 'slide4': 'sec-2-1-2',
+        'slide5': 'sec-2-1-3', 'slide6': 'sec-2-2-1', 'slide7': 'sec-2-2-2', 'slide8': 'sec-3-1'
+    };
+    if (slideMap[slideId]) switchSection(slideMap[slideId]);
 }
 
 function openApiKeyModal(errorMsg, actionType) {
     currentRetryAction = actionType;
     const reasonEl = document.getElementById('apiErrorReason');
-    if(errorMsg === '수동 설정') {
-        reasonEl.innerHTML = '<span style="color:#1C5691;">현재 시스템에 등록된 API 키를 확인하거나 변경합니다.</span>';
-    } else {
-        reasonEl.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${errorMsg}`;
-    }
+    if(errorMsg === '수동 설정') reasonEl.innerHTML = '<span style="color:#1C5691;">현재 시스템에 등록된 API 키를 확인하거나 변경합니다.</span>';
+    else reasonEl.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${errorMsg}`;
     
     document.getElementById('manualKakaoKey').value = manualKakaoKey || GLOBAL_KAKAO_KEY;
     document.getElementById('manualDataKey').value = manualDataKey || GLOBAL_DATA_KEY;
@@ -26,61 +43,50 @@ function saveApiKeys() {
     manualKakaoKey = document.getElementById('manualKakaoKey').value.trim();
     manualDataKey = document.getElementById('manualDataKey').value.trim();
     document.getElementById('apiKeyModal').style.display = 'none';
-    
-    if(currentRetryAction === 'address') {
-        searchAddress();
-    } else if(currentRetryAction === 'ledger') {
-        simulateApiFetch();
-    } else if(currentRetryAction === 'none') {
-        alert("API 키 설정이 저장되었습니다.");
-    }
+    if(currentRetryAction === 'address') searchAddress();
+    else if(currentRetryAction === 'ledger') simulateApiFetch();
+    else if(currentRetryAction === 'none') alert("API 키 설정이 저장되었습니다.");
 }
 
 function cancelApiKeys() {
     document.getElementById('apiKeyModal').style.display = 'none';
-    if(currentRetryAction === 'address') {
-        executeMockAddressSearch();
-    } else if(currentRetryAction === 'ledger') {
-        executeMockLedgerFetch();
-    }
 }
 
-function toggleMenuUI(type, isEnabled) {
-    const slides = document.querySelectorAll('.slide-container');
-    slides.forEach(slide => {
-         const links = slide.querySelectorAll(`div[data-menu-type="${type}"]`);
-         links.forEach(link => {
-            const badge = link.querySelector('.status-badge');
-            const isActive = link.classList.contains('menu-active');
-            if (!isEnabled) {
-                if(!isActive) link.classList.add('disabled-link');
-                if (badge) {
-                    if(!badge.dataset.origSaved) {
-                        badge.dataset.origText = badge.textContent;
-                        badge.dataset.origClass = badge.className;
-                        badge.dataset.origSaved = 'true';
-                    }
-                    badge.textContent = '미평가';
-                    badge.className = 'status-badge status-none';
+// 새로운 뱃지 및 사이드바 제어 로직
+function updateMenuState() {
+    let useLedger = false, useKfpa = false, useInflation = false;
+    let useBI = document.getElementById('chkGlobalBI') ? document.getElementById('chkGlobalBI').checked : false;
+
+    document.querySelectorAll('.check-ledger').forEach(cb => { if(cb.checked) useLedger = true; });
+    document.querySelectorAll('.check-kfpa').forEach(cb => { if(cb.checked) useKfpa = true; });
+    document.querySelectorAll('.chk-inflation').forEach(cb => { if(cb.checked) useInflation = true; });
+
+    function setMenuState(menuIds, isActive) {
+        menuIds.forEach(id => {
+            const menu = document.getElementById(id);
+            if(!menu) return;
+            let badge = menu.querySelector('.status-badge');
+            
+            if(isActive) {
+                menu.classList.remove('disabled');
+                if(badge && badge.classList.contains('status-none')) {
+                    badge.className = 'status-badge status-wait';
+                    badge.textContent = '대기';
                 }
             } else {
-                link.classList.remove('disabled-link');
-                if (badge && badge.dataset.origSaved) {
-                    badge.textContent = badge.dataset.origText;
-                    badge.className = badge.dataset.origClass;
+                menu.classList.add('disabled');
+                if(badge) {
+                    badge.className = 'status-badge status-none';
+                    badge.textContent = '미평가';
                 }
             }
         });
-    });
-}
+    }
 
-function updateMenuState() {
-    const slide2 = document.getElementById('slide2');
-    if(!slide2) return;
-    const ledgerChecks = slide2.querySelectorAll('.check-ledger');
-    const kfpaChecks = slide2.querySelectorAll('.check-kfpa');
-    toggleMenuUI('ledger', Array.from(ledgerChecks).some(cb => cb.checked));
-    toggleMenuUI('kfpa', Array.from(kfpaChecks).some(cb => cb.checked));
+    setMenuState(['nav-sec-2-1-1', 'nav-sec-2-1-2', 'nav-sec-2-1-3'], useLedger);
+    setMenuState(['nav-sec-2-2-1', 'nav-sec-2-2-2'], useKfpa);
+    setMenuState(['nav-sec-2-3'], useInflation);
+    setMenuState(['nav-sec-2-4'], useBI);
 }
 
 function switchApiTab(el, index) {
@@ -89,8 +95,7 @@ function switchApiTab(el, index) {
     el.classList.add('active');
     
     const dataContainer = document.getElementById('fetchedDataContainer');
-    const children = dataContainer.children;
-    for(let i=0; i<children.length; i++) { children[i].style.display = 'none'; }
+    Array.from(dataContainer.children).forEach(c => c.style.display = 'none');
     
     const targetDiv = document.getElementById('api-loc-' + index);
     if(targetDiv) {
@@ -100,10 +105,6 @@ function switchApiTab(el, index) {
     }
 }
 
-// ==========================================
-// [완벽 복구] .kbproj 빠른 임시 저장 및 불러오기
-// ==========================================
-
 function quickSaveProject() {
     try {
         const contractorInputs = document.querySelectorAll('.contractor-sync');
@@ -112,9 +113,10 @@ function quickSaveProject() {
         const evalYear = evalYearInput ? evalYearInput.value : new Date().getFullYear();
         
         const locations = [];
-        const rows = document.querySelectorAll('#locationListBox .list-row');
+        // 새 HTML 테이블 행에서 데이터 수집
+        const rows = document.querySelectorAll('#locationTbody tr');
         rows.forEach((row) => {
-            const nameInput = row.querySelector('.input-short');
+            const nameInput = row.querySelector('.loc-name');
             const addrInput = row.querySelector('.addr-input');
             const checkLedger = row.querySelector('.check-ledger');
             const checkKfpa = row.querySelector('.check-kfpa');
@@ -131,8 +133,9 @@ function quickSaveProject() {
             contractor: contractor,
             eval_year: evalYear,
             addresses: locations,
-            fetched_data: window.fetchedData || {}, 
-            eval_records: window.evalRecords || {'title': {}, 'floor': {}, 'kfpa': {}}
+            fetched_data: window.kbState.fetchedData || {}, 
+            eval_records: window.kbState.evalData || {'title': {}, 'floor': {}, 'kfpa': {}},
+            tempKfpaDataStore: window.tempKfpaDataStore || {}
         };
 
         const dataStr = JSON.stringify(projectState, null, 2);
@@ -172,33 +175,33 @@ function quickLoadProject(event) {
             }
             
             if(projectState.addresses && projectState.addresses.length > 0) {
-                const listBox = document.getElementById('locationListBox');
-                if(listBox) {
-                    listBox.innerHTML = ""; 
+                const tbody = document.getElementById('locationTbody');
+                if(tbody) {
+                    tbody.innerHTML = ""; 
                     projectState.addresses.forEach((item, index) => {
-                        if(typeof createLocationRowHTML === 'function') {
-                            listBox.insertAdjacentHTML('beforeend', createLocationRowHTML(index + 1));
-                            const lastRow = listBox.lastElementChild;
-                            lastRow.querySelector('.input-short').value = item.name || "";
-                            lastRow.querySelector('.addr-input').value = item.addr || "";
-                            
-                            const checkLedger = lastRow.querySelector('.check-ledger');
-                            const checkKfpa = lastRow.querySelector('.check-kfpa');
-                            if(checkLedger) checkLedger.checked = item.checkLedger !== false;
-                            if(checkKfpa) checkKfpa.checked = item.checkKfpa !== false;
-                        }
+                        tbody.insertAdjacentHTML('beforeend', createLocationRowHTML(index + 1));
+                        const lastRow = tbody.lastElementChild;
+                        lastRow.querySelector('.loc-name').value = item.name || "";
+                        lastRow.querySelector('.addr-input').value = item.addr || "";
+                        
+                        const checkLedger = lastRow.querySelector('.check-ledger');
+                        const checkKfpa = lastRow.querySelector('.check-kfpa');
+                        if(checkLedger) checkLedger.checked = item.checkLedger !== false;
+                        if(checkKfpa) checkKfpa.checked = item.checkKfpa !== false;
                     });
                     if(document.getElementById('locationCount')) {
                         document.getElementById('locationCount').value = projectState.addresses.length;
-                        if(typeof locationCounter !== 'undefined') locationCounter = projectState.addresses.length;
+                        locationCounter = projectState.addresses.length;
                     }
                 }
             }
             
-            window.fetchedData = projectState.fetched_data || {};
-            window.evalRecords = projectState.eval_records || {'title': {}, 'floor': {}, 'kfpa': {}};
+            window.kbState.fetchedData = projectState.fetched_data || {};
+            window.kbState.evalData = projectState.eval_records || {'title': {}, 'floor': {}, 'kfpa': {}};
+            window.tempKfpaDataStore = projectState.tempKfpaDataStore || {};
             
-            if(typeof updateMenuState === 'function') updateMenuState();
+            updateMenuState();
+            if(typeof runGroupedRenderTest === 'function') runGroupedRenderTest();
             alert("✅ 임시 저장 파일을 성공적으로 불러왔습니다!");
             
             event.target.value = ''; 
