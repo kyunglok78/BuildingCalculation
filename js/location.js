@@ -1,7 +1,17 @@
 // ============================================================================
-// location.js - 소재지 동적 추가 및 삭제 제er (One-Stop 버전)
+// location.js - 소재지 동적 추가 및 삭제 제어 (최종 완성본)
 // ============================================================================
 let locationCounter = 1;
+
+// 페이지가 완전히 로드되거나 스크립트가 읽히는 즉시 1행 자동 생성 보장
+document.addEventListener("DOMContentLoaded", function() {
+    setTimeout(() => {
+        const tbody = document.getElementById('locationTbody');
+        if (tbody && tbody.children.length === 0) {
+            generateLocationRows();
+        }
+    }, 50);
+});
 
 function syncContractor(val) {
     document.querySelectorAll('.contractor-sync').forEach(input => {
@@ -34,12 +44,12 @@ function createLocationRowHTML(index) {
 
 function generateLocationRows() {
     const countInput = document.getElementById('locationCount');
-    const targetCount = parseInt(countInput.value, 10);
+    const targetCount = countInput ? parseInt(countInput.value, 10) : 1;
     const tbody = document.getElementById('locationTbody');
     if(!tbody) return;
     
     if (isNaN(targetCount) || targetCount < 1) { 
-        countInput.value = tbody.children.length || 1; 
+        if(countInput) countInput.value = tbody.children.length || 1; 
         return; 
     }
     
@@ -58,7 +68,6 @@ function addLocationRow() {
     locationCounter = tbody.children.length + 1;
     tbody.insertAdjacentHTML('beforeend', createLocationRowHTML(locationCounter));
     
-    // [+ 추가] 버튼 누를 때 상단 '소재지 개수' 입력창 숫자가 실시간으로 동기화되도록 수정
     const countInput = document.getElementById('locationCount');
     if(countInput) countInput.value = tbody.children.length;
     
@@ -72,7 +81,6 @@ function removeLocationRow(index) {
     const tbody = document.getElementById('locationTbody');
     if(!tbody) return;
 
-    // 삭제 후 번호 재정렬 및 상단 '소재지 개수' 입력창 숫자 실시간 동기화
     const rows = tbody.querySelectorAll('tr');
     rows.forEach((row, i) => {
         row.id = `loc_row_${i + 1}`;
@@ -88,12 +96,3 @@ function removeLocationRow(index) {
     
     if(typeof updateMenuStatus === 'function') updateMenuStatus();
 }
-
-// 페이지가 로드될 때 첫 번째 소재지 행이 기본으로 뜰 수 있도록 자동 실행
-document.addEventListener("DOMContentLoaded", function() {
-    setTimeout(() => {
-        if(document.getElementById('locationTbody') && document.getElementById('locationTbody').children.length === 0) {
-            generateLocationRows();
-        }
-    }, 100);
-});
