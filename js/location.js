@@ -88,3 +88,12 @@ function removeLocationRow(index) {
     
     if(typeof updateMenuStatus === 'function') updateMenuStatus();
 }
+
+// 페이지가 로드될 때 첫 번째 소재지 행이 기본으로 뜰 수 있도록 자동 실행
+document.addEventListener("DOMContentLoaded", function() {
+    setTimeout(() => {
+        if(document.getElementById('locationTbody') && document.getElementById('locationTbody').children.length === 0) {
+            generateLocationRows();
+        }
+    }, 100);
+});
