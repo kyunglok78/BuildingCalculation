@@ -563,6 +563,16 @@
     }
 </script>
 
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        setTimeout(() => {
+            if(typeof generateLocationRows === 'function' && document.getElementById('locationTbody').children.length === 0) {
+                generateLocationRows();
+            }
+        }, 100);
+    });
+</script>
+
     <!-- 기존에 만드셨던 핵심 스크립트 연결 (절대 삭제 금지!) -->
     <script src="./js/config.js"></script>
     <script src="./js/ui.js"></script>
