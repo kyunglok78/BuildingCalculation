@@ -215,38 +215,67 @@
 <!-- ============================================================================ -->
     <main class="main-content">
         
-<!-- [SEC-5-1] 소재지 등록 헤더 버튼 및 테이블 교체 부분 -->
-<div class="card-header">
-    <span><i class="fa-solid fa-map-location-dot"></i> 2. 소재지 등록 및 개별 평가 설정</span>
-    <div style="display:flex; gap:8px; align-items:center;">
-        <span style="font-size:13px; color:var(--kb-gray); font-weight:bold;">소재지 개수:</span>
-        <input type="number" id="newLocationCount" value="1" min="1" max="100" style="width: 60px; padding:6px; border:1px solid #ccc; border-radius:4px;">
-        
-        <!-- 적용 버튼 색상 (어두운 회색) -->
-        <button type="button" style="background-color: #4A4A4A; color: white; border: none; padding: 7px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px;" onclick="new_generateLocationRows()">적용</button>
-        
-        <!-- 추가 버튼 색상 (KB 노란색) -->
-        <button type="button" style="background-color: #FFCC00; color: #2C2C2C; border: none; padding: 7px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px;" onclick="new_addLocationRow()"><i class="fa-solid fa-plus"></i> 추가</button>
-    </div>
-</div>
-<div class="card-body" style="padding: 15px;">
-    <div style="font-size:12px; color:#dc3545; text-align:right; margin-bottom:10px;">* 평가 항목의 체크를 해제하면 좌측 메뉴가 잠금(미평가) 처리됩니다.</div>
-    <table class="location-table">
-        <thead>
-            <tr>
-                <th style="width: 130px;">소재지명 (지점명)</th>
-                <th>주소 (API / 지도 검색)</th>
-                <th style="width: 90px;">건축물대장</th>
-                <th style="width: 90px;">화협자료</th>
-                <th style="width: 90px;">물가보정</th>
-                <th style="width: 60px;">삭제</th>
-            </tr>
-        </thead>
-        <tbody id="locationTbody">
-            <!-- 하단 JS를 통해 행이 들어옵니다. -->
-        </tbody>
-    </table>
-</div>
+<!-- ============================================================================ -->
+<!-- [SEC-5-1] 1.1 일반정보 등록 (다중 추가 및 보험계약자 복구 완료) -->
+<!-- ============================================================================ -->
+        <section id="sec-1-1" class="page-section active">
+            <div class="page-title" style="border:none; margin-bottom:20px; padding:0; font-size:22px;">
+                <i class="fa-solid fa-pen-to-square"></i> 1.1 프로젝트 기본 정보 및 대상 등록
+            </div>
+            
+            <!-- 잃어버렸던 1번 보험계약자 영역 완벽 복구 -->
+            <div class="card">
+                <div class="card-header"><span><i class="fa-solid fa-user-tie"></i> 1. 프로젝트 공통 기본 정보</span></div>
+                <div class="card-body">
+                    <div class="input-row" style="margin:0; align-items:center;">
+                        <span class="input-label">보험계약자명</span>
+                        <input type="text" class="input-box contractor-sync" placeholder="예: (주)고려호이스트" style="width: 300px;" oninput="syncContractor(this.value)">
+                        
+                        <label class="global-toggle" style="margin-left: auto;">
+                            <input type="checkbox" id="chkGlobalBI" onchange="updateMenuStatus()">
+                            <i class="fa-solid fa-industry"></i> 이 프로젝트에서 BI(기업휴지) 평가를 수행합니다
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2번 소재지 등록 영역 (디자인 및 다중 추가 반영) -->
+            <div class="card">
+                <div class="card-header">
+                    <span><i class="fa-solid fa-map-location-dot"></i> 2. 소재지 등록 및 개별 평가 설정</span>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <span style="font-size:13px; color:var(--kb-gray); font-weight:bold;">소재지 개수:</span>
+                        <input type="number" id="newLocationCount" value="1" min="1" max="100" style="width: 60px; padding:6px; border:1px solid #ccc; border-radius:4px;">
+                        
+                        <button type="button" style="background-color: #4A4A4A; color: white; border: none; padding: 7px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px;" onclick="new_generateLocationRows()">적용</button>
+                        
+                        <button type="button" style="background-color: #FFCC00; color: #2C2C2C; border: none; padding: 7px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px;" onclick="new_addLocationRow()"><i class="fa-solid fa-plus"></i> 추가</button>
+                    </div>
+                </div>
+                <div class="card-body" style="padding: 15px;">
+                    <div style="font-size:12px; color:#dc3545; text-align:right; margin-bottom:10px;">* 평가 항목의 체크를 해제하면 좌측 메뉴가 잠금(미평가) 처리됩니다.</div>
+                    <table class="location-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 130px;">소재지명 (지점명)</th>
+                                <th>주소 (API / 지도 검색)</th>
+                                <th style="width: 90px;">건축물대장</th>
+                                <th style="width: 90px;">화협자료</th>
+                                <th style="width: 90px;">물가보정</th>
+                                <th style="width: 60px;">삭제</th>
+                            </tr>
+                        </thead>
+                        <tbody id="locationTbody">
+                            <!-- 하단 JS를 통해 행이 들어옵니다. -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div style="text-align: right;">
+                <button type="button" class="btn-exec" onclick="switchSection('sec-1-2')">정보 저장 및 다음 단계로 <i class="fa-solid fa-arrow-right"></i></button>
+            </div>
+        </section>
 
         <!-- [SEC-5-2] 1.2 평가지수 불러오기 (기존 Slide2 하단부 이식) -->
         <section id="sec-1-2" class="page-section">
@@ -438,28 +467,28 @@
 
     </main>
 
-<!-- [SEC-6] 자바스크립트 영역 교체 부분 (기존 location.js와 충돌 회피) -->
+<!-- ============================================================================ -->
+<!-- [SEC-6] 자바스크립트 영역 (SPA 및 다중 생성 처리) -->
+<!-- ============================================================================ -->
 <script>
     let newLocIndex = 0;
 
-    // 외부 JS 에러에 영향받지 않도록 DOMContentLoaded 사용
     document.addEventListener("DOMContentLoaded", function() {
-        setTimeout(() => {
-            new_generateLocationRows(); 
-        }, 100);
+        setTimeout(() => { new_generateLocationRows(); }, 100);
     });
 
     function switchSection(sectionId) {
         const targetSection = document.getElementById(sectionId);
         const targetMenu = document.getElementById('nav-' + sectionId);
         if(targetMenu && targetMenu.classList.contains('disabled')) return;
+        
         document.querySelectorAll('.page-section').forEach(sec => sec.classList.remove('active'));
         document.querySelectorAll('.menu-item').forEach(menu => menu.classList.remove('active'));
+        
         if(targetSection) targetSection.classList.add('active');
         if(targetMenu) targetMenu.classList.add('active');
     }
 
-    // 소재지 일괄 생성 (함수명 변경)
     function new_generateLocationRows() {
         const count = parseInt(document.getElementById('newLocationCount').value) || 1;
         const tbody = document.getElementById('locationTbody');
@@ -471,16 +500,16 @@
         }
     }
 
-    // 소재지 단일 추가 (함수명 변경 및 버튼 인라인 스타일 적용)
     function new_addLocationRow() {
         newLocIndex++;
         const tbody = document.getElementById('locationTbody');
         const tr = document.createElement('tr');
         tr.id = `new_loc_row_${newLocIndex}`;
         
+        // ★ input에 'loc-name' 클래스 추가 완료 (main.js 연동 필수 요소)
         tr.innerHTML = `
             <td>
-                <input type="text" class="input-box" placeholder="예: 공장명" value="소재지 ${newLocIndex}" style="width:100%; box-sizing:border-box; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                <input type="text" class="input-box loc-name" placeholder="예: 공장명" value="소재지 ${newLocIndex}" style="width:100%; box-sizing:border-box; padding:8px; border:1px solid #ccc; border-radius:4px;">
             </td>
             <td>
                 <div style="display: flex; gap: 8px;">
@@ -505,7 +534,6 @@
         if(typeof updateMenuStatus === 'function') updateMenuStatus();
     }
 
-    // 뱃지 상태 업데이트 (기존과 동일)
     function updateMenuStatus() {
         let useLedger = false, useKfpa = false, useInflation = false;
         let useBI = document.getElementById('chkGlobalBI') ? document.getElementById('chkGlobalBI').checked : false;
