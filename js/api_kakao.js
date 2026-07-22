@@ -32,7 +32,10 @@ function initMap() {
 }
 
 function openAddressModal(btn) {
-    currentAddressTarget = btn.parentElement.querySelector('.input-long.addr-input');
+    // [버그 수정 반영] 버튼이 속한 행(tr 또는 list-row)에서 인풋 요소를 정확히 탐색
+    const row = btn.closest('tr') || btn.closest('.list-row');
+    currentAddressTarget = row ? row.querySelector('.addr-input') : null;
+    
     document.getElementById('addressModal').style.display = 'flex';
     document.getElementById('modalAddressInput').value = '';
     
@@ -183,6 +186,6 @@ function applySelectedAddress() {
         currentAddressTarget.value = selectedAddressData;
         closeAddressModal();
     } else {
-        alert('주소를 먼저 선택해 주세요.');
+        alert('주소를 목록에서 클릭하여 먼저 선택해 주세요.');
     }
 }
