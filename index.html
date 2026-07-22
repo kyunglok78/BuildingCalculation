@@ -68,6 +68,12 @@
         .location-table { width: 100%; border-collapse: collapse; }
         .location-table th, .location-table td { border: 1px solid var(--border-color); padding: 10px; vertical-align: middle; }
         .location-table th { background-color: #f1f5f9; font-size: 13px; color: var(--kb-gray); text-align: center; font-weight: bold; }
+
+         /* 이 부분을 기존 코드 바로 아래에 추가해 주세요! */
+        .location-table th:nth-child(2), .location-table td:nth-child(2) { width: 45%; }
+        .location-table td:nth-child(1) { width: 140px; }
+        .location-table td input.addr-input { width: 100% !important; box-sizing: border-box; }
+
         .eval-check-wrap { display: flex; justify-content: center; gap: 5px; align-items: center; font-size: 13px; cursor: pointer; }
         .eval-check-wrap input { width: 16px; height: 16px; accent-color: var(--kb-blue); cursor: pointer; }
     </style>
@@ -229,7 +235,7 @@
         <div class="card-body">
             <div class="input-row" style="margin:0; align-items:center;">
                 <span class="input-label">보험계약자명</span>
-                <input type="text" class="input-box contractor-sync" placeholder="예: (주)고려호이스트" style="width: 300px;" oninput="syncContractor(this.value)">
+                <input type="text" class="input-box contractor-sync" placeholder="예: KB손해보험" style="width: 300px;" oninput="syncContractor(this.value)">
             </div>
         </div>
     </div>
@@ -249,22 +255,22 @@
         </div>
         <div class="card-body" style="padding: 15px;">
             <div style="font-size:12px; color:#dc3545; text-align:right; margin-bottom:10px;">* 평가 항목의 체크를 해제하면 좌측 메뉴가 잠금(미평가) 처리됩니다.</div>
-            <table class="location-table">
-                <thead>
-                    <tr>
-                        <th style="width: 130px;">소재지명 (지점명)</th>
-                        <th>주소 (API / 지도 검색)</th>
-                        <th style="width: 80px;">건축물대장</th>
-                        <th style="width: 80px;">화협자료</th>
-                        <th style="width: 80px;">물가보정</th>
-                        <th style="width: 80px;">BI평가</th>
-                        <th style="width: 60px;">삭제</th>
-                    </tr>
-                </thead>
-                <tbody id="locationTbody">
-                    <!-- JS 동적 생성 -->
-                </tbody>
-            </table>
+<table class="location-table">
+    <thead>
+        <tr>
+            <th>소재지명 (지점명)</th>
+            <th>주소 (API / 지도 검색)</th>
+            <th style="width: 75px;">건축물대장</th>
+            <th style="width: 75px;">화협자료</th>
+            <th style="width: 75px;">물가보정</th>
+            <th style="width: 75px;">BI평가</th>
+            <th style="width: 55px;">삭제</th>
+        </tr>
+    </thead>
+    <tbody id="locationTbody">
+        <!-- JS 동적 생성 -->
+    </tbody>
+</table>
         </div>
     </div>
     
