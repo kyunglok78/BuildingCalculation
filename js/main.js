@@ -689,7 +689,7 @@ window.batchApplyRatio = function(mode, siteName) {
 };
 
 // ============================================================================
-// [10] ★ 프로젝트 임시 저장 및 불러오기 (UI 테이블 완전 대응 최신버전)
+// [10] ★ 프로젝트 임시 저장 및 불러오기 (사이드바 완료 상태 완벽 보존 버전)
 // ============================================================================
 
 (function enforceTabColors() {
@@ -728,7 +728,6 @@ window.quickSaveProject = function() {
         const evalYearInput = document.getElementById('evalYear');
         const evalYear = evalYearInput ? evalYearInput.value : new Date().getFullYear();
 
-        // [핵심 변경] 새로운 테이블(locationTbody) 구조에서 소재지 정보 정확히 추출
         const locations = [];
         document.querySelectorAll('#locationTbody tr').forEach(row => {
             locations.push({
@@ -741,11 +740,22 @@ window.quickSaveProject = function() {
             });
         });
 
+        // ★ [핵심 추가] 사이드바 메뉴들의 현재 상태(완료, 대기, 뱃지 텍스트 등)를 통째로 수집합니다.
+        const sidebarStates = {};
+        document.querySelectorAll('.sidebar .menu-item').forEach(menu => {
+            const badge = menu.querySelector('.status-badge');
+            sidebarStates[menu.id] = {
+                className: menu.className,
+                badgeHtml: badge ? badge.outerHTML : ''
+            };
+        });
+
         const projectData = {
-            version: "1.5", 
+            version: "1.6", 
             contractor: contractorName,
             evalYear: evalYear,
             locations: locations, 
+            sidebarStates: sidebarStates, // 저장 파일에 사이드바 상태 포함
             unitCostPath: document.getElementById('unitCostPath') ? document.getElementById('unitCostPath').value : "",
             priceIndexPath: document.getElementById('priceIndexPath') ? document.getElementById('priceIndexPath').value : "",
             tempKfpaDataStore: window.tempKfpaDataStore || {},
@@ -804,7 +814,6 @@ window.quickLoadProject = function(event) {
                 if (pPath) pPath.value = projectData.priceIndexPath;
             }
 
-            // [핵심 변경] 새로운 테이블(locationTbody) 구조에 맞춰 소재지 정보 완벽 복원
             const tbody = document.getElementById('locationTbody');
             if (tbody) {
                 tbody.innerHTML = ''; 
@@ -830,6 +839,23 @@ window.quickLoadProject = function(event) {
             }
 
             runGroupedRenderTest();
+
+            // ★ [핵심 추가] 저장되어 있던 사이드바 상태(완료, 대기, 미평가)를 화면에 그대로 복원합니다!
+            if (projectData.sidebarStates) {
+                for (const [menuId, state] of Object.entries(projectData.sidebarStates)) {
+                    const menu = document.getElementById(menuId);
+                    if (menu) {
+                        menu.className = state.className;
+                        if (state.badgeHtml) {
+                            const oldBadge = menu.querySelector('.status-badge');
+                            if (oldBadge) oldBadge.remove();
+                            menu.insertAdjacentHTML('beforeend', state.badgeHtml);
+                        }
+                    }
+                }
+            } else {
+                if (typeof updateMenuState === 'function') updateMenuState();
+            }
 
             if (window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
                 const dataContainer = document.getElementById('fetchedDataContainer');
@@ -957,8 +983,6 @@ window.quickLoadProject = function(event) {
                 badge.innerHTML = `<i class="fa-solid fa-folder-open"></i> 최근 로드: ${file.name} (${loadTime})`;
             });
 
-            // 화면 동기화 업데이트 콜백 호출
-            if (typeof updateMenuStatus === 'function') updateMenuStatus();
             if (typeof backupLocationData === 'function') backupLocationData();
 
             alert("✅ 임시 저장 데이터 완벽 로드 완료!\n(화상단에 현재 로드한 파일 이름이 표시됩니다.)");
