@@ -114,7 +114,6 @@ async function simulateApiFetch() {
     const dataContainer = document.getElementById('fetchedDataContainer');
     const tabsContainer = document.getElementById('slide3Tabs');
     
-    // [수정됨] 새로운 HTML 테이블 구조(#locationTbody)에 맞게 대상 탐색
     const tbody = document.getElementById('locationTbody');
     const rows = tbody ? tbody.querySelectorAll('tr') : [];
     
@@ -126,10 +125,9 @@ async function simulateApiFetch() {
 
     for (let index = 0; index < rows.length; index++) {
         const row = rows[index];
-        const checkLedger = row.querySelector('.check-ledger');
+        const checkLedger = row.querySelector('.check-ledger') || row.querySelector('.chk-ledger');
         if(!checkLedger || !checkLedger.checked) continue;
         
-        // [수정됨] 새로운 클래스명(.loc-name, .addr-input)으로 데이터 추출
         const nameInput = row.querySelector('.loc-name');
         const addrInput = row.querySelector('.addr-input');
         const locName = nameInput ? nameInput.value : `소재지 ${index+1}`;
@@ -146,7 +144,6 @@ async function simulateApiFetch() {
             const kakaoJson = await kakaoRes.json();
             if(!kakaoJson.documents || kakaoJson.documents.length === 0) throw new Error("조회할 수 없는 주소 형식입니다.");
             
-            // [핵심 수정됨] 500 에러 해결을 위해 법정동 코드(b_code)를 기준으로 추출
             const addressDoc = kakaoJson.documents[0].address;
             if (!addressDoc || !addressDoc.b_code) {
                 throw new Error("정확한 지번(법정동) 정보를 찾을 수 없는 주소입니다.");
@@ -156,14 +153,15 @@ async function simulateApiFetch() {
             const codes = {
                 sigunguCd: bCode.substring(0, 5), 
                 bjdongCd: bCode.substring(5, 10), 
-                platGbCd: addressDoc.mountain_yn === 'Y' ? '2' : '0',  
+                // [핵심 수정] 산지/대지 구분 코드 명확화 (0:대지, 1:산)
+                platGbCd: addressDoc.mountain_yn === 'Y' ? '1' : '0',  
                 bun: (addressDoc.main_address_no || '').padStart(4, '0'), 
                 ji: (addressDoc.sub_address_no || '').padStart(4, '0') 
             };
             
             const fetchEndpoint = async (endpoint, colMap) => {
                 const res = await fetch(`${baseUrl}/api/datago?endpoint=${endpoint}&sigunguCd=${codes.sigunguCd}&bjdongCd=${codes.bjdongCd}&platGbCd=${codes.platGbCd}&bun=${codes.bun}&ji=${codes.ji}`);
-                if(!res.ok) throw new Error(`서버 통신 실패 (HTTP ${res.status})`);
+                if(!res.ok) throw new Error(`[500 에러] Vercel 프록시 또는 정부 서버 통신 오류`);
                 return parseXMLToJSON(await res.text(), colMap);
             };
             
@@ -191,8 +189,6 @@ function executeLedgerRender(results) {
     const tabsContainer = document.getElementById('slide3Tabs');
 
     let hasActive = false;
-    
-    // 저장소를 kbState.fetchedData 로 정확히 연결
     window.kbState.fetchedData = {}; 
 
     results.forEach(res => {
@@ -217,7 +213,6 @@ function executeLedgerRender(results) {
                 });
             }
 
-            // 여기서도 kbState.fetchedData 에 담기도록 설정
             window.kbState.fetchedData[locName] = { address: locAddr, recap: totalData, title: titleData, floor: floorData };
 
             const trTotal = totalData.map(d => `<tr><td>${d.platPlc || locAddr}</td><td>${d.bldNm||'-'}</td><td>${d.mainPurpsCdNm||'-'}</td><td>${formatNumber(d.mainBldCnt||'0')}</td><td>${formatNumber(d.subBldCnt||'0')}</td><td>${formatNumber(d.totArea||'0')}</td><td>${formatDate(d.pmsDay||'-')}</td><td>${formatDate(d.stcnsDay||'-')}</td><td>${formatDate(d.useAprDay||'-')}</td></tr>`).join('');
@@ -251,7 +246,6 @@ function executeLedgerRender(results) {
 // 엑셀 내보내기 
 // ==========================================
 window.exportLedgerToExcel = function() {
-    // 엑셀 내보내기도 kbState.fetchedData 를 바라보도록 변경
     if (!window.kbState.fetchedData || Object.keys(window.kbState.fetchedData).length === 0) {
         alert("내보낼 데이터가 존재하지 않습니다. 먼저 조회해 주세요."); return;
     }
