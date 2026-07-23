@@ -689,7 +689,7 @@ window.batchApplyRatio = function(mode, siteName) {
 };
 
 // ============================================================================
-// [10] ★ 프로젝트 임시 저장 및 불러오기 (사이드바 완료 상태 완벽 보존 버전)
+// [10] ★ 프로젝트 임시 저장 및 불러오기 (사이드바 완료/대기/미평가 상태 완벽 복원 버전)
 // ============================================================================
 
 (function enforceTabColors() {
@@ -740,7 +740,7 @@ window.quickSaveProject = function() {
             });
         });
 
-        // ★ [핵심 추가] 사이드바 메뉴들의 현재 상태(완료, 대기, 뱃지 텍스트 등)를 통째로 수집합니다.
+        // 사이드바 메뉴들의 현재 상태(완료, 대기, 미평가 뱃지 및 클래스) 수집
         const sidebarStates = {};
         document.querySelectorAll('.sidebar .menu-item').forEach(menu => {
             const badge = menu.querySelector('.status-badge');
@@ -751,11 +751,11 @@ window.quickSaveProject = function() {
         });
 
         const projectData = {
-            version: "1.6", 
+            version: "1.7", 
             contractor: contractorName,
             evalYear: evalYear,
             locations: locations, 
-            sidebarStates: sidebarStates, // 저장 파일에 사이드바 상태 포함
+            sidebarStates: sidebarStates, 
             unitCostPath: document.getElementById('unitCostPath') ? document.getElementById('unitCostPath').value : "",
             priceIndexPath: document.getElementById('priceIndexPath') ? document.getElementById('priceIndexPath').value : "",
             tempKfpaDataStore: window.tempKfpaDataStore || {},
@@ -840,7 +840,7 @@ window.quickLoadProject = function(event) {
 
             runGroupedRenderTest();
 
-            // ★ [핵심 추가] 저장되어 있던 사이드바 상태(완료, 대기, 미평가)를 화면에 그대로 복원합니다!
+            // 저장되어 있던 사이드바 상태(완료, 대기, 미평가) 복원
             if (projectData.sidebarStates) {
                 for (const [menuId, state] of Object.entries(projectData.sidebarStates)) {
                     const menu = document.getElementById(menuId);
