@@ -114,8 +114,9 @@ async function simulateApiFetch() {
     const dataContainer = document.getElementById('fetchedDataContainer');
     const tabsContainer = document.getElementById('slide3Tabs');
     
-    // 새로운 HTML 테이블에서 행을 찾도록 변경
-    const rows = document.getElementById('locationTbody').querySelectorAll('tr');
+    // [수정됨] 새로운 HTML 테이블 구조(#locationTbody)에 맞게 대상 탐색
+    const tbody = document.getElementById('locationTbody');
+    const rows = tbody ? tbody.querySelectorAll('tr') : [];
     
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 실시간 연동 중...';
     btn.disabled = true;
@@ -125,11 +126,14 @@ async function simulateApiFetch() {
 
     for (let index = 0; index < rows.length; index++) {
         const row = rows[index];
-        if(!row.querySelector('.check-ledger').checked) continue;
+        const checkLedger = row.querySelector('.check-ledger');
+        if(!checkLedger || !checkLedger.checked) continue;
         
-        // 클래스 이름(loc-name, addr-input)에 맞게 데이터 추출
-        const locName = row.querySelector('.loc-name').value || `소재지 ${index+1}`;
-        const locAddr = row.querySelector('.addr-input').value || ``;
+        // [수정됨] 새로운 클래스명(.loc-name, .addr-input)으로 데이터 추출
+        const nameInput = row.querySelector('.loc-name');
+        const addrInput = row.querySelector('.addr-input');
+        const locName = nameInput ? nameInput.value : `소재지 ${index+1}`;
+        const locAddr = addrInput ? addrInput.value : ``;
         if (!locAddr) continue;
         
         let isSuccess = false;
@@ -142,7 +146,7 @@ async function simulateApiFetch() {
             const kakaoJson = await kakaoRes.json();
             if(!kakaoJson.documents || kakaoJson.documents.length === 0) throw new Error("조회할 수 없는 주소 형식입니다.");
             
-            // [수정완료] 법정동 코드(b_code)를 기준으로 시군구/법정동 코드를 정확히 분리
+            // [핵심 수정됨] 500 에러 해결을 위해 법정동 코드(b_code)를 기준으로 추출
             const addressDoc = kakaoJson.documents[0].address;
             if (!addressDoc || !addressDoc.b_code) {
                 throw new Error("정확한 지번(법정동) 정보를 찾을 수 없는 주소입니다.");
@@ -213,7 +217,7 @@ function executeLedgerRender(results) {
                 });
             }
 
-            // 여기서도 kbState.fetchedData 에 담기도록 변경
+            // 여기서도 kbState.fetchedData 에 담기도록 설정
             window.kbState.fetchedData[locName] = { address: locAddr, recap: totalData, title: titleData, floor: floorData };
 
             const trTotal = totalData.map(d => `<tr><td>${d.platPlc || locAddr}</td><td>${d.bldNm||'-'}</td><td>${d.mainPurpsCdNm||'-'}</td><td>${formatNumber(d.mainBldCnt||'0')}</td><td>${formatNumber(d.subBldCnt||'0')}</td><td>${formatNumber(d.totArea||'0')}</td><td>${formatDate(d.pmsDay||'-')}</td><td>${formatDate(d.stcnsDay||'-')}</td><td>${formatDate(d.useAprDay||'-')}</td></tr>`).join('');
