@@ -98,7 +98,7 @@ function renderEvalTabsAndTable(mode, tbodyId, tabContainerId) {
 }
 
 // ============================================================================
-// [4] ★ 하이브리드 UI 렌더링 엔진 (구조코드/감가율 항시입력창 탑재)
+// [4] 하이브리드 UI 렌더링 엔진 (구조코드/감가율 항시입력창 탑재)
 // ============================================================================
 function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
     let grandTotalArea = 0, grandTotalReco = 0, grandTotalCur = 0;
@@ -265,7 +265,6 @@ window.syncTitleData = function() {
             const rowAprDate = String(row["useAprDay"] || "").replace(/[-/]/g, "").trim();
             if (rowAprDate.length >= 4 && !isNaN(rowAprDate.substring(0, 4))) buildYear = parseInt(rowAprDate.substring(0, 4));
             
-            // ★ 면적 검사소: 연면적이 300 이하이면 부속비율 0%, 초과면 20%
             const autoRatio = (area <= 300 && area > 0) ? 0.0 : 20.0;
 
             siteRecords.push({
@@ -305,7 +304,6 @@ window.syncFloorData = function() {
             if (aprDate.length >= 4 && !isNaN(aprDate.substring(0, 4))) fallbackYear = parseInt(aprDate.substring(0, 4));
         }
         
-        // ★ 층별 합산 면적 사전 계산 (300㎡ 검사 용도)
         const floorAreaMap = {};
         dfFloor.forEach(row => {
             let d = (row["dongNm"] || "").trim();
@@ -338,7 +336,6 @@ window.syncFloorData = function() {
                 "감가율": 1.78, "재조달_건축": 0, "잔가율": 100.0, "현재_건축": 0
             };
             
-            // ★ 해당 동의 층별 면적 합계가 300 이하면 0% 자동 적용
             let inheritedRatio = (floorAreaMap[dongNm] <= 300 && floorAreaMap[dongNm] > 0) ? 0.0 : 20.0; 
             
             const tGroup = titleRecords.find(g => g.동명칭 === dongNm);
@@ -347,7 +344,7 @@ window.syncFloorData = function() {
                 record["구조코드"] = tReq["구조코드"]; record["단가"] = tReq["단가"];
                 record["노무비"] = tReq["노무비"]; record["물가지수"] = tReq["물가지수"];
                 record["감가율"] = tReq["감가율"]; record["준공연도"] = tReq["준공연도"]; 
-                if (tGroup["부속비율"] !== undefined) inheritedRatio = tGroup["부속비율"]; // 표제부에서 수정했다면 그 값을 우선
+                if (tGroup["부속비율"] !== undefined) inheritedRatio = tGroup["부속비율"]; 
             }
             
             if (!siteGroups[dongNm]) {
@@ -527,7 +524,6 @@ window.applyCodeToRecord = function(code, mode, siteName, gIdx, rIdx, skipRender
             if(matched) { 
                 record['단가'] = matched['단가']; 
                 record['노무비'] = matched['노무비']; 
-                // ★ 단가표의 구조(F열) 또는 중분류(C열) 이름을 구조명으로 자동 업데이트
                 record['구조명'] = (matched['구조'] && matched['구조'] !== "-") ? matched['구조'] : matched['중분류'];
                 if(window.applyAutoPriceIndex) window.applyAutoPriceIndex(record); 
             }
@@ -693,10 +689,9 @@ window.batchApplyRatio = function(mode, siteName) {
 };
 
 // ============================================================================
-// [10] ★ 프로젝트 임시 저장 및 불러오기 (평가지수 파일명, 화협 임시데이터 완벽 보존)
+// [10] ★ 프로젝트 임시 저장 및 불러오기 (UI 테이블 완전 대응 최신버전)
 // ============================================================================
 
-// ★ 전역 CSS 탭 스타일 강제 주입 (다른 화면에서 대장을 새로 조회해도 무조건 탭 색상 유지)
 (function enforceTabColors() {
     if(document.getElementById('kb-tab-colors')) return;
     const style = document.createElement('style');
@@ -733,18 +728,21 @@ window.quickSaveProject = function() {
         const evalYearInput = document.getElementById('evalYear');
         const evalYear = evalYearInput ? evalYearInput.value : new Date().getFullYear();
 
+        // [핵심 변경] 새로운 테이블(locationTbody) 구조에서 소재지 정보 정확히 추출
         const locations = [];
-        document.querySelectorAll('#locationListBox .list-row').forEach(row => {
+        document.querySelectorAll('#locationTbody tr').forEach(row => {
             locations.push({
-                name: row.querySelector('.input-short') ? row.querySelector('.input-short').value : '',
-                address: row.querySelector('.addr-input') ? row.querySelector('.addr-input').value : '',
-                checkedLedger: row.querySelector('.check-ledger') ? row.querySelector('.check-ledger').checked : true,
-                checkedKfpa: row.querySelector('.check-kfpa') ? row.querySelector('.check-kfpa').checked : true
+                name: row.querySelector('.loc-name') ? row.querySelector('.loc-name').value.trim() : '',
+                address: row.querySelector('.addr-input') ? row.querySelector('.addr-input').value.trim() : '',
+                checkedLedger: row.querySelector('.chk-ledger') ? row.querySelector('.chk-ledger').checked : true,
+                checkedKfpa: row.querySelector('.chk-kfpa') ? row.querySelector('.chk-kfpa').checked : true,
+                checkedInflation: row.querySelector('.chk-inflation') ? row.querySelector('.chk-inflation').checked : false,
+                checkedBI: row.querySelector('.chk-bi') ? row.querySelector('.chk-bi').checked : false
             });
         });
 
         const projectData = {
-            version: "1.4", 
+            version: "1.5", 
             contractor: contractorName,
             evalYear: evalYear,
             locations: locations, 
@@ -784,12 +782,9 @@ window.quickLoadProject = function(event) {
             
             if (projectData.kbState) window.kbState = projectData.kbState;
             
-            // ★ 화협(KFPA) 임시 바구니 데이터 완벽 복구
-            if (projectData.tempKfpaDataStore) {
-                window.tempKfpaDataStore = projectData.tempKfpaDataStore;
-            } else {
-                window.tempKfpaDataStore = {};
-            }
+            if (projectData.tempKfpaDataStore) window.tempKfpaDataStore = projectData.tempKfpaDataStore;
+            else window.tempKfpaDataStore = {};
+            
             if (projectData.targetKfpaSite) window.targetKfpaSite = projectData.targetKfpaSite;
             if (projectData.targetKfpaAddress) window.targetKfpaAddress = projectData.targetKfpaAddress;
 
@@ -800,7 +795,6 @@ window.quickLoadProject = function(event) {
                 const evalYearInput = document.getElementById('evalYear');
                 if (evalYearInput) evalYearInput.value = projectData.evalYear;
             }
-
             if (projectData.unitCostPath) {
                 const uPath = document.getElementById('unitCostPath');
                 if (uPath) uPath.value = projectData.unitCostPath;
@@ -810,27 +804,28 @@ window.quickLoadProject = function(event) {
                 if (pPath) pPath.value = projectData.priceIndexPath;
             }
 
-            const listBox = document.getElementById('locationListBox');
-            if (listBox) {
-                listBox.innerHTML = ''; 
+            // [핵심 변경] 새로운 테이블(locationTbody) 구조에 맞춰 소재지 정보 완벽 복원
+            const tbody = document.getElementById('locationTbody');
+            if (tbody) {
+                tbody.innerHTML = ''; 
                 if (projectData.locations && projectData.locations.length > 0) {
                     projectData.locations.forEach((loc, idx) => {
-                        const row = document.createElement('div');
-                        row.className = 'list-row';
-                        row.innerHTML = `
-                            <input type="checkbox" class="row-checkbox" checked><span>소재지 ${idx + 1}</span>
-                            <input type="text" class="input-short" value="${loc.name}" placeholder="예: 공장/지점명">
-                            <button type="button" class="btn-blue" onclick="openAddressModal(this); return false;"><i class="fa-solid fa-magnifying-glass"></i> 주소 검색</button>
-                            <span>주소</span><input type="text" class="input-long addr-input" value="${loc.address}" placeholder="주소를 검색해 주세요" readonly>
-                            <div class="check-group">
-                                <label class="check-item"><input type="checkbox" class="check-ledger" ${loc.checkedLedger ? 'checked' : ''} onchange="updateMenuState()"> 건축물대장</label>
-                                <label class="check-item"><input type="checkbox" class="check-kfpa" ${loc.checkedKfpa ? 'checked' : ''} onchange="updateMenuState()"> 화협자료평가</label>
-                            </div>
-                        `;
-                        listBox.appendChild(row);
+                        if (typeof createLocationRowHTML === 'function') {
+                            tbody.insertAdjacentHTML('beforeend', createLocationRowHTML(idx + 1));
+                            const newRow = document.getElementById(`loc_row_${idx + 1}`);
+                            if(newRow) {
+                                newRow.querySelector('.loc-name').value = loc.name || '';
+                                newRow.querySelector('.addr-input').value = loc.address || '';
+                                if(newRow.querySelector('.chk-ledger')) newRow.querySelector('.chk-ledger').checked = loc.checkedLedger !== false;
+                                if(newRow.querySelector('.chk-kfpa')) newRow.querySelector('.chk-kfpa').checked = loc.checkedKfpa !== false;
+                                if(newRow.querySelector('.chk-inflation')) newRow.querySelector('.chk-inflation').checked = !!loc.checkedInflation;
+                                if(newRow.querySelector('.chk-bi')) newRow.querySelector('.chk-bi').checked = !!loc.checkedBI;
+                            }
+                        }
                     });
                     const locCountInput = document.getElementById('locationCount');
                     if(locCountInput) locCountInput.value = projectData.locations.length;
+                    window.locationCounter = projectData.locations.length;
                 } 
             }
 
@@ -860,7 +855,6 @@ window.quickLoadProject = function(event) {
                     for (const [siteName, siteData] of Object.entries(window.kbState.fetchedData)) {
                         const tabBtn = document.createElement('div');
                         tabBtn.innerText = siteName;
-                        // ★ 대장 탭 UI 확 띄게 (남색/흰색 강제)
                         tabBtn.style.cssText = `padding:10px 20px; cursor:pointer; font-weight:${isFirst ? 'bold' : 'normal'}; border:1px solid ${isFirst ? '#1C5691' : '#e2e8f0'}; border-bottom:none; border-radius:4px 4px 0 0; margin-right:5px; background:${isFirst ? '#1C5691' : '#f1f5f9'}; color:${isFirst ? '#ffffff' : '#94a3b8'};`;
                         
                         const contentDiv = document.createElement('div');
@@ -951,7 +945,6 @@ window.quickLoadProject = function(event) {
                 }
             }
 
-            // ★ 최상단 헤더 영역에 [현재 작업파일] 뱃지 고정 표시!
             const loadTime = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
             document.querySelectorAll('.window-title').forEach(title => {
                 let badge = title.querySelector('.loaded-badge');
@@ -964,13 +957,9 @@ window.quickLoadProject = function(event) {
                 badge.innerHTML = `<i class="fa-solid fa-folder-open"></i> 최근 로드: ${file.name} (${loadTime})`;
             });
 
-            // ★ 화협(KFPA) 바구니 백그라운드 렌더링 강제 실행 (빈 화면 방지)
-            if (window.targetKfpaSite && typeof window.renderKfpaPreview === 'function') {
-                window.renderKfpaPreview(window.targetKfpaSite);
-            }
-            if (typeof updateMenuState === 'function') {
-                updateMenuState();
-            }
+            // 화면 동기화 업데이트 콜백 호출
+            if (typeof updateMenuStatus === 'function') updateMenuStatus();
+            if (typeof backupLocationData === 'function') backupLocationData();
 
             alert("✅ 임시 저장 데이터 완벽 로드 완료!\n(화상단에 현재 로드한 파일 이름이 표시됩니다.)");
         } catch (err) {
@@ -982,7 +971,7 @@ window.quickLoadProject = function(event) {
 };
 
 // ============================================================================
-// [11] ★ 화협(KFPA) 다중 사업장 바구니 보존 및 일괄 확정 로직 (데이터 증발 방어 & 300㎡ 자동체크)
+// [11] ★ 화협(KFPA) 다중 사업장 바구니 보존 및 일괄 확정 로직 
 // ============================================================================
 window.targetKfpaSite = "";
 window.targetKfpaAddress = "";
@@ -991,7 +980,6 @@ if (typeof window.tempKfpaDataStore === 'undefined') {
     window.tempKfpaDataStore = {};
 }
 
-// 1. 화협 불러오기 진입 시 탭 세팅
 window.initKfpaScreen = function() {
     const tabsContainer = document.getElementById('slide6Tabs');
     const infoPanel = document.getElementById('kfpaActiveInfoPanel');
@@ -999,18 +987,17 @@ window.initKfpaScreen = function() {
     tabsContainer.innerHTML = '';
     
     const locations = [];
-    // [핵심 변경점] 새로운 HTML 테이블(locationTbody)에서 행을 찾도록 변경
     document.querySelectorAll('#locationTbody tr').forEach(row => {
         const name = row.querySelector('.loc-name') ? row.querySelector('.loc-name').value.trim() : '';
         const addr = row.querySelector('.addr-input') ? row.querySelector('.addr-input').value.trim() : '';
-        const checkedKfpa = row.querySelector('.check-kfpa') ? row.querySelector('.check-kfpa').checked : false;
+        const checkedKfpa = row.querySelector('.chk-kfpa') ? row.querySelector('.chk-kfpa').checked : false;
         if(name && checkedKfpa) locations.push({name, addr});
     });
 
     if(locations.length === 0) {
         tabsContainer.innerHTML = '<div style="padding: 15px; color: #dc3545; font-weight: bold;">등록된 사업장이 없거나 화협자료평가 체크가 해제되어 있습니다. (1.1 일반정보 확인)</div>';
         infoPanel.style.display = 'none';
-        switchSection('sec-2-2-1'); // [변경점] goToSlide 대체
+        switchSection('sec-2-2-1'); 
         return;
     }
 
@@ -1046,10 +1033,9 @@ window.initKfpaScreen = function() {
     });
     
     if (isFirst && tabsContainer.firstChild) tabsContainer.firstChild.click();
-    switchSection('sec-2-2-1'); // [변경점] goToSlide 대체
+    switchSection('sec-2-2-1'); 
 };
 
-// 2. 화면 미리보기 렌더링 함수
 window.renderKfpaPreview = function(siteName) {
     const tbody = document.getElementById('previewKfpaTbody');
     const btnConfirm = document.getElementById('btnConfirmKfpa');
@@ -1079,11 +1065,13 @@ window.renderKfpaPreview = function(siteName) {
         tbody.appendChild(totalTr);
     }
 
-    if (window.tempKfpaDataStore && Object.keys(window.tempKfpaDataStore).length > 0) btnConfirm.style.display = 'block';
-    else btnConfirm.style.display = 'none';
+    if (window.tempKfpaDataStore && Object.keys(window.tempKfpaDataStore).length > 0) {
+        if(btnConfirm) btnConfirm.style.display = 'inline-block';
+    } else {
+        if(btnConfirm) btnConfirm.style.display = 'none';
+    }
 };
 
-// 3. 엑셀 파일 파싱
 window.loadKfpaExcel = function(event) {
     const file = event.target.files[0];
     if(!file) return;
@@ -1156,7 +1144,6 @@ window.loadKfpaExcel = function(event) {
     event.target.value = ''; 
 };
 
-// 4. 전체 다중 사업장 일괄 확정 (300㎡ 면적 체크 포함 + 2.2.1 원본 유지)
 window.confirmAllKfpaData = function() {
     if(!window.tempKfpaDataStore) return alert("반영할 데이터가 전혀 없습니다. 엑셀 파일을 먼저 업로드해주세요.");
     
@@ -1170,7 +1157,6 @@ window.confirmAllKfpaData = function() {
         const titleRecords = window.kbState.evalData.title[siteName] || [];
         const siteGroups = {};
         
-        // ★ 화협 데이터 동별 면적 합산 (300㎡ 이하 판별용)
         const dongAreaMap = {};
         records.forEach(r => {
             const d = r.동명칭;
@@ -1178,7 +1164,6 @@ window.confirmAllKfpaData = function() {
         });
         
         records.forEach(r => {
-            // ★ [중요] 2.2.1 원본과 2.2.2 평가 데이터가 서로 간섭하지 않도록 복사본(Clone) 생성
             let evalRecord = JSON.parse(JSON.stringify(r));
 
             if (evalRecord.구조코드 && evalRecord.구조코드 !== "-" && window.kbState.costData && window.kbState.costData.length > 0) {
@@ -1196,12 +1181,10 @@ window.confirmAllKfpaData = function() {
             }
 
             const d = evalRecord.동명칭;
-            
-            // ★ 면적 300 이하이면 0% 자동 적용
             let inheritedRatio = (dongAreaMap[d] <= 300 && dongAreaMap[d] > 0) ? 0.0 : 20.0;
             
             const tGroup = titleRecords.find(g => (g.동명칭 || "") === d);
-            if (tGroup && tGroup.부속비율 !== undefined) inheritedRatio = tGroup.부속비율; // 표제부에서 세팅했다면 표제부 우선
+            if (tGroup && tGroup.부속비율 !== undefined) inheritedRatio = tGroup.부속비율;
 
             if(!siteGroups[d]) {
                 siteGroups[d] = { "동명칭": d, "부속비율": inheritedRatio, "재조달_부속": 0, "재조달_합계": 0, "현재_부속": 0, "현재_합계": 0, "records": [] };
@@ -1214,10 +1197,6 @@ window.confirmAllKfpaData = function() {
     });
 
     window.kbState.activeSite.kfpa = sites[0];
-    
-    // ★ [수정됨] 2.2.1 화면 비교를 위해 임시 바구니를 비우지 않고 그대로 유지합니다.
-    // window.tempKfpaDataStore = {}; 
-    
     goToSlide('slide7');
     renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
     
@@ -1225,9 +1204,8 @@ window.confirmAllKfpaData = function() {
 };
 
 // ============================================================================
-// [12] ★ 통합 총괄표(Summary Table) 렌더링 로직 (세부 항목 전체 펼침 모드 & 배경색 강제 고정)
+// [12] ★ 통합 총괄표(Summary Table) 렌더링 로직 
 // ============================================================================
-
 setTimeout(() => {
     document.querySelectorAll('.menu-l1, .menu-l2, .menu-l3').forEach(menu => {
         if (menu.innerText.includes('3. 총괄표 작성')) {
@@ -1282,7 +1260,7 @@ window.renderSummary = function(mode, tabElement) {
         let siteRowSpan = 0;
         groupArray.forEach(g => {
             const rCount = (g.records && g.records.length > 0) ? g.records.length : 1;
-            siteRowSpan += (rCount + 2); // (실제 층/항목 수) + (부속설비 1줄) + (소계 1줄)
+            siteRowSpan += (rCount + 2); 
         });
 
         groupArray.forEach((group, gIdx) => {
@@ -1305,14 +1283,12 @@ window.renderSummary = function(mode, tabElement) {
             const dongName = group.동명칭 || '-';
             const accRate = parseFloat(group.부속비율 || 20.0).toFixed(1);
 
-            // ★ td 자체에 background 속성을 !important로 강제 주입하여 얼룩말 무늬 방어
             const siteCellHtml = (gIdx === 0) 
                 ? `<td rowspan="${siteRowSpan}" style="vertical-align:middle; font-weight:bold; background:#ffffff !important; border-right:1px solid #ddd;">${siteName}</td>` 
                 : '';
                 
             const dongCellHtml = `<td rowspan="${dongRowSpan}" style="vertical-align:middle; font-weight:bold; color:#1C5691; background:#ffffff !important; border-right:1px solid #ddd;">${dongName}</td>`;
 
-            // 1. 건축공사비(세부 층/항목) 렌더링
             if (records.length === 0) {
                 tbody.innerHTML += `
                     <tr>
@@ -1341,7 +1317,6 @@ window.renderSummary = function(mode, tabElement) {
                 });
             }
 
-            // 2. [동별] 부속설비 행
             tbody.innerHTML += `
                 <tr>
                     <td style="text-align:left; color:#666; background:#f8f9fa !important;">└ 부속설비 (${accRate}%)</td>
@@ -1351,7 +1326,6 @@ window.renderSummary = function(mode, tabElement) {
                 </tr>
             `;
             
-            // 3. [동별] 소계 행 (색상 완벽 고정)
             tbody.innerHTML += `
                 <tr style="font-weight:bold;">
                     <td style="text-align:center; color:#111; background:#e2e8f0 !important;">[${dongName}] 소계</td>
@@ -1362,7 +1336,6 @@ window.renderSummary = function(mode, tabElement) {
             `;
         });
 
-        // 4. [사업장별] 합계 행 (색상 완벽 고정)
         grandTotalArea += siteTotalArea;
         grandTotalReco += siteTotalReco;
         grandTotalCur += siteTotalCur;
@@ -1377,7 +1350,6 @@ window.renderSummary = function(mode, tabElement) {
         `;
     }
 
-    // 5. [전체] 총계 행 (맨 아래 파란 바탕 및 황금색 글자 완벽 고정)
     if (Object.keys(dataObj).length > 1) { 
         tbody.innerHTML += `
             <tr style="font-weight:bold; font-size:15px;">
@@ -1390,7 +1362,6 @@ window.renderSummary = function(mode, tabElement) {
     }
 };
 
-// ★ 총괄표 엑셀 다운로드 기능
 window.exportSummaryExcel = function() {
     const table = document.getElementById('summaryTable');
     if(!table || table.rows.length <= 2) {
