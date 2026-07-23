@@ -398,7 +398,9 @@
             </div>
         </section>
 
-        <!-- [SEC-5-6] 2.2.1 화협자료 불러오기 (기존 Slide6 이식) -->
+<!-- ============================================================================ -->
+<!-- [SEC-5-6] 2.2.1 화협자료 불러오기 (기존 Slide6 이식) -->
+<!-- ============================================================================ -->
         <section id="sec-2-2-1" class="page-section">
             <h2 class="page-title"><i class="fa-solid fa-file-csv"></i> 2.2.1 화협(KFPA) 자료 업로드 및 데이터 검증</h2>
             
@@ -419,9 +421,9 @@
                 </div>
             </div>
 
+            <!-- 파란색 버튼이 삭제되고 제목만 남은 영역 -->
             <div class="flex-between mb-10" style="align-items: flex-end;">
                 <span class="bold" style="color:#1C5691;">🔍 데이터 변환 미리보기 (검증)</span>
-                <button type="button" class="btn-exec" id="btnConfirmKfpa" style="display:none; background:#0056b3; font-size:15px; padding: 10px 20px;" onclick="confirmAllKfpaData()">⚡ 전체 사업장 데이터 일괄 확정 및 가액평가 시작 ▶</button>
             </div>
             
             <div class="data-table-wrapper" style="flex:1; border: 1px solid #ddd; overflow-y: auto;">
@@ -436,10 +438,12 @@
                     </tbody>
                 </table>
             </div>
-            <div style="text-align: right; margin-top: 20px;">
-            <button type="button" class="btn-exec" onclick="completeAndNext('sec-2-2-1')" style="background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px;">
-            업로드 검증 완료 및 다음 단계로 <i class="fa-solid fa-arrow-right"></i>
-            </button>
+
+            <!-- 하단으로 통합된 녹색 최종 확정 및 다음 단계 이동 버튼 -->
+            <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
+                <button type="button" class="btn-exec" id="btnConfirmKfpa" onclick="confirmAllKfpaData(); completeAndNext('sec-2-2-1');" style="display: none; background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px;">
+                    ⚡ 전체 사업장 데이터 일괄 확정 및 다음 단계로 <i class="fa-solid fa-arrow-right"></i>
+                </button>
             </div>
         </section>
 
