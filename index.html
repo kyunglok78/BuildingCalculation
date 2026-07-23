@@ -47,6 +47,7 @@
         .status-ing { background: var(--kb-yellow); color: #000; }
         .status-wait { background: #666; color: #fff; }
         .status-none { background: #dc3545; color: #fff; } /* 미평가 빨간색 */
+        .status-complete { background-color: #10b981; color: white; border: 1px solid #10b981; }
 
         /* 하단 저장 버튼 영역 */
         .sidebar-bottom { padding: 20px; background-color: #1a1a1a; display: flex; flex-direction: column; gap: 10px; }
@@ -273,9 +274,13 @@
 </table>
         </div>
     </div>
+
+    <input type="hidden" id="kb_location_backup" value="">
     
-    <div style="text-align: right;">
-        <button type="button" class="btn-exec" onclick="switchSection('sec-1-2')">정보 저장 및 다음 단계로 <i class="fa-solid fa-arrow-right"></i></button>
+    <div style="text-align: right; margin-top: 20px;">
+        <button type="button" class="btn-exec" onclick="completeAndNext('sec-1-1')" style="background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px;">
+            정보 저장 및 다음 단계로 <i class="fa-solid fa-arrow-right"></i>
+        </button>
     </div>
 </section>
 
@@ -481,6 +486,37 @@
             }
         }, 100);
     });
+
+function completeAndNext(currentSecId) {
+        // 1. 현재 메뉴에 '완료' 뱃지 달기
+        const currentMenu = document.getElementById('nav-' + currentSecId);
+        if (currentMenu) {
+            let badge = currentMenu.querySelector('.status-badge');
+            if (badge) {
+                badge.className = 'status-badge status-complete';
+                badge.textContent = '완료';
+            }
+        }
+
+        // 2. 전체 메뉴 리스트를 가져와서 다음 이동할 섹션 찾기
+        const allMenus = Array.from(document.querySelectorAll('.menu-item'));
+        const currentIndex = allMenus.findIndex(m => m.id === 'nav-' + currentSecId);
+
+        if (currentIndex >= 0) {
+            for (let i = currentIndex + 1; i < allMenus.length; i++) {
+                // 'disabled' 클래스가 없는(미평가가 아닌) 활성화된 첫 번째 메뉴를 찾음
+                if (!allMenus[i].classList.contains('disabled')) {
+                    const nextSecId = allMenus[i].id.replace('nav-', '');
+                    
+                    // 기존에 있는 switchSection 함수를 호출하여 화면 이동
+                    if (typeof switchSection === 'function') {
+                        switchSection(nextSecId);
+                    }
+                    break;
+                }
+            }
+        }
+    }
 </script>
 
     <!-- 기존에 만드셨던 핵심 스크립트 연결 (절대 삭제 금지!) -->
