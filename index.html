@@ -531,20 +531,16 @@ function completeAndNext(currentSecId) {
             }
         }
 
-        // 2. 전체 메뉴 리스트를 가져와서 다음 이동할 섹션 찾기
+        // 2. 다음 이동할 활성화 메뉴 찾기
         const allMenus = Array.from(document.querySelectorAll('.menu-item'));
         const currentIndex = allMenus.findIndex(m => m.id === 'nav-' + currentSecId);
 
         if (currentIndex >= 0) {
             for (let i = currentIndex + 1; i < allMenus.length; i++) {
-                // 'disabled' 클래스가 없는(미평가가 아닌) 활성화된 첫 번째 메뉴를 찾음
                 if (!allMenus[i].classList.contains('disabled')) {
-                    const nextSecId = allMenus[i].id.replace('nav-', '');
-                    
-                    // 기존에 있는 switchSection 함수를 호출하여 화면 이동
-                    if (typeof switchSection === 'function') {
-                        switchSection(nextSecId);
-                    }
+                    // [핵심 해결] 단순히 switchSection만 부르지 않고, 사이드바 메뉴를 직접 클릭시킵니다!
+                    // 이렇게 하면 initKfpaScreen 등 초기화 함수가 완벽하게 함께 실행됩니다.
+                    allMenus[i].click(); 
                     break;
                 }
             }
