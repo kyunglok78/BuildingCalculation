@@ -300,8 +300,11 @@
                         <input type="file" id="priceIndexFile" style="display: none;" accept=".xlsx, .xls" onclick="this.value=null;" onchange="document.getElementById('priceIndexPath').value = this.files[0] ? this.files[0].name : ''">
                     </div>
                 </div>
-            </div>
-            <div style="text-align: right;"><button type="button" class="btn-exec" onclick="switchSection('sec-2-1-1')">건축물대장 조회 단계로 이동 <i class="fa-solid fa-arrow-right"></i></button></div>
+            <div style="text-align: right;">
+           <button type="button" class="btn-exec" onclick="completeAndNext('sec-1-2')" style="background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px;">
+        설정 완료 및 다음 단계로 <i class="fa-solid fa-arrow-right"></i>
+           </button>
+           </div>
         </section>
 
         <!-- [SEC-5-3] 2.1.1 건축물대장 통합 조회 (기존 Slide3 이식) -->
@@ -323,6 +326,11 @@
                 </div>
                 <div id="fetchedDataContainer" style="display: none;"></div>
             </div>
+            <div style="text-align: right; margin-top: 20px;">
+            <button type="button" class="btn-exec" onclick="completeAndNext('sec-2-1-1')" style="background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px;">
+        조회 완료 및 다음 단계로 <i class="fa-solid fa-arrow-right"></i>
+             </button>
+             </div>
         </section>
 
         <!-- [SEC-5-4] 2.1.2 표제부 평가 (기존 Slide4 이식) -->
