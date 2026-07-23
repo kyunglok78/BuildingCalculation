@@ -114,7 +114,7 @@ async function simulateApiFetch() {
     const dataContainer = document.getElementById('fetchedDataContainer');
     const tabsContainer = document.getElementById('slide3Tabs');
     
-    // [변경점] 새로운 HTML 테이블에서 행을 찾도록 변경
+    // 새로운 HTML 테이블에서 행을 찾도록 변경
     const rows = document.getElementById('locationTbody').querySelectorAll('tr');
     
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 실시간 연동 중...';
@@ -127,7 +127,7 @@ async function simulateApiFetch() {
         const row = rows[index];
         if(!row.querySelector('.check-ledger').checked) continue;
         
-        // [변경점] 클래스 이름(loc-name, addr-input)에 맞게 데이터 추출
+        // 클래스 이름(loc-name, addr-input)에 맞게 데이터 추출
         const locName = row.querySelector('.loc-name').value || `소재지 ${index+1}`;
         const locAddr = row.querySelector('.addr-input').value || ``;
         if (!locAddr) continue;
@@ -142,12 +142,19 @@ async function simulateApiFetch() {
             const kakaoJson = await kakaoRes.json();
             if(!kakaoJson.documents || kakaoJson.documents.length === 0) throw new Error("조회할 수 없는 주소 형식입니다.");
             
-            const doc = kakaoJson.documents[0].address || kakaoJson.documents[0].road_address;
-            const sigunguCd = doc.h_code ? doc.h_code.substring(0, 5) : "00000";
-            const bjdongCd = doc.b_code ? doc.b_code.substring(5) : "00000";
+            // [수정완료] 법정동 코드(b_code)를 기준으로 시군구/법정동 코드를 정확히 분리
+            const addressDoc = kakaoJson.documents[0].address;
+            if (!addressDoc || !addressDoc.b_code) {
+                throw new Error("정확한 지번(법정동) 정보를 찾을 수 없는 주소입니다.");
+            }
+            
+            const bCode = addressDoc.b_code; 
             const codes = {
-                sigunguCd: sigunguCd, bjdongCd: bjdongCd, platGbCd: doc.mountain_yn === 'Y' ? '2' : '0',  
-                bun: (doc.main_address_no || '').padStart(4, '0'), ji: doc.sub_address_no ? doc.sub_address_no.padStart(4, '0') : '0000' 
+                sigunguCd: bCode.substring(0, 5), 
+                bjdongCd: bCode.substring(5, 10), 
+                platGbCd: addressDoc.mountain_yn === 'Y' ? '2' : '0',  
+                bun: (addressDoc.main_address_no || '').padStart(4, '0'), 
+                ji: (addressDoc.sub_address_no || '').padStart(4, '0') 
             };
             
             const fetchEndpoint = async (endpoint, colMap) => {
@@ -181,7 +188,7 @@ function executeLedgerRender(results) {
 
     let hasActive = false;
     
-    // ★ 1차 수정: 저장소를 kbState.fetchedData 로 정확히 연결 ★
+    // 저장소를 kbState.fetchedData 로 정확히 연결
     window.kbState.fetchedData = {}; 
 
     results.forEach(res => {
@@ -206,7 +213,7 @@ function executeLedgerRender(results) {
                 });
             }
 
-            // ★ 2차 수정: 여기서도 kbState.fetchedData 에 담기도록 변경 ★
+            // 여기서도 kbState.fetchedData 에 담기도록 변경
             window.kbState.fetchedData[locName] = { address: locAddr, recap: totalData, title: titleData, floor: floorData };
 
             const trTotal = totalData.map(d => `<tr><td>${d.platPlc || locAddr}</td><td>${d.bldNm||'-'}</td><td>${d.mainPurpsCdNm||'-'}</td><td>${formatNumber(d.mainBldCnt||'0')}</td><td>${formatNumber(d.subBldCnt||'0')}</td><td>${formatNumber(d.totArea||'0')}</td><td>${formatDate(d.pmsDay||'-')}</td><td>${formatDate(d.stcnsDay||'-')}</td><td>${formatDate(d.useAprDay||'-')}</td></tr>`).join('');
@@ -240,13 +247,12 @@ function executeLedgerRender(results) {
 // 엑셀 내보내기 
 // ==========================================
 window.exportLedgerToExcel = function() {
-    // ★ 3차 수정: 엑셀 내보내기도 kbState.fetchedData 를 바라보도록 변경 ★
+    // 엑셀 내보내기도 kbState.fetchedData 를 바라보도록 변경
     if (!window.kbState.fetchedData || Object.keys(window.kbState.fetchedData).length === 0) {
         alert("내보낼 데이터가 존재하지 않습니다. 먼저 조회해 주세요."); return;
     }
     let csvContent = "\uFEFF"; 
     
-    // ★ 4차 수정 ★
     for (const [siteName, data] of Object.entries(window.kbState.fetchedData)) { 
         csvContent += `[사업장명: ${siteName}]\n주소: ${data.address}\n\n`;
         if (data.recap && data.recap.length > 0) {
@@ -271,5 +277,3 @@ window.exportLedgerToExcel = function() {
     a.download = `건축물대장_원본_${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
 };
-
-// ❌ 파일의 가장 끝에 있던 window.syncTitleData 와 window.syncFloorData 함수는 깨끗하게 지웠습니다!
