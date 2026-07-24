@@ -558,8 +558,10 @@ window.infAddEmptyRow = function() {
     infRenderTable();
 };
 
-// ★ 수정됨: isSilent 매개변수를 추가하여 삭제 시 백그라운드 재계산 지원
-window.infCalculateSubtotals = function(isSilent = false) {
+// ★ 수정됨: 마우스 클릭 이벤트가 넘어와도 오작동하지 않도록 엄격하게 체크(silent === true)
+window.infCalculateSubtotals = function(isSilent) {
+    const silent = (isSilent === true); // 이벤트 객체 무시, 오직 true일 때만 조용히 처리
+
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
     if(!tData || !tData.raw || tData.raw.length === 0) return;
@@ -570,20 +572,18 @@ window.infCalculateSubtotals = function(isSilent = false) {
     const priceIdx = Object.keys(wiz.mapped).indexOf('취득가액');
 
     if(locIdx === -1 || accIdx === -1 || yearIdx === -1 || priceIdx === -1) {
-        if (!isSilent) alert("부분합을 계산하기 위한 필수 항목(소재지, 자산계정, 취득년도, 취득가액)이 매핑되지 않았습니다.");
+        if (!silent) alert("부분합을 계산하기 위한 필수 항목(소재지, 자산계정, 취득년도, 취득가액)이 매핑되지 않았습니다.");
         return;
     }
 
-    // 단축키 로직에서 호출된 경우 히스토리 중복 저장 방지
-    if (!isSilent) infSaveHistory();
+    if (!silent) infSaveHistory();
 
     const cleanRaw = tData.raw.filter(row => !String(row[yearIdx] || '').includes('소계') && !String(row[yearIdx] || '').includes('총계'));
 
-    // 모든 행을 지워서 남은 데이터가 없다면 초기화
     if (cleanRaw.length === 0) {
         tData.raw = [];
         tData.hasSubtotal = false;
-        if (!isSilent) infRenderTable();
+        if (!silent) infRenderTable();
         return;
     }
 
@@ -670,7 +670,7 @@ window.infCalculateSubtotals = function(isSilent = false) {
     tData.selectedRows.clear();
     tData.selectedCols.clear();
     
-    if (!isSilent) infRenderTable();
+    if (!silent) infRenderTable();
 };
 
 window.infSaveHistory = function() {
