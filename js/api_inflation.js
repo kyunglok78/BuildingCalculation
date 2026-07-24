@@ -391,9 +391,15 @@ window.infRenderTable = function() {
         headerTr.appendChild(th);
     }
     
+    // ★ 2단계, 3단계 헤더 색상 톤 통일 및 연도 동적 표기
     if(window.infState.step >= 2) {
-        step2Cols.forEach(colName => {
-            headerTr.innerHTML += `<th style="background:#e9ecef; color:#1C5691; border:1px solid #ccc; padding:8px; text-align:center;">${colName}</th>`;
+        step2Cols.forEach((colName, idx) => {
+            let displayName = colName;
+            // 과거 구분 열(idx 0)이고, 연도가 추출되었을 때 연도 추가 표기
+            if (idx === 0 && window.infState.pastYear) {
+                displayName = `과거 구분<br><span style="font-size:11px; color:#888;">(${window.infState.pastYear})</span>`;
+            }
+            headerTr.innerHTML += `<th style="background:#e9ecef; color:#1C5691; border:1px solid #ccc; padding:8px; text-align:center;">${displayName}</th>`;
         });
     }
     if(window.infState.step === 3) {
@@ -402,6 +408,7 @@ window.infRenderTable = function() {
         });
     }
     thead.appendChild(headerTr);
+
 
     const yearColIdx = mappedKeys.indexOf('취득년도'); 
     
@@ -651,3 +658,87 @@ document.addEventListener('keydown', function(e) {
         infRenderTable();
     }
 });
+
+// ============================================================================
+// api_inflation.js - [섹션 6] 과거 데이터 연동 및 매칭 알고리즘
+// ============================================================================
+
+// 전역 상태에 과거 연도 저장소 추가 (초기화)
+window.infState.pastYear = null; 
+
+window.infLoadPastData = function(event) {
+    const file = event.target.files[0];
+    if(!file) return;
+
+    // 1. 파일명에서 연도(4자리 숫자) 자동 추출
+    const yearMatch = file.name.match(/(19|20)\d{2}/);
+    window.infState.pastYear = yearMatch ? yearMatch[0] : '연도미상';
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
+            const pastData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {header: 1, defval: ""});
+            
+            if(pastData.length < 2) return alert("과거 데이터 파일이 비어있습니다.");
+
+            const pastHeader = pastData[0];
+            
+            // 과거 파일에서 자산번호, 자산명 인덱스 찾기
+            const pastAssetNumIdx = pastHeader.findIndex(h => String(h).includes('자산번호'));
+            const pastAssetNameIdx = pastHeader.findIndex(h => String(h).includes('자산명'));
+            
+            // 과거 파일에서 가져올 타겟 데이터 (보통 작년의 '최종 구분'이 올해의 '과거 구분'이 됨)
+            const pastClassIdx = pastHeader.findIndex(h => String(h).includes('최종 구분') || String(h).includes('과거 구분')); 
+
+            if(pastClassIdx === -1) {
+                return alert("과거 파일에서 '최종 구분' 또는 '과거 구분' 열을 찾을 수 없어 연동할 수 없습니다.");
+            }
+
+            const wiz = window.infState.wizard;
+            const tData = window.infState.data[window.infState.activeTab];
+            const curAssetNumIdx = Object.keys(wiz.mapped).indexOf('자산번호');
+            const curAssetNameIdx = Object.keys(wiz.mapped).indexOf('자산명');
+            const curPastClassIdx = wiz.columns.length; // 2단계 추가 열 중 첫 번째('과거 구분') 인덱스
+
+            let matchCount = 0;
+
+            // 2. 스마트 매칭 실행
+            tData.raw.forEach(curRow => {
+                // 소계, 총계 행은 건너뛰기
+                const yearColIdx = Object.keys(wiz.mapped).indexOf('취득년도');
+                if (String(curRow[yearColIdx] || '').includes('소계') || String(curRow[yearColIdx] || '').includes('총계')) return;
+
+                const curNum = String(curRow[curAssetNumIdx] || '').trim();
+                const curName = String(curRow[curAssetNameIdx] || '').trim();
+                let matchedPastRow = null;
+
+                // [1순위] 자산번호 매칭
+                if (curNum && pastAssetNumIdx !== -1) {
+                    matchedPastRow = pastData.find((pRow, idx) => idx > 0 && String(pRow[pastAssetNumIdx] || '').trim() === curNum);
+                }
+                
+                // [2순위] 자산명 매칭 (자산번호가 빈칸이거나 매칭 실패 시)
+                if (!matchedPastRow && curName && pastAssetNameIdx !== -1) {
+                    matchedPastRow = pastData.find((pRow, idx) => idx > 0 && String(pRow[pastAssetNameIdx] || '').trim() === curName);
+                }
+
+                // 매칭 성공 시 데이터 삽입
+                if (matchedPastRow) {
+                    curRow[curPastClassIdx] = matchedPastRow[pastClassIdx];
+                    matchCount++;
+                }
+            });
+
+            // 화면 갱신 및 결과 알림
+            infSaveHistory();
+            infRenderTable();
+            alert(`✅ 과거 데이터 연동 완료\n- 기준 연도: ${window.infState.pastYear}년\n- 총 ${matchCount}건의 자산 구분이 성공적으로 매칭되었습니다.`);
+
+        } catch(err) {
+            alert("파일을 읽는 중 오류가 발생했습니다: " + err);
+        }
+    };
+    reader.readAsArrayBuffer(file);
+    event.target.value = ''; // 같은 파일 다시 선택 가능하도록 초기화
+};
