@@ -521,8 +521,10 @@ window.infRenderTable = function() {
 };
 
 // ============================================================================
-// [섹션 5] 정렬/부분합, 히스토리, 단축키 로직 및 행 추가 로직
+// api_inflation.js - [섹션 5] 정렬/부분합, 히스토리, 단축키 로직 및 행 추가 로직
 // ============================================================================
+
+// ★ 신규: 선택한 행 밑에 빈 행을 추가하는 로직
 window.infAddEmptyRow = function() {
     const tData = window.infState.data[window.infState.activeTab];
     if(!tData || !tData.raw || tData.raw.length === 0) return;
@@ -533,6 +535,7 @@ window.infAddEmptyRow = function() {
     const mappedKeys = Object.keys(wiz.mapped);
     let totalCols = (wiz.phase === 'mapping' || wiz.phase === 'idle') ? tData.raw[0].length : mappedKeys.length;
     
+    // 추가 열(구분 5개, 평가 6개)을 포함하여 빈 배열 크기 잡기
     if (window.infState.step >= 2) totalCols += 5;
     if (window.infState.step === 3) totalCols += 6;
 
@@ -544,7 +547,7 @@ window.infAddEmptyRow = function() {
     } else {
         const yearIdx = mappedKeys.indexOf('취득년도');
         if (yearIdx !== -1 && tData.raw.length > 0 && String(tData.raw[tData.raw.length-1][yearIdx]).includes('총계')) {
-            insertIdx = tData.raw.length - 1; 
+            insertIdx = tData.raw.length - 1; // 총계 바로 위에 삽입
         }
     }
 
@@ -555,7 +558,8 @@ window.infAddEmptyRow = function() {
     infRenderTable();
 };
 
-window.infCalculateSubtotals = function() {
+// ★ 수정됨: isSilent 매개변수를 추가하여 삭제 시 백그라운드 재계산 지원
+window.infCalculateSubtotals = function(isSilent = false) {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
     if(!tData || !tData.raw || tData.raw.length === 0) return;
@@ -566,12 +570,22 @@ window.infCalculateSubtotals = function() {
     const priceIdx = Object.keys(wiz.mapped).indexOf('취득가액');
 
     if(locIdx === -1 || accIdx === -1 || yearIdx === -1 || priceIdx === -1) {
-        return alert("부분합을 계산하기 위한 필수 항목(소재지, 자산계정, 취득년도, 취득가액)이 매핑되지 않았습니다.");
+        if (!isSilent) alert("부분합을 계산하기 위한 필수 항목(소재지, 자산계정, 취득년도, 취득가액)이 매핑되지 않았습니다.");
+        return;
     }
 
-    infSaveHistory();
+    // 단축키 로직에서 호출된 경우 히스토리 중복 저장 방지
+    if (!isSilent) infSaveHistory();
 
     const cleanRaw = tData.raw.filter(row => !String(row[yearIdx] || '').includes('소계') && !String(row[yearIdx] || '').includes('총계'));
+
+    // 모든 행을 지워서 남은 데이터가 없다면 초기화
+    if (cleanRaw.length === 0) {
+        tData.raw = [];
+        tData.hasSubtotal = false;
+        if (!isSilent) infRenderTable();
+        return;
+    }
 
     const locOrder = [];
     const accOrder = [];
@@ -655,7 +669,8 @@ window.infCalculateSubtotals = function() {
     
     tData.selectedRows.clear();
     tData.selectedCols.clear();
-    infRenderTable();
+    
+    if (!isSilent) infRenderTable();
 };
 
 window.infSaveHistory = function() {
@@ -687,6 +702,7 @@ document.addEventListener('keydown', function(e) {
         infRenderTable();
     }
     
+    // ★ 행/열 삭제 로직
     if ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_')) {
         e.preventDefault();
         if (tData.selectedRows.size === 0 && tData.selectedCols.size === 0) return;
@@ -700,6 +716,12 @@ document.addEventListener('keydown', function(e) {
             tData.raw.forEach(row => colsToDelete.forEach(cIdx => row.splice(cIdx, 1)));
             tData.selectedCols.clear();
         }
+        
+        // ★ 핵심: 삭제 후 부분합이 켜져있다면, 백그라운드에서 실시간 재계산 실행
+        if (tData.hasSubtotal) {
+            window.infCalculateSubtotals(true); // true를 넘겨서 경고창 안 뜨게 조용히 처리
+        }
+        
         infRenderTable();
     }
 });
