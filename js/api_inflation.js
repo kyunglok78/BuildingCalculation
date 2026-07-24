@@ -366,7 +366,7 @@ window.infBackToStep1 = function() {
 
 
 // ============================================================================
-// api_inflation.js - [섹션 4] 테이블 렌더링 (금액 우측 정렬/콤마 추가) 및 단축키
+// api_inflation.js - [섹션 4] 테이블 렌더링 (이벤트 증발 버그 수정 및 줄 전체 클릭)
 // ============================================================================
 
 window.infRenderTable = function() {
@@ -439,39 +439,22 @@ window.infRenderTable = function() {
     }
     thead.appendChild(headerTr);
 
-    // ★ 행(바디) 렌더링 및 숫자 콤마/우측 정렬 처리 ★
+    // ★ 렌더링 로직 및 클릭 이벤트 증발 버그 완벽 수정 ★
     data.forEach((row, rIdx) => {
-        const isRowSel = tData.selectedRows.has(rIdx) ? 'inf-sel-row' : '';
+        const isRowSel = tData.selectedRows.has(rIdx);
+        const rowSelClass = isRowSel ? 'inf-sel-row' : '';
         const tr = document.createElement('tr');
-        tr.className = isRowSel; // 클래스 적용으로 하이라이트 작동!
         
-        const tdNum = document.createElement('td');
-        tdNum.className = `inf-row-header`;
-        tdNum.style.cssText = `background:#f8fafc; border:1px solid #ccc; text-align:center; font-weight:bold; color:#666; cursor:pointer;`;
-        tdNum.innerText = rIdx + 1;
-        tdNum.onclick = (e) => {
-            if (e.shiftKey && window.infState.lastClickedRow !== -1) {
-                const start = Math.min(window.infState.lastClickedRow, rIdx), end = Math.max(window.infState.lastClickedRow, rIdx);
-                for(let i=start; i<=end; i++) tData.selectedRows.add(i);
-            } else {
-                if (!e.ctrlKey && !e.metaKey) tData.selectedRows.clear();
-                tData.selectedRows.has(rIdx) ? tData.selectedRows.delete(rIdx) : tData.selectedRows.add(rIdx);
-            }
-            window.infState.lastClickedRow = rIdx;
-            tData.selectedCols.clear();
-            infRenderTable();
-        };
-        tr.appendChild(tdNum);
+        // 1. 이벤트 증발을 막기 위해 HTML 문자열을 한 번에 조립
+        let rowHtml = `<td class="inf-row-header ${rowSelClass}" style="background:#f8fafc; border:1px solid #ccc; text-align:center; font-weight:bold; color:#666; cursor:pointer;">${rIdx + 1}</td>`;
 
         for(let c = 0; c < colCount; c++) {
             const isColSel = tData.selectedCols.has(c) ? 'inf-sel-col' : '';
             let cellVal = row[c] !== undefined ? row[c] : '';
             let align = 'left';
             
-            // 숫자인지 확인 후 콤마 찍기 (취득가액 등)
             if (wiz.phase !== 'mapping' && wiz.phase !== 'idle') {
                 const headerName = mappedKeys[c];
-                // 특정 열이거나, 셀 내용이 순수 숫자로 구성되어 있다면
                 const isNumericCol = headerName === '취득가액' || headerName === '재조달가액' || headerName === '현재가액' || (cellVal !== '' && !isNaN(String(cellVal).replace(/,/g, '')));
                 
                 if (isNumericCol && cellVal !== '') {
@@ -482,11 +465,34 @@ window.infRenderTable = function() {
                     }
                 }
             }
-            
-            tr.innerHTML += `<td class="${isColSel}" style="border:1px solid #eee; padding:6px 10px; max-width:200px; overflow:hidden; text-overflow:ellipsis; text-align:${align};">${cellVal}</td>`;
+            // 모든 셀(td)에 rowSelClass를 부여하여 하이라이트 강제 적용
+            rowHtml += `<td class="${isColSel} ${rowSelClass}" style="border:1px solid #eee; padding:6px 10px; max-width:200px; overflow:hidden; text-overflow:ellipsis; text-align:${align};">${cellVal}</td>`;
         }
         
-        if(window.infState.step === 2) step2Cols.forEach(c => { tr.innerHTML += `<td style="border:1px solid #eee; background:#f0fdf4;">-</td>`; });
+        if(window.infState.step === 2) {
+            step2Cols.forEach(c => { rowHtml += `<td class="${rowSelClass}" style="border:1px solid #eee; background:#f0fdf4;">-</td>`; });
+        }
+        
+        tr.innerHTML = rowHtml;
+
+        // 2. 조립 완료 후 행(tr) 전체에 클릭 이벤트 부여 (아무 곳이나 클릭해도 선택됨!)
+        tr.onclick = (e) => {
+            if (window.infState.step === 1 && wiz.phase === 'mapping') return;
+
+            if (e.shiftKey && window.infState.lastClickedRow !== -1) {
+                const start = Math.min(window.infState.lastClickedRow, rIdx), end = Math.max(window.infState.lastClickedRow, rIdx);
+                for(let i=start; i<=end; i++) tData.selectedRows.add(i);
+            } else if (e.ctrlKey || e.metaKey) {
+                tData.selectedRows.has(rIdx) ? tData.selectedRows.delete(rIdx) : tData.selectedRows.add(rIdx);
+            } else {
+                tData.selectedRows.clear();
+                tData.selectedRows.add(rIdx);
+            }
+            window.infState.lastClickedRow = rIdx;
+            tData.selectedCols.clear();
+            infRenderTable();
+        };
+
         tbody.appendChild(tr);
     });
 };
@@ -527,6 +533,7 @@ document.addEventListener('keydown', function(e) {
         infRenderTable();
     }
 });
+
 
 // 히스토리 및 단축키 로직
 window.infSaveHistory = function() {
