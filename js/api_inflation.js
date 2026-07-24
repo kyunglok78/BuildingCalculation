@@ -742,3 +742,19 @@ window.infLoadPastData = function(event) {
     reader.readAsArrayBuffer(file);
     event.target.value = ''; // 같은 파일 다시 선택 가능하도록 초기화
 };
+
+// ============================================================================
+// api_inflation.js - [섹션 7] 자산 구분 일괄 지정 로직 (구현 예정)
+// ============================================================================
+
+window.assignBasicClass = function() {
+    alert("준비 중: '기본구분' 일괄 지정 로직이 실행될 예정입니다.");
+};
+
+window.assignExcludeEval = function() {
+    alert("준비 중: '평가제외' 일괄 지정 로직이 실행될 예정입니다.");
+};
+
+window.assignExcludeCoverage = function() {
+    alert("준비 중: '부보제외' 일괄 지정 로직이 실행될 예정입니다.");
+};

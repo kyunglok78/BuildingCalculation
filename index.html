@@ -517,18 +517,13 @@
                 </div>
             </div>
 
-          <!-- [2단계] 자산 구분 패널 (과거 데이터 불러오기 버튼 추가) -->
+          <!-- [2단계] 자산 구분 패널 (버튼을 테이블 헤더로 이동) -->
             <div id="infStep2Panel" class="card" style="margin-bottom: 15px; display:none;">
                 <div class="card-header" style="background:#e9ecef; color:#333; display:flex; justify-content:space-between; align-items:center;">
                     <span><i class="fa-solid fa-tags"></i> [2단계] 자산 구분 워크시트</span>
                     <div style="display: flex; gap: 8px;">
-                        <!-- 숨겨진 파일 입력 폼 -->
+                        <!-- 숨겨진 파일 입력 폼 (표 안의 버튼이 클릭할 예정) -->
                         <input type="file" id="infPastExcelFile" accept=".xlsx, .xls, .csv" style="display: none;" onchange="infLoadPastData(event)">
-                        
-                        <!-- 과거 데이터 불러오기 버튼 -->
-                        <button type="button" style="background:#17A2B8; color:#fff; border:none; padding:4px 10px; border-radius:3px; font-weight:bold; font-size:12px; cursor:pointer;" onclick="document.getElementById('infPastExcelFile').click()">
-                            <i class="fa-solid fa-file-import"></i> 과거 데이터 불러오기
-                        </button>
                         
                         <button type="button" style="background:#fff; color:#333; border:1px solid #ccc; padding:4px 10px; border-radius:3px; font-weight:bold; font-size:12px; cursor:pointer;" onclick="infBackToStep1()">
                             ◀ 1단계(정제)로 돌아가기
@@ -536,7 +531,7 @@
                     </div>
                 </div>
                 <div class="card-body" style="padding: 10px 20px;">
-                    <span style="font-size:13px; color:#333;">👉 <b>'과거 데이터 불러오기'</b>를 통해 이전 연도의 구분 값을 연동하거나, 직접 자산의 상태를 분류해 주세요.</span>
+                    <span style="font-size:13px; color:#333;">👉 표 헤더(제목) 위에 있는 <b>실행 단추(버튼)</b>들을 순서대로 클릭하여 자산의 상태를 일괄 지정하거나 직접 입력해 주세요.</span>
                 </div>
             </div>
 
