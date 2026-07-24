@@ -254,7 +254,7 @@ window.infBackToStep2 = function() {
 };
 
 // ============================================================================
-// api_inflation.js - [섹션 4] 테이블 렌더링 (구분 열 2자리 입력, 최종 구분 추가 및 색상 톤 통일)
+// api_inflation.js - [섹션 4] 테이블 렌더링 (열 밀림 버그 수정, 폰트 통일, 엔터키 하강 기능)
 // ============================================================================
 
 window.infSetFolding = function(level) {
@@ -262,11 +262,31 @@ window.infSetFolding = function(level) {
     infRenderTable();
 };
 
-// ★ 셀 데이터 업데이트 함수 (구분 값을 입력하면 내부 데이터에 즉시 저장)
 window.infUpdateCellData = function(rIdx, cIdx, val) {
     const tData = window.infState.data[window.infState.activeTab];
     if(tData && tData.raw[rIdx]) {
         tData.raw[rIdx][cIdx] = val;
+    }
+};
+
+// ★ 엔터키 누르면 아래 행으로 이동하는 엑셀형 단축키 로직
+window.infHandleInputEnter = function(e, rIdx, cIdx) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const tData = window.infState.data[window.infState.activeTab];
+        let offset = 1;
+        let nextEl = document.getElementById(`infInput_${rIdx + offset}_${cIdx}`);
+        
+        // 소계나 총계처럼 입력칸이 없는 행은 건너뛰기
+        while (!nextEl && (rIdx + offset) < tData.raw.length) {
+            offset++;
+            nextEl = document.getElementById(`infInput_${rIdx + offset}_${cIdx}`);
+        }
+        
+        if (nextEl) {
+            nextEl.focus();
+            nextEl.select(); // 포커스 시 내용을 전체 블록 지정해서 바로 수정하기 편하게 만듦
+        }
     }
 };
 
@@ -280,7 +300,10 @@ window.infRenderTable = function() {
     const tbody = document.getElementById('infTbody');
     thead.innerHTML = ''; tbody.innerHTML = '';
 
-    const colCount = wiz.columns.length; 
+    const mappedKeys = Object.keys(wiz.mapped); 
+    // ★ 핵심 버그 수정: 추가된 열(취득년도)까지 포함하여 정확한 열 개수 계산
+    const colCount = (wiz.phase === 'mapping' || wiz.phase === 'idle') ? data[0].length : mappedKeys.length;
+    
     const headerTr = document.createElement('tr');
     
     let foldHtml = '';
@@ -295,10 +318,8 @@ window.infRenderTable = function() {
     
     headerTr.innerHTML = `<th style="width:60px; background:#f8fafc; border:1px solid #ccc; text-align:center; padding:6px 2px;">행 번호${foldHtml}</th>`; 
     
-    // ★ 2단계 열에 '최종 구분' 추가
     const step2Cols = ['과거 구분', '기본 구분', '평가제외 구분', '부보제외 구분', '최종 구분'];
     const step3Cols = ['물가지수', '재조달가액', '감가율', '잔가율', '현재가액', '비고'];
-    const mappedKeys = Object.keys(wiz.mapped); 
 
     for(let c = 0; c < colCount; c++) {
         const isSelected = tData.selectedCols.has(c) ? 'inf-sel-col' : '';
@@ -345,7 +366,6 @@ window.infRenderTable = function() {
         headerTr.appendChild(th);
     }
     
-    // ★ 2단계, 3단계 헤더 색상 톤 통일 (#e9ecef)
     if(window.infState.step >= 2) {
         step2Cols.forEach(colName => {
             headerTr.innerHTML += `<th style="background:#e9ecef; color:#1C5691; border:1px solid #ccc; padding:8px; text-align:center;">${colName}</th>`;
@@ -407,7 +427,7 @@ window.infRenderTable = function() {
             rowHtml += `<td class="${isColSel}" style="border:1px solid #eee; padding:6px 10px; max-width:200px; overflow:hidden; text-overflow:ellipsis; text-align:${align}; ${bgStyle}">${cellVal}</td>`;
         }
         
-        // ★ 2단계 열: 직접 입력 가능한 Input 필드 구현 (2자리 제한)
+        // ★ 2단계 열 입력 필드: 폰트 스타일 통일 및 ID/엔터 이벤트 추가
         if(window.infState.step >= 2) {
             step2Cols.forEach((cName, idx) => {
                 const dataIdx = colCount + idx;
@@ -417,16 +437,16 @@ window.infRenderTable = function() {
                     rowHtml += `<td style="border:1px solid #eee; ${bgStyle}"></td>`;
                 } else {
                     rowHtml += `<td style="border:1px solid #ccc; padding:0; background:#fff; min-width:70px;">
-                        <input type="text" maxlength="2" value="${savedVal}" 
-                               style="width:100%; height:100%; min-height:28px; border:none; text-align:center; outline:none; background:transparent;" 
+                        <input type="text" id="infInput_${rIdx}_${dataIdx}" maxlength="2" value="${savedVal}" 
+                               style="width:100%; height:100%; min-height:28px; border:none; text-align:center; outline:none; background:transparent; font-family:inherit; font-size:13px; color:#1C5691; font-weight:bold;" 
                                onchange="window.infUpdateCellData(${rIdx}, ${dataIdx}, this.value)"
+                               onkeydown="window.infHandleInputEnter(event, ${rIdx}, ${dataIdx})"
                                onclick="event.stopPropagation();">
                     </td>`;
                 }
             });
         }
         
-        // 3단계 열
         if(window.infState.step === 3) {
             step3Cols.forEach((cName, idx) => { 
                 rowHtml += `<td style="border:1px solid #eee; ${bgStyle ? bgStyle : 'background:#f0fdf4;'}"></td>`; 
@@ -454,7 +474,6 @@ window.infRenderTable = function() {
         tbody.appendChild(tr);
     });
 };
-
 
 // (5) 정렬/부분합, 히스토리, 단축키 로직
 window.infCalculateSubtotals = function() {
