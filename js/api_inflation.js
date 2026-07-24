@@ -253,10 +253,21 @@ window.infBackToStep2 = function() {
     infRenderTable(); 
 };
 
-// (4) 메인 렌더링 로직 (2, 3단계 열 동적 추가)
+// ============================================================================
+// api_inflation.js - [섹션 4] 테이블 렌더링 (구분 열 2자리 입력, 최종 구분 추가 및 색상 톤 통일)
+// ============================================================================
+
 window.infSetFolding = function(level) {
     window.infState.foldingLevel = level;
     infRenderTable();
+};
+
+// ★ 셀 데이터 업데이트 함수 (구분 값을 입력하면 내부 데이터에 즉시 저장)
+window.infUpdateCellData = function(rIdx, cIdx, val) {
+    const tData = window.infState.data[window.infState.activeTab];
+    if(tData && tData.raw[rIdx]) {
+        tData.raw[rIdx][cIdx] = val;
+    }
 };
 
 window.infRenderTable = function() {
@@ -269,7 +280,7 @@ window.infRenderTable = function() {
     const tbody = document.getElementById('infTbody');
     thead.innerHTML = ''; tbody.innerHTML = '';
 
-    const colCount = data[0].length;
+    const colCount = wiz.columns.length; 
     const headerTr = document.createElement('tr');
     
     let foldHtml = '';
@@ -284,8 +295,8 @@ window.infRenderTable = function() {
     
     headerTr.innerHTML = `<th style="width:60px; background:#f8fafc; border:1px solid #ccc; text-align:center; padding:6px 2px;">행 번호${foldHtml}</th>`; 
     
-    // 단계별 추가 열 정의
-    const step2Cols = ['과거 구분', '기본 구분', '평가제외 구분', '부보제외 구분'];
+    // ★ 2단계 열에 '최종 구분' 추가
+    const step2Cols = ['과거 구분', '기본 구분', '평가제외 구분', '부보제외 구분', '최종 구분'];
     const step3Cols = ['물가지수', '재조달가액', '감가율', '잔가율', '현재가액', '비고'];
     const mappedKeys = Object.keys(wiz.mapped); 
 
@@ -334,16 +345,15 @@ window.infRenderTable = function() {
         headerTr.appendChild(th);
     }
     
-    // 2단계 이상이면 자산구분 열 추가
+    // ★ 2단계, 3단계 헤더 색상 톤 통일 (#e9ecef)
     if(window.infState.step >= 2) {
         step2Cols.forEach(colName => {
-            headerTr.innerHTML += `<th style="background:#28A745; color:#fff; border:1px solid #ccc; padding:8px; text-align:center;">${colName}</th>`;
+            headerTr.innerHTML += `<th style="background:#e9ecef; color:#1C5691; border:1px solid #ccc; padding:8px; text-align:center;">${colName}</th>`;
         });
     }
-    // 3단계면 평가 열 추가
     if(window.infState.step === 3) {
         step3Cols.forEach(colName => {
-            headerTr.innerHTML += `<th style="background:#1C5691; color:#fff; border:1px solid #ccc; padding:8px; text-align:center;">${colName}</th>`;
+            headerTr.innerHTML += `<th style="background:#e9ecef; color:#1C5691; border:1px solid #ccc; padding:8px; text-align:center;">${colName}</th>`;
         });
     }
     thead.appendChild(headerTr);
@@ -397,12 +407,30 @@ window.infRenderTable = function() {
             rowHtml += `<td class="${isColSel}" style="border:1px solid #eee; padding:6px 10px; max-width:200px; overflow:hidden; text-overflow:ellipsis; text-align:${align}; ${bgStyle}">${cellVal}</td>`;
         }
         
-        // 2단계 이상이면 빈칸 렌더링 (일단 텍스트 입력용 빈칸으로 처리)
+        // ★ 2단계 열: 직접 입력 가능한 Input 필드 구현 (2자리 제한)
         if(window.infState.step >= 2) {
-            step2Cols.forEach(c => { rowHtml += `<td style="border:1px solid #eee; ${bgStyle ? bgStyle : 'background:#e8f5e9;'}"></td>`; });
+            step2Cols.forEach((cName, idx) => {
+                const dataIdx = colCount + idx;
+                const savedVal = row[dataIdx] || '';
+                
+                if (isSubtotalRow || isGrandTotalRow) {
+                    rowHtml += `<td style="border:1px solid #eee; ${bgStyle}"></td>`;
+                } else {
+                    rowHtml += `<td style="border:1px solid #ccc; padding:0; background:#fff; min-width:70px;">
+                        <input type="text" maxlength="2" value="${savedVal}" 
+                               style="width:100%; height:100%; min-height:28px; border:none; text-align:center; outline:none; background:transparent;" 
+                               onchange="window.infUpdateCellData(${rIdx}, ${dataIdx}, this.value)"
+                               onclick="event.stopPropagation();">
+                    </td>`;
+                }
+            });
         }
+        
+        // 3단계 열
         if(window.infState.step === 3) {
-            step3Cols.forEach(c => { rowHtml += `<td style="border:1px solid #eee; ${bgStyle ? bgStyle : 'background:#f0fdf4;'}"></td>`; });
+            step3Cols.forEach((cName, idx) => { 
+                rowHtml += `<td style="border:1px solid #eee; ${bgStyle ? bgStyle : 'background:#f0fdf4;'}"></td>`; 
+            });
         }
         
         tr.innerHTML = rowHtml;
@@ -426,6 +454,7 @@ window.infRenderTable = function() {
         tbody.appendChild(tr);
     });
 };
+
 
 // (5) 정렬/부분합, 히스토리, 단축키 로직
 window.infCalculateSubtotals = function() {
