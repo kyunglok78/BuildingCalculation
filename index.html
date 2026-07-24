@@ -484,7 +484,7 @@
         <section id="sec-2-3" class="page-section">
             <h2 class="page-title"><i class="fa-solid fa-arrow-trend-up"></i> 2.3 고정자산 기반 물가보정 평가</h2>
             
-            <!-- [1단계] 고정자산명세서 정리 컨트롤 패널 -->
+            <!-- [1단계] 고정자산명세서 정제 패널 -->
             <div id="infStep1Panel" class="card" style="margin-bottom: 15px;">
                 <div class="card-header" style="background:#e9ecef; color:#333;">
                     <span><i class="fa-solid fa-broom"></i> [1단계] 명세서 정제 및 열 매핑 마법사</span>
@@ -505,7 +505,6 @@
                         </div>
                     </div>
 
-                    <!-- 마법사 안내 영역 (업그레이드 버전) -->
                     <div id="infWizardArea" style="background:#f0fdf4; border:1px solid #bbf7d0; padding:15px; border-radius:4px; display:none; flex-direction:column; gap:12px;">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <span style="font-size:15px; font-weight:bold; color:#166534;" id="infWizardText">🎯 아래 버튼 중 하나를 선택하고, 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭해 매칭하세요!</span>
@@ -513,22 +512,31 @@
                             <button type="button" class="btn-yellow" id="btnFinishMapping" onclick="infFinishMapping()" style="display:none; background:#1C5691; color:white; border:none;">열 매핑 완료 및 행 지우기로 전환 ▶</button>
                         </div>
                         <div id="infMappingButtons" style="display:none; gap:10px; flex-wrap:wrap; padding-top:10px; border-top:1px dashed #a7f3d0;">
-                            <!-- JS에서 7개 항목 버튼이 생성됩니다. -->
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- [2단계] 물가보정 평가 컨트롤 패널 (초기엔 숨김) -->
-            <div id="infStep2Panel" class="card" style="margin-bottom: 15px; display:none; border-color:#1C5691;">
+            <!-- [2단계] 자산 구분 패널 (신규 추가) -->
+            <div id="infStep2Panel" class="card" style="margin-bottom: 15px; display:none; border-color:#28A745;">
+                <div class="card-header" style="background:#28A745; color:#fff;">
+                    <span><i class="fa-solid fa-tags"></i> [2단계] 자산 구분 워크시트</span>
+                    <button type="button" style="background:#fff; color:#28A745; border:none; padding:4px 10px; border-radius:3px; font-weight:bold; font-size:12px; cursor:pointer;" onclick="infBackToStep1()">◀ 1단계(정제)로 돌아가기</button>
+                </div>
+                <div class="card-body" style="padding: 10px 20px;">
+                    <span style="font-size:13px; color:#333;">👉 우측에 추가된 <b>[과거 구분, 기본 구분, 평가제외, 부보제외]</b> 열을 확인하고 자산의 상태를 분류해 주세요.</span>
+                </div>
+            </div>
+
+            <!-- [3단계] 물가보정 평가 패널 (기존 2단계) -->
+            <div id="infStep3Panel" class="card" style="margin-bottom: 15px; display:none; border-color:#1C5691;">
                 <div class="card-header" style="background:#1C5691; color:#fff;">
-                    <span><i class="fa-solid fa-calculator"></i> [2단계] 물가보정 가액평가 워크시트</span>
-                    <button type="button" style="background:#fff; color:#1C5691; border:none; padding:4px 10px; border-radius:3px; font-weight:bold; font-size:12px; cursor:pointer;" onclick="infBackToStep1()">◀ 1단계(정제)로 돌아가기</button>
+                    <span><i class="fa-solid fa-calculator"></i> [3단계] 물가보정 가액평가 워크시트</span>
+                    <button type="button" style="background:#fff; color:#1C5691; border:none; padding:4px 10px; border-radius:3px; font-weight:bold; font-size:12px; cursor:pointer;" onclick="infBackToStep2()">◀ 2단계(자산구분)로 돌아가기</button>
                 </div>
                 <div class="card-body" style="padding: 10px 20px; display: flex; gap: 10px;">
                     <button type="button" class="btn-dark" style="background:#007BFF;"><i class="fa-solid fa-bolt"></i> 물가지수 일괄적용</button>
                     <button type="button" class="btn-dark" style="background:#28A745;"><i class="fa-solid fa-bolt"></i> 감가율 일괄적용</button>
-                    <button type="button" class="btn-yellow" onclick="infCalculateSubtotals()">부분합(소계) 검증</button>
                 </div>
             </div>
 
@@ -543,9 +551,13 @@
                 </table>
             </div>
 
+            <!-- 하단 전환 버튼들 -->
             <div style="text-align: right; margin-top: 20px;">
-                <button type="button" id="btnInfNextStep" class="btn-exec" onclick="infProceedToStep2()" style="background-color: #17A2B8; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; display:none;">
-                    정리 완료 및 2단계(평가)로 전환 ▶
+                <button type="button" id="btnInfNextStep" class="btn-exec" style="background-color: #17A2B8; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; display:none;">
+                    부분합(소계) 및 정렬 수행
+                </button>
+                <button type="button" id="btnInfToStep3" class="btn-exec" onclick="infProceedToStep3()" style="background-color: #6f42c1; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; display:none;">
+                    구분 완료 및 3단계(평가)로 전환 ▶
                 </button>
                 <button type="button" id="btnInfComplete" class="btn-exec" onclick="completeAndNext('sec-2-3')" style="background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; display:none;">
                     물가보정 평가 완료 및 다음 단계로 <i class="fa-solid fa-arrow-right"></i>

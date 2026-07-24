@@ -1,29 +1,28 @@
 // ============================================================================
-// api_inflation.js - [섹션 2] 코어 상태 관리 및 초기화 (폴딩 상태 및 국산/외산 추가)
+// api_inflation.js - 3단계 프로세스(정제 -> 자산구분 -> 평가) 통합 버전
 // ============================================================================
 
 window.infState = {
     mode: 'location',
     tabs: [],
     activeTab: '',
-    step: 1, // 1: 정제, 2: 평가
-    data: {}, // { tabName: { raw: [], history: [], selectedRows: Set, selectedCols: Set, hasSubtotal: false } }
+    step: 1, // 1: 정제, 2: 구분, 3: 평가
+    data: {},
     
     wizard: {
         active: false,
-        phase: 'idle', // 'idle' -> 'mapping' -> 'row-delete'
-        // ★ '국산/외산' 항목 추가
+        phase: 'idle',
         columns: ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득일', '취득가액'],
         activeTarget: '', 
         mapped: {} 
     },
     
-    foldingLevel: 3, // 1: 총계, 2: 소계+총계, 3: 전체 표시
+    foldingLevel: 3, 
     lastClickedRow: -1,
     lastClickedCol: -1
 };
 
-// CSS 동적 추가 (행 하이라이트 및 폴딩 버튼 스타일)
+// CSS 동적 추가
 (function addInfStyles() {
     if(document.getElementById('inf-dynamic-styles')) document.getElementById('inf-dynamic-styles').remove();
     const style = document.createElement('style');
@@ -37,8 +36,6 @@ window.infState = {
         .wiz-btn.active { background:#1C5691 !important; color:#fff !important; border:2px solid #1C5691 !important; box-shadow:0 0 8px rgba(28,86,145,0.4); }
         .wiz-btn.mapped { background:#e2e8f0 !important; color:#64748b !important; border:2px solid #cbd5e1 !important; }
         .wiz-btn.default { background:#fff; color:#333; border:2px solid #ccc; }
-        
-        /* 엑셀형 폴딩 버튼 스타일 */
         .fold-btn { padding: 2px 8px; border: 1px solid #94a3b8; background: #fff; cursor: pointer; font-weight: bold; font-size: 11px; border-radius: 3px; color: #64748b; }
         .fold-btn:hover { background: #e2e8f0; }
         .fold-btn.active { background: #1C5691; color: #fff; border-color: #1C5691; }
@@ -84,11 +81,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if(infMenu) infMenu.addEventListener('click', () => { if(window.infState.tabs.length === 0) infInitTabs(); });
 });
 
-
-// ============================================================================
-// api_inflation.js - [섹션 3] 엑셀 데이터 로드 및 매핑 마법사 (국산/외산 포함, 1단계 부분합 버튼 유도)
-// ============================================================================
-
+// (2) 엑셀 로드 및 마법사
 window.infLoadExcel = function(event) {
     const file = event.target.files[0];
     if(!file) return;
@@ -169,7 +162,6 @@ window.infFinishMapping = function() {
 
     infSaveHistory();
 
-    // ★ 국산/외산 포함 표준 열 세팅
     const finalColumns = ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득일', '취득년도', '취득가액'];
 
     tData.raw = tData.raw.map(oldRow => {
@@ -201,11 +193,10 @@ window.infFinishMapping = function() {
     document.getElementById('btnFinishMapping').style.display = 'none';
     document.getElementById('infMappingButtons').style.display = 'none';
     
-    // 2단계 전환 버튼을 임시로 '부분합 수행' 버튼으로 용도 변경
     const btnNext = document.getElementById('btnInfNextStep');
     btnNext.style.display = 'inline-block';
     btnNext.innerHTML = '<i class="fa-solid fa-layer-group"></i> 부분합(소계) 및 정렬 수행';
-    btnNext.style.backgroundColor = '#6f42c1'; // 보라색으로 강조
+    btnNext.style.backgroundColor = '#6f42c1'; 
     btnNext.onclick = infCalculateSubtotals;
     
     tData.selectedCols.clear();
@@ -213,11 +204,27 @@ window.infFinishMapping = function() {
     infRenderTable();
 };
 
+// (3) 3단계 전환 로직
 window.infProceedToStep2 = function() {
     window.infState.step = 2;
     document.getElementById('infStep1Panel').style.display = 'none';
-    document.getElementById('btnInfNextStep').style.display = 'none';
     document.getElementById('infStep2Panel').style.display = 'block';
+    document.getElementById('infStep3Panel').style.display = 'none';
+    
+    document.getElementById('btnInfNextStep').style.display = 'none';
+    document.getElementById('btnInfToStep3').style.display = 'inline-block';
+    document.getElementById('btnInfComplete').style.display = 'none';
+    infRenderTable();
+};
+
+window.infProceedToStep3 = function() {
+    window.infState.step = 3;
+    document.getElementById('infStep1Panel').style.display = 'none';
+    document.getElementById('infStep2Panel').style.display = 'none';
+    document.getElementById('infStep3Panel').style.display = 'block';
+    
+    document.getElementById('btnInfNextStep').style.display = 'none';
+    document.getElementById('btnInfToStep3').style.display = 'none';
     document.getElementById('btnInfComplete').style.display = 'inline-block';
     infRenderTable();
 };
@@ -225,17 +232,28 @@ window.infProceedToStep2 = function() {
 window.infBackToStep1 = function() {
     window.infState.step = 1;
     document.getElementById('infStep1Panel').style.display = 'block';
-    document.getElementById('btnInfNextStep').style.display = 'inline-block';
     document.getElementById('infStep2Panel').style.display = 'none';
+    document.getElementById('infStep3Panel').style.display = 'none';
+    
+    document.getElementById('btnInfNextStep').style.display = 'inline-block';
+    document.getElementById('btnInfToStep3').style.display = 'none';
     document.getElementById('btnInfComplete').style.display = 'none';
     infRenderTable(); 
 };
 
+window.infBackToStep2 = function() {
+    window.infState.step = 2;
+    document.getElementById('infStep1Panel').style.display = 'none';
+    document.getElementById('infStep2Panel').style.display = 'block';
+    document.getElementById('infStep3Panel').style.display = 'none';
+    
+    document.getElementById('btnInfNextStep').style.display = 'none';
+    document.getElementById('btnInfToStep3').style.display = 'inline-block';
+    document.getElementById('btnInfComplete').style.display = 'none';
+    infRenderTable(); 
+};
 
-// ============================================================================
-// api_inflation.js - [섹션 4] 테이블 렌더링 (엑셀 폴딩 그룹화 UI 및 중앙정렬 콤마처리)
-// ============================================================================
-
+// (4) 메인 렌더링 로직 (2, 3단계 열 동적 추가)
 window.infSetFolding = function(level) {
     window.infState.foldingLevel = level;
     infRenderTable();
@@ -254,7 +272,6 @@ window.infRenderTable = function() {
     const colCount = data[0].length;
     const headerTr = document.createElement('tr');
     
-    // ★ 1단계 부분합이 생성된 경우 폴딩 1,2,3 버튼 UI 생성
     let foldHtml = '';
     if (tData.hasSubtotal && wiz.phase !== 'mapping' && wiz.phase !== 'idle') {
         foldHtml = `
@@ -267,7 +284,9 @@ window.infRenderTable = function() {
     
     headerTr.innerHTML = `<th style="width:60px; background:#f8fafc; border:1px solid #ccc; text-align:center; padding:6px 2px;">행 번호${foldHtml}</th>`; 
     
-    const step2Cols = ['구분', '물가지수', '재조달가액', '감가율', '잔가율', '현재가액', '비고'];
+    // 단계별 추가 열 정의
+    const step2Cols = ['과거 구분', '기본 구분', '평가제외 구분', '부보제외 구분'];
+    const step3Cols = ['물가지수', '재조달가액', '감가율', '잔가율', '현재가액', '비고'];
     const mappedKeys = Object.keys(wiz.mapped); 
 
     for(let c = 0; c < colCount; c++) {
@@ -279,7 +298,6 @@ window.infRenderTable = function() {
         if (wiz.phase === 'mapping' || wiz.phase === 'idle') {
             let colLetter = String.fromCharCode(65 + (c % 26)); 
             if (c >= 26) colLetter = String.fromCharCode(64 + Math.floor(c / 26)) + colLetter;
-            
             let mappedLabel = "";
             for (const [key, val] of Object.entries(wiz.mapped)) {
                 if (val === c) mappedLabel = `<br><span style="background:#FFCC00; color:#000; font-size:11px; padding:2px 4px; border-radius:3px;">${key}</span>`;
@@ -316,8 +334,15 @@ window.infRenderTable = function() {
         headerTr.appendChild(th);
     }
     
-    if(window.infState.step === 2) {
+    // 2단계 이상이면 자산구분 열 추가
+    if(window.infState.step >= 2) {
         step2Cols.forEach(colName => {
+            headerTr.innerHTML += `<th style="background:#28A745; color:#fff; border:1px solid #ccc; padding:8px; text-align:center;">${colName}</th>`;
+        });
+    }
+    // 3단계면 평가 열 추가
+    if(window.infState.step === 3) {
+        step3Cols.forEach(colName => {
             headerTr.innerHTML += `<th style="background:#1C5691; color:#fff; border:1px solid #ccc; padding:8px; text-align:center;">${colName}</th>`;
         });
     }
@@ -331,7 +356,6 @@ window.infRenderTable = function() {
         const isGrandTotalRow = yearColIdx !== -1 && yearVal.includes('총계');
         const isDetailRow = !isSubtotalRow && !isGrandTotalRow;
 
-        // ★ 폴딩 상태에 따른 행 숨김 로직
         if (tData.hasSubtotal) {
             if (window.infState.foldingLevel === 1 && !isGrandTotalRow) return; 
             if (window.infState.foldingLevel === 2 && isDetailRow) return;
@@ -343,7 +367,6 @@ window.infRenderTable = function() {
         tr.className = rowSelClass; 
         tr.style.cursor = 'pointer'; 
         
-        // 배경색 구분 (소계, 총계)
         let bgStyle = '';
         let rowTitle = rIdx + 1;
         if (isSubtotalRow) { bgStyle = 'background:#e2e8f0; font-weight:bold; color:#1C5691;'; rowTitle = '-'; }
@@ -358,12 +381,10 @@ window.infRenderTable = function() {
             
             if (wiz.phase !== 'mapping' && wiz.phase !== 'idle') {
                 const headerName = mappedKeys[c];
-                
                 if (headerName === '취득년도') {
                     align = 'center';
                 } else {
                     const isNumericCol = headerName === '취득가액' || headerName === '재조달가액' || headerName === '현재가액' || (cellVal !== '' && !isNaN(String(cellVal).replace(/,/g, '')));
-                    
                     if (isNumericCol && cellVal !== '') {
                         const num = Number(String(cellVal).replace(/,/g, ''));
                         if (!isNaN(num)) {
@@ -376,8 +397,12 @@ window.infRenderTable = function() {
             rowHtml += `<td class="${isColSel}" style="border:1px solid #eee; padding:6px 10px; max-width:200px; overflow:hidden; text-overflow:ellipsis; text-align:${align}; ${bgStyle}">${cellVal}</td>`;
         }
         
-        if(window.infState.step === 2) {
-            step2Cols.forEach(c => { rowHtml += `<td style="border:1px solid #eee; ${bgStyle ? bgStyle : 'background:#f0fdf4;'}"></td>`; });
+        // 2단계 이상이면 빈칸 렌더링 (일단 텍스트 입력용 빈칸으로 처리)
+        if(window.infState.step >= 2) {
+            step2Cols.forEach(c => { rowHtml += `<td style="border:1px solid #eee; ${bgStyle ? bgStyle : 'background:#e8f5e9;'}"></td>`; });
+        }
+        if(window.infState.step === 3) {
+            step3Cols.forEach(c => { rowHtml += `<td style="border:1px solid #eee; ${bgStyle ? bgStyle : 'background:#f0fdf4;'}"></td>`; });
         }
         
         tr.innerHTML = rowHtml;
@@ -402,11 +427,7 @@ window.infRenderTable = function() {
     });
 };
 
-
-// ============================================================================
-// api_inflation.js - [섹션 5] 정렬(최초 등장순) 및 엑셀 부분합/총계 로직, 단축키 이벤트
-// ============================================================================
-
+// (5) 정렬/부분합, 히스토리, 단축키 로직
 window.infCalculateSubtotals = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
@@ -423,10 +444,8 @@ window.infCalculateSubtotals = function() {
 
     infSaveHistory();
 
-    // 1. 소계, 총계 행 사전 제거
     const cleanRaw = tData.raw.filter(row => !String(row[yearIdx] || '').includes('소계') && !String(row[yearIdx] || '').includes('총계'));
 
-    // ★ 2. 최초 등장 순서(Order of Appearance) 추출
     const locOrder = [];
     const accOrder = [];
     cleanRaw.forEach(row => {
@@ -436,7 +455,6 @@ window.infCalculateSubtotals = function() {
         if(a && !accOrder.includes(a)) accOrder.push(a);
     });
 
-    // 3. 다중 정렬 (1순위: 소재지 등장순 > 2순위: 자산계정 등장순 > 3순위: 취득년도 텍스트순)
     cleanRaw.sort((a, b) => {
         const lA = locOrder.indexOf(String(a[locIdx] || '').trim());
         const lB = locOrder.indexOf(String(b[locIdx] || '').trim());
@@ -451,7 +469,6 @@ window.infCalculateSubtotals = function() {
         return yA.localeCompare(yB);
     });
 
-    // 4. 그룹별 부분합(소계) 및 전체 총계 삽입
     const newRaw = [];
     let currentGroupKey = null;
     let groupSum = 0;
@@ -493,7 +510,6 @@ window.infCalculateSubtotals = function() {
         newRaw.push(subtotalRow);
     }
     
-    // 마지막 총계 추가
     if(newRaw.length > 0) {
         const grandTotalRow = new Array(cleanRaw[0].length).fill('');
         grandTotalRow[yearIdx] = "총계";
@@ -503,11 +519,10 @@ window.infCalculateSubtotals = function() {
 
     tData.raw = newRaw;
     tData.hasSubtotal = true;
-    window.infState.foldingLevel = 3; // 기본은 모두 펼쳐진 상태
+    window.infState.foldingLevel = 3; 
 
-    // ★ 1단계 버튼을 '2단계로 전환' 본래 목적으로 복구
     const btnNext = document.getElementById('btnInfNextStep');
-    btnNext.innerHTML = '명세서 검증 완료 및 2단계(평가)로 전환 ▶';
+    btnNext.innerHTML = '명세서 검증 완료 및 2단계(자산구분)로 전환 ▶';
     btnNext.style.backgroundColor = '#17A2B8';
     btnNext.onclick = infProceedToStep2;
     
@@ -534,7 +549,6 @@ document.addEventListener('keydown', function(e) {
         tData.raw = tData.history.pop();
         tData.selectedRows.clear(); tData.selectedCols.clear();
         
-        // 되돌렸을 때 소계가 없어졌다면 UI 초기화
         const yearColIdx = Object.keys(window.infState.wizard.mapped).indexOf('취득년도');
         tData.hasSubtotal = yearColIdx !== -1 && tData.raw.some(r => String(r[yearColIdx] || '').includes('소계'));
         if(!tData.hasSubtotal && window.infState.step === 1 && window.infState.wizard.phase === 'row-delete') {
