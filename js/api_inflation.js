@@ -791,30 +791,26 @@ window.infLoadPastData = function(event) {
 };
 
 // ============================================================================
-// [섹션 7] 자산 구분 일괄 지정 (기본구분 팝업 및 자동화 로직)
+// [섹션 7] 자산 구분 일괄 지정 (동적 매핑 적용)
 // ============================================================================
 
-// ★ 매핑 룰: 계정명에 따른 기본 구분 자동 할당기
-function getDefaultBasicClass(accountName) {
+// ★ 동적 매핑 룰 탐색기
+function getDynamicMapping(accountName) {
     if (!accountName) return "";
     const acc = accountName.trim();
+    const rules = window.infState.mappingRules || [];
     
-    if (acc === '건물') return "50";
-    if (acc.includes('토지')) return "부보제외(토지)";
-    if (acc.includes('구축물')) return "50";
-    if (acc.includes('기계장치')) return "47";
-    if (acc.includes('공기구')) return "47";
-    if (acc.includes('시설장치') || acc === '시설') return "47";
-    if (acc.includes('비품')) return "평가제외(비품)";
-    if (acc.includes('차량운반구')) return "47";
-    if (acc.includes('건설중 자산') || acc.includes('건설중자산')) return "평가제외(건설중 자산)";
-    if (acc.includes('건물부속설비')) return "50";
-    if (acc.includes('금형')) return "47";
+    // 1. 완전 일치하는지 먼저 확인
+    let matched = rules.find(r => r.keyword === acc);
+    if (matched) return matched.val;
     
-    return ""; // 매핑 룰에 없으면 빈칸
+    // 2. 포함되는 단어가 있는지 확인 (예: '차량' 이라는 룰이 '영업용 차량운반구'에 매칭됨)
+    matched = rules.find(r => acc.includes(r.keyword));
+    if (matched) return matched.val;
+    
+    return "";
 }
 
-// ★ 기본 지정 버튼 클릭 시 팝업 열기
 window.assignBasicClass = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
@@ -825,23 +821,21 @@ window.assignBasicClass = function() {
 
     if (accIdx === undefined) return alert("자산계정 열이 매핑되지 않았습니다.");
 
-    // 중복 없는 자산계정 목록 추출
     let uniqueAccounts = new Set();
     tData.raw.forEach(row => {
         const yearVal = String(row[yearIdx] || '');
         if (yearVal.includes('소계') || yearVal.includes('총계')) return;
-        
         const acc = String(row[accIdx] || '').trim();
         if (acc) uniqueAccounts.add(acc);
     });
 
     if (uniqueAccounts.size === 0) return alert("명세서에 자산계정 데이터가 없습니다.");
 
-    // 팝업 테이블 그리기
     const tbody = document.getElementById('basicClassTbody');
     tbody.innerHTML = '';
     uniqueAccounts.forEach(acc => {
-        const defaultVal = getDefaultBasicClass(acc);
+        // 하드코딩 대신 관리자가 설정한 동적 룰을 불러옴
+        const defaultVal = getDynamicMapping(acc); 
         tbody.innerHTML += `
             <tr>
                 <td style="text-align:center; font-weight:bold; color:#1C5691; vertical-align:middle;">${acc}</td>
@@ -855,17 +849,13 @@ window.assignBasicClass = function() {
     document.getElementById('basicClassModal').style.display = 'flex';
 };
 
-// ★ 팝업에서 '일괄 적용하기' 눌렀을 때 표에 쫙 뿌려주는 로직
 window.applyBasicClass = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
     const accIdx = wiz.mapped['자산계정'];
     const yearIdx = wiz.mapped['취득년도'];
-    
-    // 2단계 추가 열 중 '기본 구분'은 2번째 (인덱스 1)
     const basicClassIdx = Object.keys(wiz.mapped).length + 1; 
 
-    // 입력창에서 설정한 값들 수집
     const inputMap = {};
     document.querySelectorAll('[id^="basicInput_"]').forEach(input => {
         const acc = input.id.replace('basicInput_', '');
@@ -881,23 +871,91 @@ window.applyBasicClass = function() {
 
         const acc = String(row[accIdx] || '').trim();
         if (inputMap[acc] !== undefined && inputMap[acc] !== "") {
-            row[basicClassIdx] = inputMap[acc]; // 해당 셀에 쏙!
+            row[basicClassIdx] = inputMap[acc]; 
             applyCount++;
         }
     });
 
     document.getElementById('basicClassModal').style.display = 'none';
-    infRenderTable(); // 화면 갱신
+    infRenderTable(); 
 };
 
-window.assignExcludeEval = function() {
-    alert("준비 중: '평가제외' 일괄 지정 로직이 곧 적용됩니다.");
+window.assignExcludeEval = function() { alert("준비 중: '평가제외' 일괄 지정 로직이 곧 적용됩니다."); };
+window.assignExcludeCoverage = function() { alert("준비 중: '부보제외' 일괄 지정 로직이 곧 적용됩니다."); };
+window.assignFinalClass = function() { alert("준비 중: '최종 선택' 일괄 지정 로직이 곧 적용됩니다."); };
+
+
+// ============================================================================
+// [섹션 8] 매핑 마스터 데이터 관리 (항목 관리 로직)
+// ============================================================================
+
+// ★ 초기 기본 세팅 (요청하신 11개 + 공구, 기구 반영)
+const defaultMappingRules = [
+    { keyword: '건물', val: '50' },
+    { keyword: '토지', val: '부보제외(토지)' },
+    { keyword: '구축물', val: '50' },
+    { keyword: '기계장치', val: '47' },
+    { keyword: '공기구', val: '47' },
+    { keyword: '공구', val: '47' }, // 추가
+    { keyword: '기구', val: '47' }, // 추가
+    { keyword: '시설', val: '47' },
+    { keyword: '시설장치', val: '47' },
+    { keyword: '비품', val: '평가제외(비품)' },
+    { keyword: '차량운반구', val: '47' },
+    { keyword: '건설중 자산', val: '평가제외(건설중 자산)' },
+    { keyword: '건설중자산', val: '평가제외(건설중 자산)' },
+    { keyword: '건물부속설비', val: '50' },
+    { keyword: '금형', val: '47' }
+];
+
+// 브라우저 캐시(localStorage)에서 불러오기. 없으면 기본 세팅 적용.
+window.infState.mappingRules = JSON.parse(localStorage.getItem('kb_mapping_rules')) || defaultMappingRules;
+
+// 관리 팝업 열기 및 렌더링
+window.openRuleManager = function() {
+    const tbody = document.getElementById('ruleManagerTbody');
+    tbody.innerHTML = '';
+    window.infState.mappingRules.forEach((rule, idx) => {
+        window.renderRuleRow(tbody, rule.keyword, rule.val, idx);
+    });
+    document.getElementById('ruleManagerModal').style.display = 'flex';
 };
 
-window.assignExcludeCoverage = function() {
-    alert("준비 중: '부보제외' 일괄 지정 로직이 곧 적용됩니다.");
+// 행 렌더링용 유틸
+window.renderRuleRow = function(tbody, keyword, val, idx) {
+    const tr = document.createElement('tr');
+    tr.id = `ruleRow_${idx}`;
+    tr.innerHTML = `
+        <td style="padding:4px;"><input type="text" class="input-box rule-keyword" value="${keyword}" placeholder="예: 비품" style="width:100%; box-sizing:border-box;"></td>
+        <td style="padding:4px;"><input type="text" class="input-box rule-val" value="${val}" placeholder="예: 평가제외(비품)" style="width:100%; box-sizing:border-box;"></td>
+        <td style="text-align:center;"><button type="button" style="background:#dc3545; color:white; border:none; padding:4px 8px; border-radius:3px; cursor:pointer;" onclick="document.getElementById('ruleRow_${idx}').remove()"><i class="fa-solid fa-trash"></i></button></td>
+    `;
+    tbody.appendChild(tr);
 };
 
-window.assignFinalClass = function() {
-    alert("준비 중: '최종 선택' 일괄 지정 로직이 곧 적용됩니다.");
+// 규칙 행 한 줄 추가
+window.addRuleRow = function() {
+    const tbody = document.getElementById('ruleManagerTbody');
+    const newIdx = Date.now(); // 임시 고유 ID
+    window.renderRuleRow(tbody, "", "", newIdx);
+};
+
+// 저장 로직 (localStorage 에 영구 보존)
+window.saveRules = function() {
+    const tbody = document.getElementById('ruleManagerTbody');
+    const newRules = [];
+    
+    Array.from(tbody.children).forEach(tr => {
+        const keyword = tr.querySelector('.rule-keyword').value.trim();
+        const val = tr.querySelector('.rule-val').value.trim();
+        if(keyword) {
+            newRules.push({ keyword, val });
+        }
+    });
+
+    window.infState.mappingRules = newRules;
+    localStorage.setItem('kb_mapping_rules', JSON.stringify(newRules)); // 브라우저 캐시에 저장
+    
+    document.getElementById('ruleManagerModal').style.display = 'none';
+    alert("✅ 매핑 정책이 성공적으로 저장되었습니다. (브라우저를 껐다 켜도 유지됩니다.)");
 };
