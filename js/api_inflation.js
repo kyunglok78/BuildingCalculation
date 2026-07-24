@@ -254,7 +254,7 @@ window.infBackToStep2 = function() {
 };
 
 // ============================================================================
-// api_inflation.js - [섹션 4] 테이블 렌더링 (열 밀림 버그 수정, 폰트 통일, 엔터키 하강 기능)
+// api_inflation.js - [섹션 4] 테이블 렌더링 (20자 입력, 폰트 정상화, 상하좌우 방향키 이동 기능 추가)
 // ============================================================================
 
 window.infSetFolding = function(level) {
@@ -269,23 +269,49 @@ window.infUpdateCellData = function(rIdx, cIdx, val) {
     }
 };
 
-// ★ 엔터키 누르면 아래 행으로 이동하는 엑셀형 단축키 로직
-window.infHandleInputEnter = function(e, rIdx, cIdx) {
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        const tData = window.infState.data[window.infState.activeTab];
-        let offset = 1;
-        let nextEl = document.getElementById(`infInput_${rIdx + offset}_${cIdx}`);
-        
-        // 소계나 총계처럼 입력칸이 없는 행은 건너뛰기
-        while (!nextEl && (rIdx + offset) < tData.raw.length) {
-            offset++;
-            nextEl = document.getElementById(`infInput_${rIdx + offset}_${cIdx}`);
+// ★ 상하좌우(방향키) 및 엔터키 이동을 완벽 지원하는 엑셀형 내비게이션 로직
+window.infHandleInputKey = function(e, rIdx, cIdx) {
+    const tData = window.infState.data[window.infState.activeTab];
+    let nextR = rIdx;
+    let nextC = cIdx;
+    let shouldMove = false;
+
+    if (e.key === 'Enter' || e.key === 'ArrowDown') {
+        shouldMove = true;
+        nextR++;
+        // 아래로 갈 때 소계/총계 행은 건너뛰기
+        while (nextR < tData.raw.length) {
+            if (document.getElementById(`infInput_${nextR}_${nextC}`)) break;
+            nextR++;
         }
-        
+    } else if (e.key === 'ArrowUp') {
+        shouldMove = true;
+        nextR--;
+        // 위로 갈 때 소계/총계 행은 건너뛰기
+        while (nextR >= 0) {
+            if (document.getElementById(`infInput_${nextR}_${nextC}`)) break;
+            nextR--;
+        }
+    } else if (e.key === 'ArrowLeft') {
+        // 커서가 맨 앞에 있을 때만 왼쪽 셀로 이동 (글자 수정 방해 방지)
+        if (e.target.selectionStart === 0) {
+            shouldMove = true;
+            nextC--;
+        }
+    } else if (e.key === 'ArrowRight') {
+        // 커서가 맨 뒤에 있을 때만 오른쪽 셀로 이동 (글자 수정 방해 방지)
+        if (e.target.selectionEnd === e.target.value.length) {
+            shouldMove = true;
+            nextC++;
+        }
+    }
+
+    if (shouldMove) {
+        let nextEl = document.getElementById(`infInput_${nextR}_${nextC}`);
         if (nextEl) {
+            e.preventDefault();
             nextEl.focus();
-            nextEl.select(); // 포커스 시 내용을 전체 블록 지정해서 바로 수정하기 편하게 만듦
+            nextEl.select(); // 이동 후 바로 수정할 수 있게 전체 블록 지정
         }
     }
 };
@@ -301,7 +327,6 @@ window.infRenderTable = function() {
     thead.innerHTML = ''; tbody.innerHTML = '';
 
     const mappedKeys = Object.keys(wiz.mapped); 
-    // ★ 핵심 버그 수정: 추가된 열(취득년도)까지 포함하여 정확한 열 개수 계산
     const colCount = (wiz.phase === 'mapping' || wiz.phase === 'idle') ? data[0].length : mappedKeys.length;
     
     const headerTr = document.createElement('tr');
@@ -427,7 +452,7 @@ window.infRenderTable = function() {
             rowHtml += `<td class="${isColSel}" style="border:1px solid #eee; padding:6px 10px; max-width:200px; overflow:hidden; text-overflow:ellipsis; text-align:${align}; ${bgStyle}">${cellVal}</td>`;
         }
         
-        // ★ 2단계 열 입력 필드: 폰트 스타일 통일 및 ID/엔터 이벤트 추가
+        // ★ 2단계 열 입력 필드: maxlength 20으로 수정, 기본 폰트로 얌전하게 변경, 방향키 이벤트(onkeydown) 연결
         if(window.infState.step >= 2) {
             step2Cols.forEach((cName, idx) => {
                 const dataIdx = colCount + idx;
@@ -437,10 +462,10 @@ window.infRenderTable = function() {
                     rowHtml += `<td style="border:1px solid #eee; ${bgStyle}"></td>`;
                 } else {
                     rowHtml += `<td style="border:1px solid #ccc; padding:0; background:#fff; min-width:70px;">
-                        <input type="text" id="infInput_${rIdx}_${dataIdx}" maxlength="2" value="${savedVal}" 
-                               style="width:100%; height:100%; min-height:28px; border:none; text-align:center; outline:none; background:transparent; font-family:inherit; font-size:13px; color:#1C5691; font-weight:bold;" 
+                        <input type="text" id="infInput_${rIdx}_${dataIdx}" maxlength="20" value="${savedVal}" 
+                               style="width:100%; height:100%; min-height:28px; border:none; text-align:center; outline:none; background:transparent; font-family:inherit; font-size:13px; color:#333;" 
                                onchange="window.infUpdateCellData(${rIdx}, ${dataIdx}, this.value)"
-                               onkeydown="window.infHandleInputEnter(event, ${rIdx}, ${dataIdx})"
+                               onkeydown="window.infHandleInputKey(event, ${rIdx}, ${dataIdx})"
                                onclick="event.stopPropagation();">
                     </td>`;
                 }
@@ -475,7 +500,9 @@ window.infRenderTable = function() {
     });
 };
 
-// (5) 정렬/부분합, 히스토리, 단축키 로직
+// ============================================================================
+// api_inflation.js - [섹션 5] 정렬/부분합, 히스토리, 단축키 로직
+// ============================================================================
 window.infCalculateSubtotals = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
