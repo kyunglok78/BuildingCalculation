@@ -791,10 +791,103 @@ window.infLoadPastData = function(event) {
 };
 
 // ============================================================================
-// [섹션 7] 자산 구분 일괄 지정 (이벤트 준비)
+// [섹션 7] 자산 구분 일괄 지정 (기본구분 팝업 및 자동화 로직)
 // ============================================================================
+
+// ★ 매핑 룰: 계정명에 따른 기본 구분 자동 할당기
+function getDefaultBasicClass(accountName) {
+    if (!accountName) return "";
+    const acc = accountName.trim();
+    
+    if (acc === '건물') return "50";
+    if (acc.includes('토지')) return "부보제외(토지)";
+    if (acc.includes('구축물')) return "50";
+    if (acc.includes('기계장치')) return "47";
+    if (acc.includes('공기구')) return "47";
+    if (acc.includes('시설장치') || acc === '시설') return "47";
+    if (acc.includes('비품')) return "평가제외(비품)";
+    if (acc.includes('차량운반구')) return "47";
+    if (acc.includes('건설중 자산') || acc.includes('건설중자산')) return "평가제외(건설중 자산)";
+    if (acc.includes('건물부속설비')) return "50";
+    if (acc.includes('금형')) return "47";
+    
+    return ""; // 매핑 룰에 없으면 빈칸
+}
+
+// ★ 기본 지정 버튼 클릭 시 팝업 열기
 window.assignBasicClass = function() {
-    alert("준비 중: '기본구분' 일괄 지정 로직이 곧 적용됩니다.");
+    const wiz = window.infState.wizard;
+    const tData = window.infState.data[window.infState.activeTab];
+    if(!tData || !tData.raw || tData.raw.length === 0) return alert("데이터가 없습니다.");
+
+    const accIdx = wiz.mapped['자산계정'];
+    const yearIdx = wiz.mapped['취득년도'];
+
+    if (accIdx === undefined) return alert("자산계정 열이 매핑되지 않았습니다.");
+
+    // 중복 없는 자산계정 목록 추출
+    let uniqueAccounts = new Set();
+    tData.raw.forEach(row => {
+        const yearVal = String(row[yearIdx] || '');
+        if (yearVal.includes('소계') || yearVal.includes('총계')) return;
+        
+        const acc = String(row[accIdx] || '').trim();
+        if (acc) uniqueAccounts.add(acc);
+    });
+
+    if (uniqueAccounts.size === 0) return alert("명세서에 자산계정 데이터가 없습니다.");
+
+    // 팝업 테이블 그리기
+    const tbody = document.getElementById('basicClassTbody');
+    tbody.innerHTML = '';
+    uniqueAccounts.forEach(acc => {
+        const defaultVal = getDefaultBasicClass(acc);
+        tbody.innerHTML += `
+            <tr>
+                <td style="text-align:center; font-weight:bold; color:#1C5691; vertical-align:middle;">${acc}</td>
+                <td style="padding:4px;">
+                    <input type="text" id="basicInput_${acc}" class="input-box" maxlength="20" value="${defaultVal}" style="width:100%; text-align:center; box-sizing:border-box; font-weight:bold; color:#333;">
+                </td>
+            </tr>
+        `;
+    });
+
+    document.getElementById('basicClassModal').style.display = 'flex';
+};
+
+// ★ 팝업에서 '일괄 적용하기' 눌렀을 때 표에 쫙 뿌려주는 로직
+window.applyBasicClass = function() {
+    const wiz = window.infState.wizard;
+    const tData = window.infState.data[window.infState.activeTab];
+    const accIdx = wiz.mapped['자산계정'];
+    const yearIdx = wiz.mapped['취득년도'];
+    
+    // 2단계 추가 열 중 '기본 구분'은 2번째 (인덱스 1)
+    const basicClassIdx = Object.keys(wiz.mapped).length + 1; 
+
+    // 입력창에서 설정한 값들 수집
+    const inputMap = {};
+    document.querySelectorAll('[id^="basicInput_"]').forEach(input => {
+        const acc = input.id.replace('basicInput_', '');
+        inputMap[acc] = input.value.trim();
+    });
+
+    infSaveHistory();
+
+    let applyCount = 0;
+    tData.raw.forEach(row => {
+        const yearVal = String(row[yearIdx] || '');
+        if (yearVal.includes('소계') || yearVal.includes('총계')) return;
+
+        const acc = String(row[accIdx] || '').trim();
+        if (inputMap[acc] !== undefined && inputMap[acc] !== "") {
+            row[basicClassIdx] = inputMap[acc]; // 해당 셀에 쏙!
+            applyCount++;
+        }
+    });
+
+    document.getElementById('basicClassModal').style.display = 'none';
+    infRenderTable(); // 화면 갱신
 };
 
 window.assignExcludeEval = function() {
