@@ -479,66 +479,72 @@
         </section>
 
 <!-- ============================================================================ -->
-<!-- [SEC-5-X] 2.3 물가보정 평가 (고정자산명세서 정리) -->
+<!-- [SEC-5-X] 2.3 물가보정 평가 (고정자산명세서 정리 및 평가) -->
 <!-- ============================================================================ -->
         <section id="sec-2-3" class="page-section">
             <h2 class="page-title"><i class="fa-solid fa-arrow-trend-up"></i> 2.3 고정자산 기반 물가보정 평가</h2>
             
-            <!-- 1. 평가 방식 선택 및 파일 불러오기 -->
-            <div class="card" style="margin-bottom: 15px;">
-                <div class="card-body" style="padding: 15px 20px; display: flex; align-items: center; justify-content: space-between;">
-                    <div style="display: flex; gap: 20px; align-items: center;">
-                        <span style="font-weight: bold; color: #1C5691;">(1) 평가 방식 선택:</span>
-                        <label style="cursor: pointer;"><input type="radio" name="inflationMode" value="location" checked onchange="infChangeMode()"> 소재지별 평가하기 (탭 분리)</label>
-                        <label style="cursor: pointer;"><input type="radio" name="inflationMode" value="integrated" onchange="infChangeMode()"> 통합 평가하기 (단일 탭)</label>
+            <!-- [1단계] 고정자산명세서 정리 컨트롤 패널 -->
+            <div id="infStep1Panel" class="card" style="margin-bottom: 15px;">
+                <div class="card-header" style="background:#e9ecef; color:#333;">
+                    <span><i class="fa-solid fa-broom"></i> [1단계] 명세서 정제 및 열 매핑 마법사</span>
+                    <div style="font-size:12px; color:#e74c3c; font-weight:normal;">단축키 지원: 여러 행/열 선택 후 [Ctrl + -] 삭제 / [Ctrl + Z] 되돌리기</div>
+                </div>
+                <div class="card-body" style="padding: 15px 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <div style="display: flex; gap: 20px; align-items: center;">
+                            <span style="font-weight: bold; color: #1C5691;">(1) 평가 방식:</span>
+                            <label style="cursor: pointer;"><input type="radio" name="infMode" value="location" checked onchange="infInitTabs()"> 소재지별 평가</label>
+                            <label style="cursor: pointer;"><input type="radio" name="infMode" value="integrated" onchange="infInitTabs()"> 통합 평가</label>
+                        </div>
+                        <div>
+                            <input type="file" id="infExcelFile" accept=".xlsx, .xls, .csv" style="display: none;" onchange="infLoadExcel(event)">
+                            <button type="button" class="btn-dark" style="background:#28a745;" onclick="document.getElementById('infExcelFile').click()">
+                                <i class="fa-solid fa-file-excel"></i> (2) 고정자산명세서 원본 불러오기
+                            </button>
+                        </div>
                     </div>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="file" id="infExcelFile" accept=".xlsx, .xls, .csv" style="display: none;" onchange="infLoadExcel(event)">
-                        <button type="button" class="btn-dark" style="background:#28a745;" onclick="document.getElementById('infExcelFile').click()">
-                            <i class="fa-solid fa-file-excel"></i> (2) 고정자산명세서 불러오기
-                        </button>
+
+                    <!-- 마법사 안내 영역 -->
+                    <div id="infWizardArea" style="background:#f0fdf4; border:1px solid #bbf7d0; padding:12px; border-radius:4px; display:none; align-items:center; justify-content:space-between;">
+                        <div>
+                            <span style="font-size:15px; font-weight:bold; color:#166534;" id="infWizardText">🎯 1단계: [소재지] 데이터가 있는 열 상단을 클릭해 주세요!</span>
+                            <span style="font-size:12px; color:#666; margin-left:10px;" id="infWizardStatus">(0/7 완료)</span>
+                        </div>
+                        <button type="button" class="btn-yellow" onclick="infStartWizard()">열 매핑 마법사 시작</button>
                     </div>
                 </div>
             </div>
 
-            <!-- 2. 행/열 정리 툴바 -->
-            <div class="toolbar" style="background:#fff; border:1px solid #ccc; margin-bottom:10px; display:flex; justify-content: space-between; align-items: center; padding: 10px; border-radius: 4px;">
-                <div style="display:flex; align-items: center; gap: 10px;">
-                    <button type="button" style="background:#dc3545; color:white; border:none; padding:6px 12px; border-radius:3px; cursor:pointer; font-weight:bold;" onclick="infDeleteCols()">
-                        <i class="fa-solid fa-columns"></i> (3) 선택 열 삭제
-                    </button>
-                    <button type="button" style="background:#dc3545; color:white; border:none; padding:6px 12px; border-radius:3px; cursor:pointer; font-weight:bold;" onclick="infDeleteRows()">
-                        <i class="fa-solid fa-table-list"></i> (4) 선택 행 삭제
-                    </button>
-                    <button type="button" style="background:#6c757d; color:white; border:none; padding:6px 12px; border-radius:3px; cursor:pointer; font-weight:bold;" onclick="infUndo()">
-                        <i class="fa-solid fa-rotate-left"></i> (5) 되돌리기 (Ctrl+Z)
-                    </button>
+            <!-- [2단계] 물가보정 평가 컨트롤 패널 (초기엔 숨김) -->
+            <div id="infStep2Panel" class="card" style="margin-bottom: 15px; display:none; border-color:#1C5691;">
+                <div class="card-header" style="background:#1C5691; color:#fff;">
+                    <span><i class="fa-solid fa-calculator"></i> [2단계] 물가보정 가액평가 워크시트</span>
+                    <button type="button" style="background:#fff; color:#1C5691; border:none; padding:4px 10px; border-radius:3px; font-weight:bold; font-size:12px; cursor:pointer;" onclick="infBackToStep1()">◀ 1단계(정제)로 돌아가기</button>
                 </div>
-                <div style="display:flex; align-items: center; gap: 10px;">
-                    <button type="button" style="background:#17A2B8; color:white; border:none; padding:6px 12px; border-radius:3px; cursor:pointer; font-weight:bold;" onclick="infCalculateSubtotals()">
-                        <i class="fa-solid fa-calculator"></i> (6~7) 소계 및 부분합 검증
-                    </button>
-                    <button type="button" class="btn-yellow" onclick="infProceedToPriceIndex()">
-                        <i class="fa-solid fa-bolt"></i> (8) 물가지수 넣기 ▶
-                    </button>
+                <div class="card-body" style="padding: 10px 20px; display: flex; gap: 10px;">
+                    <button type="button" class="btn-dark" style="background:#007BFF;"><i class="fa-solid fa-bolt"></i> 물가지수 일괄적용</button>
+                    <button type="button" class="btn-dark" style="background:#28A745;"><i class="fa-solid fa-bolt"></i> 감가율 일괄적용</button>
+                    <button type="button" class="btn-yellow" onclick="infCalculateSubtotals()">부분합(소계) 검증</button>
                 </div>
             </div>
 
-            <!-- 탭 영역 (소재지별 평가 시 활성화) -->
+            <!-- 공통 데이터 테이블 영역 -->
             <div id="infTabs" style="display: flex; border-bottom: 2px solid #1C5691;"></div>
-            
-            <!-- 테이블 영역 -->
-            <div class="data-table-wrapper" style="flex:1; border-top: none; overflow-x: auto; background: #fff;">
-                <table class="data-table" id="infTable" style="white-space: nowrap;">
+            <div class="data-table-wrapper" style="flex:1; border-top: none; overflow-x: auto; overflow-y: auto; background: #fff;" id="infTableContainer">
+                <table class="data-table" id="infTable" style="white-space: nowrap; user-select: none;">
                     <thead id="infThead">
-                        <tr><td style="padding: 40px; text-align: center; color: #999;">고정자산명세서 엑셀 파일을 불러와주세요.</td></tr>
+                        <tr><td style="padding: 60px; text-align: center; color: #999;">고정자산명세서 엑셀 파일을 불러와주세요.</td></tr>
                     </thead>
                     <tbody id="infTbody"></tbody>
                 </table>
             </div>
 
             <div style="text-align: right; margin-top: 20px;">
-                <button type="button" class="btn-exec" onclick="completeAndNext('sec-2-3')" style="background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px;">
+                <button type="button" id="btnInfNextStep" class="btn-exec" onclick="infProceedToStep2()" style="background-color: #17A2B8; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; display:none;">
+                    정리 완료 및 2단계(평가)로 전환 ▶
+                </button>
+                <button type="button" id="btnInfComplete" class="btn-exec" onclick="completeAndNext('sec-2-3')" style="background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; display:none;">
                     물가보정 평가 완료 및 다음 단계로 <i class="fa-solid fa-arrow-right"></i>
                 </button>
             </div>
