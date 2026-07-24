@@ -1,5 +1,5 @@
 // ============================================================================
-// api_inflation.js - [섹션 2] 코어 상태 관리 및 초기화 
+// api_inflation.js - [섹션 2] 코어 상태 관리 및 초기화 (폴딩 상태 및 국산/외산 추가)
 // ============================================================================
 
 window.infState = {
@@ -7,22 +7,23 @@ window.infState = {
     tabs: [],
     activeTab: '',
     step: 1, // 1: 정제, 2: 평가
-    data: {}, // { tabName: { raw: [], history: [], selectedRows: Set, selectedCols: Set } }
+    data: {}, // { tabName: { raw: [], history: [], selectedRows: Set, selectedCols: Set, hasSubtotal: false } }
     
     wizard: {
         active: false,
         phase: 'idle', // 'idle' -> 'mapping' -> 'row-delete'
         // ★ '국산/외산' 항목 추가
-        columns: ['소재지', '자산계정', '자산번호', '자산명', '취득일', '취득가액', '국산/외산'],
+        columns: ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득일', '취득가액'],
         activeTarget: '', 
         mapped: {} 
     },
     
+    foldingLevel: 3, // 1: 총계, 2: 소계+총계, 3: 전체 표시
     lastClickedRow: -1,
     lastClickedCol: -1
 };
 
-// CSS 동적 추가 
+// CSS 동적 추가 (행 하이라이트 및 폴딩 버튼 스타일)
 (function addInfStyles() {
     if(document.getElementById('inf-dynamic-styles')) document.getElementById('inf-dynamic-styles').remove();
     const style = document.createElement('style');
@@ -36,6 +37,11 @@ window.infState = {
         .wiz-btn.active { background:#1C5691 !important; color:#fff !important; border:2px solid #1C5691 !important; box-shadow:0 0 8px rgba(28,86,145,0.4); }
         .wiz-btn.mapped { background:#e2e8f0 !important; color:#64748b !important; border:2px solid #cbd5e1 !important; }
         .wiz-btn.default { background:#fff; color:#333; border:2px solid #ccc; }
+        
+        /* 엑셀형 폴딩 버튼 스타일 */
+        .fold-btn { padding: 2px 8px; border: 1px solid #94a3b8; background: #fff; cursor: pointer; font-weight: bold; font-size: 11px; border-radius: 3px; color: #64748b; }
+        .fold-btn:hover { background: #e2e8f0; }
+        .fold-btn.active { background: #1C5691; color: #fff; border-color: #1C5691; }
     `;
     document.head.appendChild(style);
 })();
@@ -55,7 +61,7 @@ window.infInitTabs = function() {
     tabContainer.innerHTML = '';
     
     window.infState.tabs.forEach((tabName, idx) => {
-        if(!window.infState.data[tabName]) window.infState.data[tabName] = { raw: [], history: [], selectedRows: new Set(), selectedCols: new Set() };
+        if(!window.infState.data[tabName]) window.infState.data[tabName] = { raw: [], history: [], selectedRows: new Set(), selectedCols: new Set(), hasSubtotal: false };
         
         const tabBtn = document.createElement('div');
         tabBtn.innerText = tabName;
@@ -78,8 +84,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if(infMenu) infMenu.addEventListener('click', () => { if(window.infState.tabs.length === 0) infInitTabs(); });
 });
 
+
 // ============================================================================
-// api_inflation.js - [섹션 3] 엑셀 데이터 로드 및 매핑 마법사 
+// api_inflation.js - [섹션 3] 엑셀 데이터 로드 및 매핑 마법사 (국산/외산 포함, 1단계 부분합 버튼 유도)
 // ============================================================================
 
 window.infLoadExcel = function(event) {
@@ -95,6 +102,7 @@ window.infLoadExcel = function(event) {
             
             window.infState.data[tabName].raw = jsonData;
             window.infState.data[tabName].history = [];
+            window.infState.data[tabName].hasSubtotal = false;
             window.infState.wizard.phase = 'idle';
             
             document.getElementById('infWizardArea').style.display = 'flex';
@@ -161,8 +169,8 @@ window.infFinishMapping = function() {
 
     infSaveHistory();
 
-    // ★ '국산/외산' 포함 최종 표준 열 세팅
-    const finalColumns = ['소재지', '자산계정', '자산번호', '자산명', '취득일', '취득년도', '취득가액', '국산/외산'];
+    // ★ 국산/외산 포함 표준 열 세팅
+    const finalColumns = ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득일', '취득년도', '취득가액'];
 
     tData.raw = tData.raw.map(oldRow => {
         const newRow = [];
@@ -189,10 +197,16 @@ window.infFinishMapping = function() {
     wiz.phase = 'row-delete';
     wiz.activeTarget = '';
     
-    document.getElementById('infWizardText').innerHTML = `🧹 2단계: 불필요한 행(빈 줄, 합계 등)을 지워주세요!<br><span style="font-size:13px; font-weight:normal; color:#666;">여러 행의 번호를 선택 후 키보드 <kbd>Ctrl + -</kbd> (삭제) / 실수했다면 <kbd>Ctrl + Z</kbd> (되돌리기)</span>`;
+    document.getElementById('infWizardText').innerHTML = `🧹 1.5단계: 불필요한 행(빈 줄, 합계 등)을 <b>[Ctrl + -]</b> 단축키로 지우시고, <b>우측 하단의 '부분합 및 정렬' 버튼</b>을 눌러 명세서를 검증하세요.`;
     document.getElementById('btnFinishMapping').style.display = 'none';
     document.getElementById('infMappingButtons').style.display = 'none';
-    document.getElementById('btnInfNextStep').style.display = 'inline-block'; 
+    
+    // 2단계 전환 버튼을 임시로 '부분합 수행' 버튼으로 용도 변경
+    const btnNext = document.getElementById('btnInfNextStep');
+    btnNext.style.display = 'inline-block';
+    btnNext.innerHTML = '<i class="fa-solid fa-layer-group"></i> 부분합(소계) 및 정렬 수행';
+    btnNext.style.backgroundColor = '#6f42c1'; // 보라색으로 강조
+    btnNext.onclick = infCalculateSubtotals;
     
     tData.selectedCols.clear();
     tData.selectedRows.clear();
@@ -217,9 +231,15 @@ window.infBackToStep1 = function() {
     infRenderTable(); 
 };
 
+
 // ============================================================================
-// api_inflation.js - [섹션 4] 테이블 렌더링 (취득년도 콤마 제거 및 소계 디자인)
+// api_inflation.js - [섹션 4] 테이블 렌더링 (엑셀 폴딩 그룹화 UI 및 중앙정렬 콤마처리)
 // ============================================================================
+
+window.infSetFolding = function(level) {
+    window.infState.foldingLevel = level;
+    infRenderTable();
+};
 
 window.infRenderTable = function() {
     const wiz = window.infState.wizard;
@@ -233,7 +253,19 @@ window.infRenderTable = function() {
 
     const colCount = data[0].length;
     const headerTr = document.createElement('tr');
-    headerTr.innerHTML = `<th style="width:40px; background:#f8fafc; border:1px solid #ccc;"></th>`; 
+    
+    // ★ 1단계 부분합이 생성된 경우 폴딩 1,2,3 버튼 UI 생성
+    let foldHtml = '';
+    if (tData.hasSubtotal && wiz.phase !== 'mapping' && wiz.phase !== 'idle') {
+        foldHtml = `
+            <div style="display:flex; gap:2px; justify-content:center; margin-top:4px;">
+                <button class="fold-btn ${window.infState.foldingLevel === 1 ? 'active' : ''}" onclick="event.stopPropagation(); infSetFolding(1)" title="총계만 보기">1</button>
+                <button class="fold-btn ${window.infState.foldingLevel === 2 ? 'active' : ''}" onclick="event.stopPropagation(); infSetFolding(2)" title="소계 표시">2</button>
+                <button class="fold-btn ${window.infState.foldingLevel === 3 ? 'active' : ''}" onclick="event.stopPropagation(); infSetFolding(3)" title="전체 표시">3</button>
+            </div>`;
+    }
+    
+    headerTr.innerHTML = `<th style="width:60px; background:#f8fafc; border:1px solid #ccc; text-align:center; padding:6px 2px;">행 번호${foldHtml}</th>`; 
     
     const step2Cols = ['구분', '물가지수', '재조달가액', '감가율', '잔가율', '현재가액', '비고'];
     const mappedKeys = Object.keys(wiz.mapped); 
@@ -242,7 +274,7 @@ window.infRenderTable = function() {
         const isSelected = tData.selectedCols.has(c) ? 'inf-sel-col' : '';
         const th = document.createElement('th');
         th.className = `inf-header ${isSelected}`;
-        th.style.cssText = `background:#f8fafc; border:1px solid #ccc; padding:8px; text-align:center; font-weight:bold; min-width:80px;`;
+        th.style.cssText = `background:#f8fafc; border:1px solid #ccc; padding:8px; text-align:center; font-weight:bold; min-width:80px; vertical-align:middle;`;
         
         if (wiz.phase === 'mapping' || wiz.phase === 'idle') {
             let colLetter = String.fromCharCode(65 + (c % 26)); 
@@ -291,20 +323,33 @@ window.infRenderTable = function() {
     }
     thead.appendChild(headerTr);
 
-    const yearColIdx = mappedKeys.indexOf('취득년도'); // 소계 여부 체크용 인덱스
-
+    const yearColIdx = mappedKeys.indexOf('취득년도'); 
+    
     data.forEach((row, rIdx) => {
+        const yearVal = String(row[yearColIdx] || '');
+        const isSubtotalRow = yearColIdx !== -1 && yearVal.includes('소계');
+        const isGrandTotalRow = yearColIdx !== -1 && yearVal.includes('총계');
+        const isDetailRow = !isSubtotalRow && !isGrandTotalRow;
+
+        // ★ 폴딩 상태에 따른 행 숨김 로직
+        if (tData.hasSubtotal) {
+            if (window.infState.foldingLevel === 1 && !isGrandTotalRow) return; 
+            if (window.infState.foldingLevel === 2 && isDetailRow) return;
+        }
+
         const isRowSel = tData.selectedRows.has(rIdx);
         const rowSelClass = isRowSel ? 'inf-sel-row' : '';
         const tr = document.createElement('tr');
         tr.className = rowSelClass; 
         tr.style.cursor = 'pointer'; 
         
-        // ★ 소계 행인지 판단 (배경색 강조 처리용)
-        const isSubtotalRow = yearColIdx !== -1 && String(row[yearColIdx] || '').includes('소계');
-        const bgStyle = isSubtotalRow ? 'background:#e2e8f0; font-weight:bold; color:#1C5691;' : '';
-        
-        let rowHtml = `<td class="inf-row-header" style="background:#f8fafc; border:1px solid #ccc; text-align:center; font-weight:bold; color:#666;">${isSubtotalRow ? 'Σ' : rIdx + 1}</td>`;
+        // 배경색 구분 (소계, 총계)
+        let bgStyle = '';
+        let rowTitle = rIdx + 1;
+        if (isSubtotalRow) { bgStyle = 'background:#e2e8f0; font-weight:bold; color:#1C5691;'; rowTitle = '-'; }
+        if (isGrandTotalRow) { bgStyle = 'background:#1C5691; font-weight:bold; color:#fff;'; rowTitle = 'Σ'; }
+
+        let rowHtml = `<td class="inf-row-header" style="background:#f8fafc; border:1px solid #ccc; text-align:center; font-weight:bold; color:#666;">${rowTitle}</td>`;
 
         for(let c = 0; c < colCount; c++) {
             const isColSel = tData.selectedCols.has(c) ? 'inf-sel-col' : '';
@@ -314,7 +359,6 @@ window.infRenderTable = function() {
             if (wiz.phase !== 'mapping' && wiz.phase !== 'idle') {
                 const headerName = mappedKeys[c];
                 
-                // ★ 취득년도는 콤마 제외하고 중앙 정렬
                 if (headerName === '취득년도') {
                     align = 'center';
                 } else {
@@ -333,7 +377,7 @@ window.infRenderTable = function() {
         }
         
         if(window.infState.step === 2) {
-            step2Cols.forEach(c => { rowHtml += `<td style="border:1px solid #eee; ${isSubtotalRow ? 'background:#e2e8f0;' : 'background:#f0fdf4;'}"></td>`; });
+            step2Cols.forEach(c => { rowHtml += `<td style="border:1px solid #eee; ${bgStyle ? bgStyle : 'background:#f0fdf4;'}"></td>`; });
         }
         
         tr.innerHTML = rowHtml;
@@ -358,6 +402,120 @@ window.infRenderTable = function() {
     });
 };
 
+
+// ============================================================================
+// api_inflation.js - [섹션 5] 정렬(최초 등장순) 및 엑셀 부분합/총계 로직, 단축키 이벤트
+// ============================================================================
+
+window.infCalculateSubtotals = function() {
+    const wiz = window.infState.wizard;
+    const tData = window.infState.data[window.infState.activeTab];
+    if(!tData || !tData.raw || tData.raw.length === 0) return;
+
+    const locIdx = Object.keys(wiz.mapped).indexOf('소재지');
+    const accIdx = Object.keys(wiz.mapped).indexOf('자산계정');
+    const yearIdx = Object.keys(wiz.mapped).indexOf('취득년도');
+    const priceIdx = Object.keys(wiz.mapped).indexOf('취득가액');
+
+    if(locIdx === -1 || accIdx === -1 || yearIdx === -1 || priceIdx === -1) {
+        return alert("부분합을 계산하기 위한 필수 항목(소재지, 자산계정, 취득년도, 취득가액)이 매핑되지 않았습니다.");
+    }
+
+    infSaveHistory();
+
+    // 1. 소계, 총계 행 사전 제거
+    const cleanRaw = tData.raw.filter(row => !String(row[yearIdx] || '').includes('소계') && !String(row[yearIdx] || '').includes('총계'));
+
+    // ★ 2. 최초 등장 순서(Order of Appearance) 추출
+    const locOrder = [];
+    const accOrder = [];
+    cleanRaw.forEach(row => {
+        const l = String(row[locIdx] || '').trim();
+        const a = String(row[accIdx] || '').trim();
+        if(l && !locOrder.includes(l)) locOrder.push(l);
+        if(a && !accOrder.includes(a)) accOrder.push(a);
+    });
+
+    // 3. 다중 정렬 (1순위: 소재지 등장순 > 2순위: 자산계정 등장순 > 3순위: 취득년도 텍스트순)
+    cleanRaw.sort((a, b) => {
+        const lA = locOrder.indexOf(String(a[locIdx] || '').trim());
+        const lB = locOrder.indexOf(String(b[locIdx] || '').trim());
+        if(lA !== lB) return lA - lB;
+        
+        const aA = accOrder.indexOf(String(a[accIdx] || '').trim());
+        const aB = accOrder.indexOf(String(b[accIdx] || '').trim());
+        if(aA !== aB) return aA - aB;
+        
+        const yA = String(a[yearIdx] || '').trim();
+        const yB = String(b[yearIdx] || '').trim();
+        return yA.localeCompare(yB);
+    });
+
+    // 4. 그룹별 부분합(소계) 및 전체 총계 삽입
+    const newRaw = [];
+    let currentGroupKey = null;
+    let groupSum = 0;
+    let grandSum = 0;
+    let currentGroupNames = [];
+
+    for(let i=0; i<cleanRaw.length; i++) {
+        const row = cleanRaw[i];
+        const loc = String(row[locIdx] || '').trim();
+        const acc = String(row[accIdx] || '').trim();
+        const key = `${loc}|${acc}`; 
+        
+        const priceStr = String(row[priceIdx] || '').replace(/,/g, '');
+        const price = Number(priceStr) || 0;
+
+        if(currentGroupKey !== null && currentGroupKey !== key) {
+            const subtotalRow = new Array(row.length).fill('');
+            subtotalRow[locIdx] = currentGroupNames[0];
+            subtotalRow[accIdx] = currentGroupNames[1];
+            subtotalRow[yearIdx] = "소계";
+            subtotalRow[priceIdx] = groupSum;
+            newRaw.push(subtotalRow);
+            groupSum = 0; 
+        }
+
+        newRaw.push(row);
+        currentGroupKey = key;
+        currentGroupNames = [loc, acc];
+        groupSum += price;
+        grandSum += price;
+    }
+
+    if(currentGroupKey !== null) {
+        const subtotalRow = new Array(cleanRaw[0].length).fill('');
+        subtotalRow[locIdx] = currentGroupNames[0];
+        subtotalRow[accIdx] = currentGroupNames[1];
+        subtotalRow[yearIdx] = "소계";
+        subtotalRow[priceIdx] = groupSum;
+        newRaw.push(subtotalRow);
+    }
+    
+    // 마지막 총계 추가
+    if(newRaw.length > 0) {
+        const grandTotalRow = new Array(cleanRaw[0].length).fill('');
+        grandTotalRow[yearIdx] = "총계";
+        grandTotalRow[priceIdx] = grandSum;
+        newRaw.push(grandTotalRow);
+    }
+
+    tData.raw = newRaw;
+    tData.hasSubtotal = true;
+    window.infState.foldingLevel = 3; // 기본은 모두 펼쳐진 상태
+
+    // ★ 1단계 버튼을 '2단계로 전환' 본래 목적으로 복구
+    const btnNext = document.getElementById('btnInfNextStep');
+    btnNext.innerHTML = '명세서 검증 완료 및 2단계(평가)로 전환 ▶';
+    btnNext.style.backgroundColor = '#17A2B8';
+    btnNext.onclick = infProceedToStep2;
+    
+    tData.selectedRows.clear();
+    tData.selectedCols.clear();
+    infRenderTable();
+};
+
 window.infSaveHistory = function() {
     const tData = window.infState.data[window.infState.activeTab];
     if(tData.history.length > 10) tData.history.shift();
@@ -375,6 +533,16 @@ document.addEventListener('keydown', function(e) {
         if(tData.history.length === 0) return alert("더 이상 되돌릴 작업이 없습니다.");
         tData.raw = tData.history.pop();
         tData.selectedRows.clear(); tData.selectedCols.clear();
+        
+        // 되돌렸을 때 소계가 없어졌다면 UI 초기화
+        const yearColIdx = Object.keys(window.infState.wizard.mapped).indexOf('취득년도');
+        tData.hasSubtotal = yearColIdx !== -1 && tData.raw.some(r => String(r[yearColIdx] || '').includes('소계'));
+        if(!tData.hasSubtotal && window.infState.step === 1 && window.infState.wizard.phase === 'row-delete') {
+            const btnNext = document.getElementById('btnInfNextStep');
+            btnNext.innerHTML = '<i class="fa-solid fa-layer-group"></i> 부분합(소계) 및 정렬 수행';
+            btnNext.style.backgroundColor = '#6f42c1';
+            btnNext.onclick = infCalculateSubtotals;
+        }
         infRenderTable();
     }
     
@@ -394,92 +562,3 @@ document.addEventListener('keydown', function(e) {
         infRenderTable();
     }
 });
-
-// ============================================================================
-// api_inflation.js - [섹션 5] 다중 정렬 및 부분합(소계) 계산 로직
-// ============================================================================
-
-window.infCalculateSubtotals = function() {
-    if(window.infState.step !== 2) return alert("1단계(정제)를 완료하고 2단계로 전환한 후 실행해주세요.");
-    
-    const wiz = window.infState.wizard;
-    const tData = window.infState.data[window.infState.activeTab];
-    if(!tData || !tData.raw || tData.raw.length === 0) return;
-
-    const locIdx = Object.keys(wiz.mapped).indexOf('소재지');
-    const accIdx = Object.keys(wiz.mapped).indexOf('자산계정');
-    const yearIdx = Object.keys(wiz.mapped).indexOf('취득년도');
-    const priceIdx = Object.keys(wiz.mapped).indexOf('취득가액');
-
-    if(locIdx === -1 || accIdx === -1 || yearIdx === -1 || priceIdx === -1) {
-        return alert("부분합을 계산하기 위한 필수 항목(소재지, 자산계정, 취득년도, 취득가액)이 누락되었습니다.");
-    }
-
-    infSaveHistory();
-
-    // 1. 기존에 생성된 '소계' 행이 있다면 중복 방지를 위해 먼저 싹 지워줍니다.
-    const cleanRaw = tData.raw.filter(row => !String(row[yearIdx] || '').includes('소계'));
-
-    // 2. 다중 정렬 (1순위: 소재지 > 2순위: 자산계정 > 3순위: 취득년도)
-    cleanRaw.sort((a, b) => {
-        const locA = String(a[locIdx] || ''), locB = String(b[locIdx] || '');
-        if(locA !== locB) return locA.localeCompare(locB);
-        
-        const accA = String(a[accIdx] || ''), accB = String(b[accIdx] || '');
-        if(accA !== accB) return accA.localeCompare(accB);
-        
-        const yearA = String(a[yearIdx] || ''), yearB = String(b[yearIdx] || '');
-        return yearA.localeCompare(yearB);
-    });
-
-    // 3. 그룹별 부분합 계산 및 행 삽입
-    const newRaw = [];
-    let currentGroupKey = null;
-    let groupSum = 0;
-    let currentGroupNames = [];
-
-    for(let i=0; i<cleanRaw.length; i++) {
-        const row = cleanRaw[i];
-        const loc = String(row[locIdx] || '');
-        const acc = String(row[accIdx] || '');
-        const year = String(row[yearIdx] || '');
-        const key = `${loc}|${acc}|${year}`; // 그룹 식별 키
-        
-        const priceStr = String(row[priceIdx] || '').replace(/,/g, '');
-        const price = Number(priceStr) || 0;
-
-        // 그룹이 바뀌면 기존 그룹의 [소계] 행을 추가!
-        if(currentGroupKey !== null && currentGroupKey !== key) {
-            const subtotalRow = new Array(row.length).fill('');
-            subtotalRow[locIdx] = currentGroupNames[0];
-            subtotalRow[accIdx] = currentGroupNames[1];
-            subtotalRow[yearIdx] = currentGroupNames[2] + " 소계";
-            subtotalRow[priceIdx] = groupSum;
-            newRaw.push(subtotalRow);
-            
-            groupSum = 0; // 누적 합계 리셋
-        }
-
-        newRaw.push(row); // 원본 데이터 삽입
-        currentGroupKey = key;
-        currentGroupNames = [loc, acc, year];
-        groupSum += price;
-    }
-
-    // 마지막 그룹의 소계 추가
-    if(currentGroupKey !== null) {
-        const subtotalRow = new Array(cleanRaw[0].length).fill('');
-        subtotalRow[locIdx] = currentGroupNames[0];
-        subtotalRow[accIdx] = currentGroupNames[1];
-        subtotalRow[yearIdx] = currentGroupNames[2] + " 소계";
-        subtotalRow[priceIdx] = groupSum;
-        newRaw.push(subtotalRow);
-    }
-
-    tData.raw = newRaw;
-    tData.selectedRows.clear();
-    tData.selectedCols.clear();
-    infRenderTable();
-    
-    alert("✅ 데이터가 소재지, 자산계정, 취득년도 순으로 정렬되었으며 부분합이 생성되었습니다.");
-};
