@@ -366,7 +366,7 @@ window.infBackToStep1 = function() {
 
 
 // ============================================================================
-// api_inflation.js - [섹션 4] 테이블 렌더링 (이벤트 증발 버그 수정 및 줄 전체 클릭)
+// api_inflation.js - [섹션 4] 테이블 렌더링 (행 선택 하이라이트 버그 완벽 수정!)
 // ============================================================================
 
 window.infRenderTable = function() {
@@ -439,14 +439,16 @@ window.infRenderTable = function() {
     }
     thead.appendChild(headerTr);
 
-    // ★ 렌더링 로직 및 클릭 이벤트 증발 버그 완벽 수정 ★
+    // ★ 행 렌더링 (버그 수정됨) ★
     data.forEach((row, rIdx) => {
         const isRowSel = tData.selectedRows.has(rIdx);
-        const rowSelClass = isRowSel ? 'inf-sel-row' : '';
         const tr = document.createElement('tr');
         
-        // 1. 이벤트 증발을 막기 위해 HTML 문자열을 한 번에 조립
-        let rowHtml = `<td class="inf-row-header ${rowSelClass}" style="background:#f8fafc; border:1px solid #ccc; text-align:center; font-weight:bold; color:#666; cursor:pointer;">${rIdx + 1}</td>`;
+        // 핵심 수정: tr 태그 자체에 클래스를 줘야 CSS가 완벽히 적용됩니다!
+        tr.className = isRowSel ? 'inf-sel-row' : ''; 
+        tr.style.cursor = 'pointer'; // 어느 칸이든 누를 수 있게 마우스 커서 변경
+        
+        let rowHtml = `<td class="inf-row-header" style="background:#f8fafc; border:1px solid #ccc; text-align:center; font-weight:bold; color:#666;">${rIdx + 1}</td>`;
 
         for(let c = 0; c < colCount; c++) {
             const isColSel = tData.selectedCols.has(c) ? 'inf-sel-col' : '';
@@ -465,17 +467,16 @@ window.infRenderTable = function() {
                     }
                 }
             }
-            // 모든 셀(td)에 rowSelClass를 부여하여 하이라이트 강제 적용
-            rowHtml += `<td class="${isColSel} ${rowSelClass}" style="border:1px solid #eee; padding:6px 10px; max-width:200px; overflow:hidden; text-overflow:ellipsis; text-align:${align};">${cellVal}</td>`;
+            rowHtml += `<td class="${isColSel}" style="border:1px solid #eee; padding:6px 10px; max-width:200px; overflow:hidden; text-overflow:ellipsis; text-align:${align};">${cellVal}</td>`;
         }
         
         if(window.infState.step === 2) {
-            step2Cols.forEach(c => { rowHtml += `<td class="${rowSelClass}" style="border:1px solid #eee; background:#f0fdf4;">-</td>`; });
+            step2Cols.forEach(c => { rowHtml += `<td style="border:1px solid #eee; background:#f0fdf4;">-</td>`; });
         }
         
         tr.innerHTML = rowHtml;
 
-        // 2. 조립 완료 후 행(tr) 전체에 클릭 이벤트 부여 (아무 곳이나 클릭해도 선택됨!)
+        // 행 전체 클릭 이벤트
         tr.onclick = (e) => {
             if (window.infState.step === 1 && wiz.phase === 'mapping') return;
 
@@ -533,6 +534,7 @@ document.addEventListener('keydown', function(e) {
         infRenderTable();
     }
 });
+
 
 
 // 히스토리 및 단축키 로직
