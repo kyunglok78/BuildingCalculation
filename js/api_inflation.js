@@ -1,260 +1,5 @@
 // ============================================================================
-// api_inflation.js - 3단계 프로세스(정제 -> 자산구분 -> 평가) 통합 버전
-// ============================================================================
-
-window.infState = {
-    mode: 'location',
-    tabs: [],
-    activeTab: '',
-    step: 1, // 1: 정제, 2: 구분, 3: 평가
-    data: {},
-    
-    wizard: {
-        active: false,
-        phase: 'idle',
-        columns: ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득일', '취득가액'],
-        activeTarget: '', 
-        mapped: {} 
-    },
-    
-    foldingLevel: 3, 
-    lastClickedRow: -1,
-    lastClickedCol: -1
-};
-
-// CSS 동적 추가
-(function addInfStyles() {
-    if(document.getElementById('inf-dynamic-styles')) document.getElementById('inf-dynamic-styles').remove();
-    const style = document.createElement('style');
-    style.id = 'inf-dynamic-styles';
-    style.innerHTML = `
-        .inf-sel-col { background-color: #dbeafe !important; }
-        tr.inf-sel-row td { background-color: #dbeafe !important; }
-        .inf-header:hover { background-color: #e2e8f0; cursor: pointer; }
-        .inf-row-header:hover { background-color: #e2e8f0; cursor: pointer; }
-        .wiz-btn { padding:6px 14px; border-radius:20px; font-size:13px; font-weight:bold; cursor:pointer; transition: 0.2s; }
-        .wiz-btn.active { background:#1C5691 !important; color:#fff !important; border:2px solid #1C5691 !important; box-shadow:0 0 8px rgba(28,86,145,0.4); }
-        .wiz-btn.mapped { background:#e2e8f0 !important; color:#64748b !important; border:2px solid #cbd5e1 !important; }
-        .wiz-btn.default { background:#fff; color:#333; border:2px solid #ccc; }
-        .fold-btn { padding: 2px 8px; border: 1px solid #94a3b8; background: #fff; cursor: pointer; font-weight: bold; font-size: 11px; border-radius: 3px; color: #64748b; }
-        .fold-btn:hover { background: #e2e8f0; }
-        .fold-btn.active { background: #1C5691; color: #fff; border-color: #1C5691; }
-    `;
-    document.head.appendChild(style);
-})();
-
-// (1) 탭 초기화
-window.infInitTabs = function() {
-    const modeObj = document.querySelector('input[name="infMode"]:checked');
-    if(!modeObj) return;
-    window.infState.mode = modeObj.value;
-    window.infState.tabs = window.infState.mode === 'integrated' ? ['통합자산명세서'] : 
-        Array.from(document.querySelectorAll('#locationTbody tr')).map(row => row.querySelector('.loc-name') ? row.querySelector('.loc-name').value.trim() : '').filter(n => n);
-    
-    if(window.infState.tabs.length === 0) window.infState.tabs = ['기본 사업장'];
-
-    const tabContainer = document.getElementById('infTabs');
-    if(!tabContainer) return;
-    tabContainer.innerHTML = '';
-    
-    window.infState.tabs.forEach((tabName, idx) => {
-        if(!window.infState.data[tabName]) window.infState.data[tabName] = { raw: [], history: [], selectedRows: new Set(), selectedCols: new Set(), hasSubtotal: false };
-        
-        const tabBtn = document.createElement('div');
-        tabBtn.innerText = tabName;
-        tabBtn.className = 'inf-tab-btn';
-        tabBtn.style.cssText = `padding:10px 20px; cursor:pointer; font-weight:normal; border:1px solid #e2e8f0; border-bottom:none; border-radius:4px 4px 0 0; margin-right:5px; background:#f1f5f9; color:#94a3b8;`;
-        
-        tabBtn.onclick = () => {
-            document.querySelectorAll('.inf-tab-btn').forEach(c => { c.style.background = '#f1f5f9'; c.style.color = '#94a3b8'; c.style.fontWeight = 'normal'; c.style.borderColor = '#e2e8f0'; });
-            tabBtn.style.background = '#1C5691'; tabBtn.style.color = '#ffffff'; tabBtn.style.fontWeight = 'bold'; tabBtn.style.borderColor = '#1C5691';
-            window.infState.activeTab = tabName;
-            infRenderTable();
-        };
-        tabContainer.appendChild(tabBtn);
-        if(idx === 0) tabBtn.click();
-    });
-};
-
-document.addEventListener("DOMContentLoaded", () => {
-    const infMenu = document.getElementById('nav-sec-2-3');
-    if(infMenu) infMenu.addEventListener('click', () => { if(window.infState.tabs.length === 0) infInitTabs(); });
-});
-
-// (2) 엑셀 로드 및 마법사
-window.infLoadExcel = function(event) {
-    const file = event.target.files[0];
-    if(!file) return;
-    const tabName = window.infState.activeTab;
-    
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const jsonData = XLSX.utils.sheet_to_json(XLSX.read(new Uint8Array(e.target.result), {type: 'array'}).Sheets[XLSX.read(new Uint8Array(e.target.result), {type: 'array'}).SheetNames[0]], {header: 1, defval: ""});
-            if(jsonData.length === 0) return alert("엑셀 파일이 비어있습니다.");
-            
-            window.infState.data[tabName].raw = jsonData;
-            window.infState.data[tabName].history = [];
-            window.infState.data[tabName].hasSubtotal = false;
-            window.infState.wizard.phase = 'idle';
-            
-            document.getElementById('infWizardArea').style.display = 'flex';
-            document.getElementById('btnStartWizard').style.display = 'inline-block';
-            document.getElementById('btnFinishMapping').style.display = 'none';
-            document.getElementById('infMappingButtons').style.display = 'none';
-            document.getElementById('infWizardText').innerHTML = `🎯 원본 데이터를 불러왔습니다. 우측의 <b>'열 매핑 마법사 시작'</b>을 눌러주세요.`;
-            document.getElementById('btnInfNextStep').style.display = 'none';
-            
-            infRenderTable();
-        } catch(err) { alert("엑셀 로드 오류: " + err); }
-    };
-    reader.readAsArrayBuffer(file);
-    event.target.value = '';
-};
-
-window.infStartWizard = function() {
-    const wiz = window.infState.wizard;
-    wiz.active = true;
-    wiz.phase = 'mapping';
-    wiz.mapped = {};
-    wiz.activeTarget = wiz.columns[0];
-    
-    document.getElementById('btnStartWizard').style.display = 'none';
-    document.getElementById('btnFinishMapping').style.display = 'inline-block';
-    document.getElementById('infMappingButtons').style.display = 'flex';
-    document.getElementById('infWizardText').innerHTML = `🎯 아래 버튼 중 하나를 선택하고, 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭하세요. (없는 항목은 무시하세요)`;
-    
-    infUpdateWizardUI();
-    infRenderTable();
-};
-
-window.infSetMappingTarget = function(colName) {
-    window.infState.wizard.activeTarget = colName;
-    infUpdateWizardUI();
-};
-
-window.infUpdateWizardUI = function() {
-    const wiz = window.infState.wizard;
-    const btnContainer = document.getElementById('infMappingButtons');
-    if(!btnContainer) return;
-    
-    btnContainer.innerHTML = '';
-    wiz.columns.forEach(colName => {
-        const isMapped = wiz.mapped[colName] !== undefined;
-        const isActive = wiz.activeTarget === colName;
-        
-        const btn = document.createElement('button');
-        btn.innerText = colName + (isMapped ? ' ✓' : '');
-        btn.className = `wiz-btn ${isActive ? 'active' : (isMapped ? 'mapped' : 'default')}`;
-        btn.onclick = () => infSetMappingTarget(colName);
-        btnContainer.appendChild(btn);
-    });
-};
-
-window.infFinishMapping = function() {
-    const wiz = window.infState.wizard;
-    const tData = window.infState.data[window.infState.activeTab];
-    
-    const mappedCols = wiz.columns.map(name => ({ name, oldIdx: wiz.mapped[name] })).filter(mc => mc.oldIdx !== undefined);
-    
-    if (mappedCols.length === 0) return alert("매칭된 열이 하나도 없습니다. 최소 1개 이상 항목을 엑셀 열과 매칭해주세요.");
-    if (!confirm("매칭되지 않은 불필요한 열은 모두 자동으로 삭제됩니다.\n'행 지우기' 단계로 넘어가시겠습니까?")) return;
-
-    infSaveHistory();
-
-    const finalColumns = ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득일', '취득년도', '취득가액'];
-
-    tData.raw = tData.raw.map(oldRow => {
-        const newRow = [];
-        finalColumns.forEach((colName, newIdx) => {
-            if (colName === '취득년도') {
-                const dateCol = mappedCols.find(mc => mc.name === '취득일');
-                let year = '';
-                if (dateCol && oldRow[dateCol.oldIdx] !== undefined) {
-                    const match = String(oldRow[dateCol.oldIdx]).match(/(19|20)\d{2}/);
-                    if (match) year = match[0];
-                }
-                newRow[newIdx] = year;
-            } else {
-                const mappedCol = mappedCols.find(mc => mc.name === colName);
-                newRow[newIdx] = (mappedCol && oldRow[mappedCol.oldIdx] !== undefined) ? oldRow[mappedCol.oldIdx] : '';
-            }
-        });
-        return newRow;
-    });
-    
-    wiz.mapped = {};
-    finalColumns.forEach((colName, idx) => { wiz.mapped[colName] = idx; });
-    
-    wiz.phase = 'row-delete';
-    wiz.activeTarget = '';
-    
-    document.getElementById('infWizardText').innerHTML = `🧹 1.5단계: 불필요한 행(빈 줄, 합계 등)을 <b>[Ctrl + -]</b> 단축키로 지우시고, <b>우측 하단의 '부분합 및 정렬' 버튼</b>을 눌러 명세서를 검증하세요.`;
-    document.getElementById('btnFinishMapping').style.display = 'none';
-    document.getElementById('infMappingButtons').style.display = 'none';
-    
-    const btnNext = document.getElementById('btnInfNextStep');
-    btnNext.style.display = 'inline-block';
-    btnNext.innerHTML = '<i class="fa-solid fa-layer-group"></i> 부분합(소계) 및 정렬 수행';
-    btnNext.style.backgroundColor = '#6f42c1'; 
-    btnNext.onclick = infCalculateSubtotals;
-    
-    tData.selectedCols.clear();
-    tData.selectedRows.clear();
-    infRenderTable();
-};
-
-// (3) 3단계 전환 로직
-window.infProceedToStep2 = function() {
-    window.infState.step = 2;
-    document.getElementById('infStep1Panel').style.display = 'none';
-    document.getElementById('infStep2Panel').style.display = 'block';
-    document.getElementById('infStep3Panel').style.display = 'none';
-    
-    document.getElementById('btnInfNextStep').style.display = 'none';
-    document.getElementById('btnInfToStep3').style.display = 'inline-block';
-    document.getElementById('btnInfComplete').style.display = 'none';
-    infRenderTable();
-};
-
-window.infProceedToStep3 = function() {
-    window.infState.step = 3;
-    document.getElementById('infStep1Panel').style.display = 'none';
-    document.getElementById('infStep2Panel').style.display = 'none';
-    document.getElementById('infStep3Panel').style.display = 'block';
-    
-    document.getElementById('btnInfNextStep').style.display = 'none';
-    document.getElementById('btnInfToStep3').style.display = 'none';
-    document.getElementById('btnInfComplete').style.display = 'inline-block';
-    infRenderTable();
-};
-
-window.infBackToStep1 = function() {
-    window.infState.step = 1;
-    document.getElementById('infStep1Panel').style.display = 'block';
-    document.getElementById('infStep2Panel').style.display = 'none';
-    document.getElementById('infStep3Panel').style.display = 'none';
-    
-    document.getElementById('btnInfNextStep').style.display = 'inline-block';
-    document.getElementById('btnInfToStep3').style.display = 'none';
-    document.getElementById('btnInfComplete').style.display = 'none';
-    infRenderTable(); 
-};
-
-window.infBackToStep2 = function() {
-    window.infState.step = 2;
-    document.getElementById('infStep1Panel').style.display = 'none';
-    document.getElementById('infStep2Panel').style.display = 'block';
-    document.getElementById('infStep3Panel').style.display = 'none';
-    
-    document.getElementById('btnInfNextStep').style.display = 'none';
-    document.getElementById('btnInfToStep3').style.display = 'inline-block';
-    document.getElementById('btnInfComplete').style.display = 'none';
-    infRenderTable(); 
-};
-
-// ============================================================================
-// api_inflation.js - [섹션 4] 테이블 렌더링 (20자 입력, 폰트 정상화, 상하좌우 방향키 이동 기능 추가)
+// api_inflation.js - [섹션 4] 테이블 렌더링 (헤더 지정 버튼 추가 및 내비게이션 유지)
 // ============================================================================
 
 window.infSetFolding = function(level) {
@@ -269,7 +14,6 @@ window.infUpdateCellData = function(rIdx, cIdx, val) {
     }
 };
 
-// ★ 상하좌우(방향키) 및 엔터키 이동을 완벽 지원하는 엑셀형 내비게이션 로직
 window.infHandleInputKey = function(e, rIdx, cIdx) {
     const tData = window.infState.data[window.infState.activeTab];
     let nextR = rIdx;
@@ -279,7 +23,6 @@ window.infHandleInputKey = function(e, rIdx, cIdx) {
     if (e.key === 'Enter' || e.key === 'ArrowDown') {
         shouldMove = true;
         nextR++;
-        // 아래로 갈 때 소계/총계 행은 건너뛰기
         while (nextR < tData.raw.length) {
             if (document.getElementById(`infInput_${nextR}_${nextC}`)) break;
             nextR++;
@@ -287,23 +30,14 @@ window.infHandleInputKey = function(e, rIdx, cIdx) {
     } else if (e.key === 'ArrowUp') {
         shouldMove = true;
         nextR--;
-        // 위로 갈 때 소계/총계 행은 건너뛰기
         while (nextR >= 0) {
             if (document.getElementById(`infInput_${nextR}_${nextC}`)) break;
             nextR--;
         }
     } else if (e.key === 'ArrowLeft') {
-        // 커서가 맨 앞에 있을 때만 왼쪽 셀로 이동 (글자 수정 방해 방지)
-        if (e.target.selectionStart === 0) {
-            shouldMove = true;
-            nextC--;
-        }
+        if (e.target.selectionStart === 0) { shouldMove = true; nextC--; }
     } else if (e.key === 'ArrowRight') {
-        // 커서가 맨 뒤에 있을 때만 오른쪽 셀로 이동 (글자 수정 방해 방지)
-        if (e.target.selectionEnd === e.target.value.length) {
-            shouldMove = true;
-            nextC++;
-        }
+        if (e.target.selectionEnd === e.target.value.length) { shouldMove = true; nextC++; }
     }
 
     if (shouldMove) {
@@ -311,7 +45,7 @@ window.infHandleInputKey = function(e, rIdx, cIdx) {
         if (nextEl) {
             e.preventDefault();
             nextEl.focus();
-            nextEl.select(); // 이동 후 바로 수정할 수 있게 전체 블록 지정
+            nextEl.select(); 
         }
     }
 };
@@ -350,8 +84,11 @@ window.infRenderTable = function() {
         const isSelected = tData.selectedCols.has(c) ? 'inf-sel-col' : '';
         const th = document.createElement('th');
         th.className = `inf-header ${isSelected}`;
-        th.style.cssText = `background:#f8fafc; border:1px solid #ccc; padding:8px; text-align:center; font-weight:bold; min-width:80px; vertical-align:middle;`;
+        th.style.cssText = `background:#f8fafc; border:1px solid #ccc; padding:8px; text-align:center; font-weight:bold; min-width:80px; vertical-align:bottom;`;
         
+        // 2단계 이상이면 좌측 일반 컬럼들도 버튼 높이만큼 여백을 줌
+        const emptySpaceForBtn = (window.infState.step >= 2 && wiz.phase !== 'mapping' && wiz.phase !== 'idle') ? `<div style="height:25px; margin-bottom:6px;"></div>` : '';
+
         if (wiz.phase === 'mapping' || wiz.phase === 'idle') {
             let colLetter = String.fromCharCode(65 + (c % 26)); 
             if (c >= 26) colLetter = String.fromCharCode(64 + Math.floor(c / 26)) + colLetter;
@@ -361,7 +98,7 @@ window.infRenderTable = function() {
             }
             th.innerHTML = `${colLetter} ${mappedLabel}`;
         } else {
-            th.innerHTML = mappedKeys[c] || `데이터 ${c+1}`;
+            th.innerHTML = `${emptySpaceForBtn}<div>${mappedKeys[c] || `데이터 ${c+1}`}</div>`;
             th.style.background = '#e9ecef';
             th.style.color = '#1C5691';
         }
@@ -391,20 +128,40 @@ window.infRenderTable = function() {
         headerTr.appendChild(th);
     }
     
-    // ★ 2단계, 3단계 헤더 색상 톤 통일 및 연도 동적 표기
+    // ★ [2단계] 구분 열 헤더 + 실행 단추(버튼) 추가!
     if(window.infState.step >= 2) {
         step2Cols.forEach((colName, idx) => {
+            let topButtonHtml = '';
             let displayName = colName;
-            // 과거 구분 열(idx 0)이고, 연도가 추출되었을 때 연도 추가 표기
-            if (idx === 0 && window.infState.pastYear) {
-                displayName = `과거 구분<br><span style="font-size:11px; color:#888;">(${window.infState.pastYear})</span>`;
+
+            if (idx === 0) {
+                topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#17A2B8; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="document.getElementById('infPastExcelFile').click()"><i class="fa-solid fa-file-import"></i> 과거 연동</button>`;
+                if (window.infState.pastYear) {
+                    displayName = `과거 구분<br><span style="font-size:11px; color:#888;">(${window.infState.pastYear})</span>`;
+                }
+            } else if (idx === 1) {
+                topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#6c757d; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="window.assignBasicClass()"><i class="fa-solid fa-wand-magic-sparkles"></i> 기본 지정</button>`;
+            } else if (idx === 2) {
+                topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#6c757d; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="window.assignExcludeEval()"><i class="fa-solid fa-ban"></i> 평가 제외</button>`;
+            } else if (idx === 3) {
+                topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#6c757d; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="window.assignExcludeCoverage()"><i class="fa-solid fa-ban"></i> 부보 제외</button>`;
+            } else if (idx === 4) {
+                topButtonHtml = `<div style="height:23px; margin-bottom:6px;"></div>`;
             }
-            headerTr.innerHTML += `<th style="background:#e9ecef; color:#1C5691; border:1px solid #ccc; padding:8px; text-align:center;">${displayName}</th>`;
+
+            headerTr.innerHTML += `<th style="background:#e9ecef; color:#1C5691; border:1px solid #ccc; padding:8px 4px; text-align:center; vertical-align:bottom; min-width:90px;">
+                ${topButtonHtml}
+                <div>${displayName}</div>
+            </th>`;
         });
     }
+
     if(window.infState.step === 3) {
         step3Cols.forEach(colName => {
-            headerTr.innerHTML += `<th style="background:#e9ecef; color:#1C5691; border:1px solid #ccc; padding:8px; text-align:center;">${colName}</th>`;
+            headerTr.innerHTML += `<th style="background:#e9ecef; color:#1C5691; border:1px solid #ccc; padding:8px; text-align:center; vertical-align:bottom;">
+                <div style="height:23px; margin-bottom:6px;"></div>
+                <div>${colName}</div>
+            </th>`;
         });
     }
     thead.appendChild(headerTr);
@@ -459,7 +216,6 @@ window.infRenderTable = function() {
             rowHtml += `<td class="${isColSel}" style="border:1px solid #eee; padding:6px 10px; max-width:200px; overflow:hidden; text-overflow:ellipsis; text-align:${align}; ${bgStyle}">${cellVal}</td>`;
         }
         
-        // ★ 2단계 열 입력 필드: maxlength 20으로 수정, 기본 폰트로 얌전하게 변경, 방향키 이벤트(onkeydown) 연결
         if(window.infState.step >= 2) {
             step2Cols.forEach((cName, idx) => {
                 const dataIdx = colCount + idx;
@@ -508,8 +264,43 @@ window.infRenderTable = function() {
 };
 
 // ============================================================================
-// api_inflation.js - [섹션 5] 정렬/부분합, 히스토리, 단축키 로직
+// api_inflation.js - [섹션 5] 정렬/부분합, 히스토리, 단축키 로직 및 행 추가 로직
 // ============================================================================
+
+// ★ 신규: 선택한 행 밑에 빈 행을 추가하는 로직
+window.infAddEmptyRow = function() {
+    const tData = window.infState.data[window.infState.activeTab];
+    if(!tData || !tData.raw || tData.raw.length === 0) return;
+
+    infSaveHistory();
+
+    const wiz = window.infState.wizard;
+    const mappedKeys = Object.keys(wiz.mapped);
+    let totalCols = (wiz.phase === 'mapping' || wiz.phase === 'idle') ? tData.raw[0].length : mappedKeys.length;
+    
+    // 추가 열(구분 5개, 평가 6개)을 포함하여 빈 배열 크기 잡기
+    if (window.infState.step >= 2) totalCols += 5;
+    if (window.infState.step === 3) totalCols += 6;
+
+    const newRow = new Array(totalCols).fill('');
+
+    let insertIdx = tData.raw.length;
+    if (tData.selectedRows.size > 0) {
+        insertIdx = Math.max(...Array.from(tData.selectedRows)) + 1;
+    } else {
+        const yearIdx = mappedKeys.indexOf('취득년도');
+        if (yearIdx !== -1 && tData.raw.length > 0 && String(tData.raw[tData.raw.length-1][yearIdx]).includes('총계')) {
+            insertIdx = tData.raw.length - 1; // 총계 바로 위에 삽입
+        }
+    }
+
+    tData.raw.splice(insertIdx, 0, newRow);
+    tData.selectedRows.clear();
+    tData.selectedRows.add(insertIdx);
+    
+    infRenderTable();
+};
+
 window.infCalculateSubtotals = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
@@ -659,18 +450,17 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
+
 // ============================================================================
-// api_inflation.js - [섹션 6] 과거 데이터 연동 및 매칭 알고리즘
+// api_inflation.js - [섹션 6] 과거 데이터 연동 매칭 알고리즘
 // ============================================================================
 
-// 전역 상태에 과거 연도 저장소 추가 (초기화)
 window.infState.pastYear = null; 
 
 window.infLoadPastData = function(event) {
     const file = event.target.files[0];
     if(!file) return;
 
-    // 1. 파일명에서 연도(4자리 숫자) 자동 추출
     const yearMatch = file.name.match(/(19|20)\d{2}/);
     window.infState.pastYear = yearMatch ? yearMatch[0] : '연도미상';
 
@@ -683,12 +473,8 @@ window.infLoadPastData = function(event) {
             if(pastData.length < 2) return alert("과거 데이터 파일이 비어있습니다.");
 
             const pastHeader = pastData[0];
-            
-            // 과거 파일에서 자산번호, 자산명 인덱스 찾기
             const pastAssetNumIdx = pastHeader.findIndex(h => String(h).includes('자산번호'));
             const pastAssetNameIdx = pastHeader.findIndex(h => String(h).includes('자산명'));
-            
-            // 과거 파일에서 가져올 타겟 데이터 (보통 작년의 '최종 구분'이 올해의 '과거 구분'이 됨)
             const pastClassIdx = pastHeader.findIndex(h => String(h).includes('최종 구분') || String(h).includes('과거 구분')); 
 
             if(pastClassIdx === -1) {
@@ -699,13 +485,11 @@ window.infLoadPastData = function(event) {
             const tData = window.infState.data[window.infState.activeTab];
             const curAssetNumIdx = Object.keys(wiz.mapped).indexOf('자산번호');
             const curAssetNameIdx = Object.keys(wiz.mapped).indexOf('자산명');
-            const curPastClassIdx = wiz.columns.length; // 2단계 추가 열 중 첫 번째('과거 구분') 인덱스
+            const curPastClassIdx = wiz.columns.length;
 
             let matchCount = 0;
 
-            // 2. 스마트 매칭 실행
             tData.raw.forEach(curRow => {
-                // 소계, 총계 행은 건너뛰기
                 const yearColIdx = Object.keys(wiz.mapped).indexOf('취득년도');
                 if (String(curRow[yearColIdx] || '').includes('소계') || String(curRow[yearColIdx] || '').includes('총계')) return;
 
@@ -713,48 +497,45 @@ window.infLoadPastData = function(event) {
                 const curName = String(curRow[curAssetNameIdx] || '').trim();
                 let matchedPastRow = null;
 
-                // [1순위] 자산번호 매칭
                 if (curNum && pastAssetNumIdx !== -1) {
                     matchedPastRow = pastData.find((pRow, idx) => idx > 0 && String(pRow[pastAssetNumIdx] || '').trim() === curNum);
                 }
                 
-                // [2순위] 자산명 매칭 (자산번호가 빈칸이거나 매칭 실패 시)
                 if (!matchedPastRow && curName && pastAssetNameIdx !== -1) {
                     matchedPastRow = pastData.find((pRow, idx) => idx > 0 && String(pRow[pastAssetNameIdx] || '').trim() === curName);
                 }
 
-                // 매칭 성공 시 데이터 삽입
                 if (matchedPastRow) {
                     curRow[curPastClassIdx] = matchedPastRow[pastClassIdx];
                     matchCount++;
                 }
             });
 
-            // 화면 갱신 및 결과 알림
             infSaveHistory();
             infRenderTable();
-            alert(`✅ 과거 데이터 연동 완료\n- 기준 연도: ${window.infState.pastYear}년\n- 총 ${matchCount}건의 자산 구분이 성공적으로 매칭되었습니다.`);
+            alert(`✅ 과거 데이터 연동 완료\n- 기준 연도: ${window.infState.pastYear}년\n- 총 ${matchCount}건의 자산 구분이 매칭되었습니다.`);
 
         } catch(err) {
             alert("파일을 읽는 중 오류가 발생했습니다: " + err);
         }
     };
     reader.readAsArrayBuffer(file);
-    event.target.value = ''; // 같은 파일 다시 선택 가능하도록 초기화
+    event.target.value = ''; 
 };
 
+
 // ============================================================================
-// api_inflation.js - [섹션 7] 자산 구분 일괄 지정 로직 (구현 예정)
+// api_inflation.js - [섹션 7] 자산 구분 일괄 지정 (이벤트 준비)
 // ============================================================================
 
 window.assignBasicClass = function() {
-    alert("준비 중: '기본구분' 일괄 지정 로직이 실행될 예정입니다.");
+    alert("준비 중: '기본구분' 일괄 지정 로직이 곧 적용됩니다.");
 };
 
 window.assignExcludeEval = function() {
-    alert("준비 중: '평가제외' 일괄 지정 로직이 실행될 예정입니다.");
+    alert("준비 중: '평가제외' 일괄 지정 로직이 곧 적용됩니다.");
 };
 
 window.assignExcludeCoverage = function() {
-    alert("준비 중: '부보제외' 일괄 지정 로직이 실행될 예정입니다.");
+    alert("준비 중: '부보제외' 일괄 지정 로직이 곧 적용됩니다.");
 };
