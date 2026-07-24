@@ -505,13 +505,16 @@
                         </div>
                     </div>
 
-                    <!-- 마법사 안내 영역 -->
-                    <div id="infWizardArea" style="background:#f0fdf4; border:1px solid #bbf7d0; padding:12px; border-radius:4px; display:none; align-items:center; justify-content:space-between;">
-                        <div>
-                            <span style="font-size:15px; font-weight:bold; color:#166534;" id="infWizardText">🎯 1단계: [소재지] 데이터가 있는 열 상단을 클릭해 주세요!</span>
-                            <span style="font-size:12px; color:#666; margin-left:10px;" id="infWizardStatus">(0/7 완료)</span>
+                    <!-- 마법사 안내 영역 (업그레이드 버전) -->
+                    <div id="infWizardArea" style="background:#f0fdf4; border:1px solid #bbf7d0; padding:15px; border-radius:4px; display:none; flex-direction:column; gap:12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-size:15px; font-weight:bold; color:#166534;" id="infWizardText">🎯 아래 버튼 중 하나를 선택하고, 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭해 매칭하세요!</span>
+                            <button type="button" class="btn-yellow" id="btnStartWizard" onclick="infStartWizard()">열 매핑 마법사 시작</button>
+                            <button type="button" class="btn-yellow" id="btnFinishMapping" onclick="infFinishMapping()" style="display:none; background:#1C5691; color:white; border:none;">열 매핑 완료 및 행 지우기로 전환 ▶</button>
                         </div>
-                        <button type="button" class="btn-yellow" onclick="infStartWizard()">열 매핑 마법사 시작</button>
+                        <div id="infMappingButtons" style="display:none; gap:10px; flex-wrap:wrap; padding-top:10px; border-top:1px dashed #a7f3d0;">
+                            <!-- JS에서 7개 항목 버튼이 생성됩니다. -->
+                        </div>
                     </div>
                 </div>
             </div>

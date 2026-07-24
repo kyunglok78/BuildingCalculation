@@ -1,5 +1,5 @@
 // ============================================================================
-// api_inflation.js - 2.3 물가보정 평가 모듈 (마법사 및 엑셀형 다중 선택 적용)
+// api_inflation.js - 2.3 물가보정 평가 모듈 (마법사 + 다중 선택 + 자동 열 삭제)
 // ============================================================================
 
 window.infState = {
@@ -9,20 +9,19 @@ window.infState = {
     step: 1, // 1: 정제, 2: 평가
     data: {}, // { tabName: { raw: [], history: [], selectedRows: Set, selectedCols: Set } }
     
-    // 마법사 관련 상태
     wizard: {
         active: false,
+        phase: 'idle', // 'idle' -> 'mapping' -> 'row-delete'
         columns: ['소재지', '자산계정', '자산번호', '자산명', '취득일', '취득년도', '취득가액'],
-        currentIndex: 0,
-        mapped: {} // { '소재지': 2 (colIndex) }
+        activeTarget: '', // 현재 매핑을 위해 활성화된 항목
+        mapped: {} // 매핑 결과 { '소재지': 2 (colIndex) }
     },
     
-    // 다중 선택을 위한 마지막 클릭 인덱스 보관 (Shift-click 구현용)
     lastClickedRow: -1,
     lastClickedCol: -1
 };
 
-// CSS 동적 추가 (엑셀 선택 효과용)
+// CSS 동적 추가
 (function addInfStyles() {
     if(document.getElementById('inf-dynamic-styles')) return;
     const style = document.createElement('style');
@@ -32,37 +31,30 @@ window.infState = {
         .inf-sel-row { background-color: #dbeafe !important; }
         .inf-header:hover { background-color: #e2e8f0; cursor: pointer; }
         .inf-row-header:hover { background-color: #e2e8f0; cursor: pointer; }
+        .wiz-btn { padding:6px 14px; border-radius:20px; font-size:13px; font-weight:bold; cursor:pointer; transition: 0.2s; }
+        .wiz-btn.active { background:#1C5691 !important; color:#fff !important; border:2px solid #1C5691 !important; box-shadow:0 0 8px rgba(28,86,145,0.4); }
+        .wiz-btn.mapped { background:#e2e8f0 !important; color:#64748b !important; border:2px solid #cbd5e1 !important; }
+        .wiz-btn.default { background:#fff; color:#333; border:2px solid #ccc; }
     `;
     document.head.appendChild(style);
 })();
 
-// (1) 탭 초기화 (1.1 일반정보에서 가져오기)
+// (1) 탭 초기화
 window.infInitTabs = function() {
     const modeObj = document.querySelector('input[name="infMode"]:checked');
     if(!modeObj) return;
-    const mode = modeObj.value;
-    window.infState.mode = mode;
-    window.infState.tabs = [];
+    window.infState.mode = modeObj.value;
+    window.infState.tabs = window.infState.mode === 'integrated' ? ['통합자산명세서'] : 
+        Array.from(document.querySelectorAll('#locationTbody tr')).map(row => row.querySelector('.loc-name') ? row.querySelector('.loc-name').value.trim() : '').filter(n => n);
     
-    if(mode === 'integrated') {
-        window.infState.tabs = ['통합자산명세서'];
-    } else {
-        document.querySelectorAll('#locationTbody tr').forEach(row => {
-            const name = row.querySelector('.loc-name') ? row.querySelector('.loc-name').value.trim() : '';
-            // 물가보정 체크된 항목만 가져오려면 여기서 필터링 가능 (현재는 이름 있으면 가져옴)
-            if(name) window.infState.tabs.push(name);
-        });
-        if(window.infState.tabs.length === 0) window.infState.tabs = ['기본 사업장'];
-    }
+    if(window.infState.tabs.length === 0) window.infState.tabs = ['기본 사업장'];
 
     const tabContainer = document.getElementById('infTabs');
     if(!tabContainer) return;
     tabContainer.innerHTML = '';
     
     window.infState.tabs.forEach((tabName, idx) => {
-        if(!window.infState.data[tabName]) {
-            window.infState.data[tabName] = { raw: [], history: [], selectedRows: new Set(), selectedCols: new Set() };
-        }
+        if(!window.infState.data[tabName]) window.infState.data[tabName] = { raw: [], history: [], selectedRows: new Set(), selectedCols: new Set() };
         
         const tabBtn = document.createElement('div');
         tabBtn.innerText = tabName;
@@ -76,46 +68,38 @@ window.infInitTabs = function() {
             infRenderTable();
         };
         tabContainer.appendChild(tabBtn);
-        
         if(idx === 0) tabBtn.click();
     });
 };
 
-// 탭 표시 화면 진입 시 초기화 트리거
 document.addEventListener("DOMContentLoaded", () => {
     const infMenu = document.getElementById('nav-sec-2-3');
-    if(infMenu) {
-        infMenu.addEventListener('click', () => {
-            if(window.infState.tabs.length === 0) infInitTabs();
-        });
-    }
+    if(infMenu) infMenu.addEventListener('click', () => { if(window.infState.tabs.length === 0) infInitTabs(); });
 });
 
-// ==========================================
-// 엑셀 데이터 로드 및 매핑 마법사
-// ==========================================
-
+// (2) 엑셀 로드
 window.infLoadExcel = function(event) {
     const file = event.target.files[0];
     if(!file) return;
     const tabName = window.infState.activeTab;
-    if(!tabName) return alert("선택된 탭이 없습니다.");
-
+    
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, {type: 'array'});
-            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: ""});
-            
+            const jsonData = XLSX.utils.sheet_to_json(XLSX.read(new Uint8Array(e.target.result), {type: 'array'}).Sheets[XLSX.read(new Uint8Array(e.target.result), {type: 'array'}).SheetNames[0]], {header: 1, defval: ""});
             if(jsonData.length === 0) return alert("엑셀 파일이 비어있습니다.");
-
+            
             window.infState.data[tabName].raw = jsonData;
             window.infState.data[tabName].history = [];
+            window.infState.wizard.phase = 'idle';
             
             document.getElementById('infWizardArea').style.display = 'flex';
-            document.getElementById('btnInfNextStep').style.display = 'inline-block';
+            document.getElementById('btnStartWizard').style.display = 'inline-block';
+            document.getElementById('btnFinishMapping').style.display = 'none';
+            document.getElementById('infMappingButtons').style.display = 'none';
+            document.getElementById('infWizardText').innerHTML = `🎯 원본 데이터를 불러왔습니다. 우측의 <b>'열 매핑 마법사 시작'</b>을 눌러주세요.`;
+            document.getElementById('btnInfNextStep').style.display = 'none';
+            
             infRenderTable();
         } catch(err) { alert("엑셀 로드 오류: " + err); }
     };
@@ -123,40 +107,86 @@ window.infLoadExcel = function(event) {
     event.target.value = '';
 };
 
-// 마법사 시작
+// (3) 마법사 기능 세트
 window.infStartWizard = function() {
-    window.infState.wizard.active = true;
-    window.infState.wizard.currentIndex = 0;
-    window.infState.wizard.mapped = {};
+    const wiz = window.infState.wizard;
+    wiz.active = true;
+    wiz.phase = 'mapping';
+    wiz.mapped = {};
+    wiz.activeTarget = wiz.columns[0];
+    
+    document.getElementById('btnStartWizard').style.display = 'none';
+    document.getElementById('btnFinishMapping').style.display = 'inline-block';
+    document.getElementById('infMappingButtons').style.display = 'flex';
+    document.getElementById('infWizardText').innerHTML = `🎯 아래 버튼 중 하나를 선택하고, 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭하세요. (없는 항목은 무시하세요)`;
+    
+    infUpdateWizardUI();
+    infRenderTable();
+};
+
+window.infSetMappingTarget = function(colName) {
+    window.infState.wizard.activeTarget = colName;
     infUpdateWizardUI();
 };
 
 window.infUpdateWizardUI = function() {
     const wiz = window.infState.wizard;
-    const targetText = document.getElementById('infWizardText');
-    const statusText = document.getElementById('infWizardStatus');
+    const btnContainer = document.getElementById('infMappingButtons');
+    if(!btnContainer) return;
     
-    if (wiz.currentIndex >= wiz.columns.length) {
-        targetText.innerHTML = `🎉 열 매핑 완료! 이제 <kbd>Ctrl + -</kbd> 로 불필요한 행을 지우거나 우측 하단의 <b>'2단계로 전환'</b>을 누르세요.`;
-        statusText.innerText = `(7/7 완료)`;
-        wiz.active = false;
-        return;
-    }
-    
-    const currColName = wiz.columns[wiz.currentIndex];
-    targetText.innerHTML = `🎯 1단계: <b>[${currColName}]</b> 데이터가 있는 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px;">열 상단(알파벳)</span>을 클릭해 주세요!`;
-    statusText.innerText = `(${wiz.currentIndex}/7 완료)`;
+    btnContainer.innerHTML = '';
+    wiz.columns.forEach(colName => {
+        const isMapped = wiz.mapped[colName] !== undefined;
+        const isActive = wiz.activeTarget === colName;
+        
+        const btn = document.createElement('button');
+        btn.innerText = colName + (isMapped ? ' ✓' : '');
+        btn.className = `wiz-btn ${isActive ? 'active' : (isMapped ? 'mapped' : 'default')}`;
+        btn.onclick = () => infSetMappingTarget(colName);
+        btnContainer.appendChild(btn);
+    });
 };
 
-// 2단계 워크시트로 전환
+// ★ 핵심: 맵핑 완료 및 불필요 열 삭제 후 행 지우기로 전환 ★
+window.infFinishMapping = function() {
+    const wiz = window.infState.wizard;
+    const tData = window.infState.data[window.infState.activeTab];
+    
+    const mappedCols = wiz.columns.map(name => ({ name, oldIdx: wiz.mapped[name] })).filter(mc => mc.oldIdx !== undefined);
+    
+    if (mappedCols.length === 0) return alert("매칭된 열이 하나도 없습니다. 최소 1개 이상 항목을 엑셀 열과 매칭해주세요.");
+    if (!confirm("매칭되지 않은 불필요한 열은 모두 자동으로 삭제됩니다.\n'행 지우기' 단계로 넘어가시겠습니까?")) return;
+
+    infSaveHistory();
+
+    // 매칭된 열만 뽑아서 데이터 재구성
+    tData.raw = tData.raw.map(row => mappedCols.map(mc => row[mc.oldIdx] !== undefined ? row[mc.oldIdx] : ''));
+    
+    // 매핑 인덱스도 새 배열에 맞게 초기화 (0, 1, 2...)
+    wiz.mapped = {};
+    mappedCols.forEach((mc, newIdx) => { wiz.mapped[mc.name] = newIdx; });
+    
+    wiz.phase = 'row-delete';
+    wiz.activeTarget = '';
+    
+    document.getElementById('infWizardText').innerHTML = `🧹 2단계: 불필요한 행(빈 줄, 합계 등)을 지워주세요!<br><span style="font-size:13px; font-weight:normal; color:#666;">여러 행의 번호를 선택 후 키보드 <kbd>Ctrl + -</kbd> (삭제) / 실수했다면 <kbd>Ctrl + Z</kbd> (되돌리기)</span>`;
+    document.getElementById('btnFinishMapping').style.display = 'none';
+    document.getElementById('infMappingButtons').style.display = 'none';
+    document.getElementById('btnInfNextStep').style.display = 'inline-block'; // 2단계 전환 버튼 등장!
+    
+    tData.selectedCols.clear();
+    tData.selectedRows.clear();
+    infRenderTable();
+};
+
+// (4) 2단계(평가) 뷰 전환
 window.infProceedToStep2 = function() {
     window.infState.step = 2;
     document.getElementById('infStep1Panel').style.display = 'none';
     document.getElementById('btnInfNextStep').style.display = 'none';
     document.getElementById('infStep2Panel').style.display = 'block';
     document.getElementById('btnInfComplete').style.display = 'inline-block';
-    
-    infRenderTable(); // 2단계용 테이블 렌더링
+    infRenderTable();
 };
 
 window.infBackToStep1 = function() {
@@ -165,17 +195,13 @@ window.infBackToStep1 = function() {
     document.getElementById('btnInfNextStep').style.display = 'inline-block';
     document.getElementById('infStep2Panel').style.display = 'none';
     document.getElementById('btnInfComplete').style.display = 'none';
-    
-    infRenderTable(); // 1단계용 테이블 렌더링
+    infRenderTable(); 
 };
 
-// ==========================================
-// 테이블 렌더링, 다중 선택 및 단축키 (Ctrl+- / Ctrl+Z)
-// ==========================================
-
+// (5) 메인 테이블 렌더링
 window.infRenderTable = function() {
-    const tabName = window.infState.activeTab;
-    const tData = window.infState.data[tabName];
+    const wiz = window.infState.wizard;
+    const tData = window.infState.data[window.infState.activeTab];
     if(!tData || !tData.raw || tData.raw.length === 0) return;
 
     const data = tData.raw;
@@ -184,61 +210,60 @@ window.infRenderTable = function() {
     thead.innerHTML = ''; tbody.innerHTML = '';
 
     const colCount = data[0].length;
-    
-    // --- 헤더 그리기 ---
     const headerTr = document.createElement('tr');
-    headerTr.innerHTML = `<th style="width:40px; background:#f8fafc; border:1px solid #ccc;"></th>`; // 좌상단 빈칸
+    headerTr.innerHTML = `<th style="width:40px; background:#f8fafc; border:1px solid #ccc;"></th>`; 
     
-    // 2단계 전환 시 추가될 표준 컬럼 배열
     const step2Cols = ['구분', '물가지수', '재조달가액', '감가율', '잔가율', '현재가액', '비고'];
+    const mappedKeys = Object.keys(wiz.mapped); // 맵핑 완료 후의 순서 배열
 
     for(let c = 0; c < colCount; c++) {
         const isSelected = tData.selectedCols.has(c) ? 'inf-sel-col' : '';
         const th = document.createElement('th');
         th.className = `inf-header ${isSelected}`;
-        th.style.cssText = `background:#f8fafc; border:1px solid #ccc; padding:8px; text-align:center; font-weight:bold; min-width:80px; position:relative;`;
+        th.style.cssText = `background:#f8fafc; border:1px solid #ccc; padding:8px; text-align:center; font-weight:bold; min-width:80px;`;
         
-        // 엑셀처럼 알파벳 표시 (A, B, C...)
-        let colLetter = String.fromCharCode(65 + (c % 26)); 
-        if (c >= 26) colLetter = String.fromCharCode(64 + Math.floor(c / 26)) + colLetter;
-        
-        // 마법사 매핑 라벨 표시
-        let mappedLabel = "";
-        for (const [key, val] of Object.entries(window.infState.wizard.mapped)) {
-            if (val === c) mappedLabel = `<br><span style="background:#FFCC00; color:#000; font-size:11px; padding:2px 4px; border-radius:3px;">${key}</span>`;
+        if (wiz.phase === 'mapping' || wiz.phase === 'idle') {
+            let colLetter = String.fromCharCode(65 + (c % 26)); 
+            if (c >= 26) colLetter = String.fromCharCode(64 + Math.floor(c / 26)) + colLetter;
+            
+            let mappedLabel = "";
+            for (const [key, val] of Object.entries(wiz.mapped)) {
+                if (val === c) mappedLabel = `<br><span style="background:#FFCC00; color:#000; font-size:11px; padding:2px 4px; border-radius:3px;">${key}</span>`;
+            }
+            th.innerHTML = `${colLetter} ${mappedLabel}`;
+        } else {
+            // 행 지우기 단계이거나 2단계(평가)일 때 -> 예쁜 정식 이름표를 달아줌!
+            th.innerHTML = mappedKeys[c] || `데이터 ${c+1}`;
+            th.style.background = '#e9ecef';
+            th.style.color = '#1C5691';
         }
-
-        th.innerHTML = `${colLetter} ${mappedLabel}`;
         
-        // 열 클릭 이벤트 (선택 및 마법사 연동)
         th.onclick = (e) => {
-            if (window.infState.step === 1 && window.infState.wizard.active) {
-                const currColName = window.infState.wizard.columns[window.infState.wizard.currentIndex];
-                window.infState.wizard.mapped[currColName] = c;
-                window.infState.wizard.currentIndex++;
+            if (window.infState.step === 1 && wiz.phase === 'mapping') {
+                if (!wiz.activeTarget) return alert("위에서 매칭할 항목 버튼을 먼저 선택해주세요.");
+                wiz.mapped[wiz.activeTarget] = c;
+                // 자동으로 다음 안 된 항목 찾아 활성화
+                const unmapped = wiz.columns.find(col => wiz.mapped[col] === undefined);
+                wiz.activeTarget = unmapped || ''; 
                 infUpdateWizardUI();
                 infRenderTable();
                 return;
             }
             
-            // Shift 다중 선택 로직
             if (e.shiftKey && window.infState.lastClickedCol !== -1) {
-                const start = Math.min(window.infState.lastClickedCol, c);
-                const end = Math.max(window.infState.lastClickedCol, c);
+                const start = Math.min(window.infState.lastClickedCol, c), end = Math.max(window.infState.lastClickedCol, c);
                 for(let i=start; i<=end; i++) tData.selectedCols.add(i);
             } else {
                 if (!e.ctrlKey && !e.metaKey) tData.selectedCols.clear();
-                if (tData.selectedCols.has(c)) tData.selectedCols.delete(c);
-                else tData.selectedCols.add(c);
+                tData.selectedCols.has(c) ? tData.selectedCols.delete(c) : tData.selectedCols.add(c);
             }
             window.infState.lastClickedCol = c;
-            tData.selectedRows.clear(); // 열 선택시 행 선택 초기화
+            tData.selectedRows.clear(); 
             infRenderTable();
         };
         headerTr.appendChild(th);
     }
     
-    // 2단계일 경우 우측에 표준 컬럼 추가
     if(window.infState.step === 2) {
         step2Cols.forEach(colName => {
             headerTr.innerHTML += `<th style="background:#1C5691; color:#fff; border:1px solid #ccc; padding:8px; text-align:center;">${colName}</th>`;
@@ -246,26 +271,23 @@ window.infRenderTable = function() {
     }
     thead.appendChild(headerTr);
 
-    // --- 바디(행) 그리기 ---
+    // 바디 렌더링
     data.forEach((row, rIdx) => {
         const isRowSel = tData.selectedRows.has(rIdx) ? 'inf-sel-row' : '';
         const tr = document.createElement('tr');
         tr.className = isRowSel;
         
-        // 행 번호 (클릭 시 선택)
         const tdNum = document.createElement('td');
         tdNum.className = `inf-row-header`;
         tdNum.style.cssText = `background:#f8fafc; border:1px solid #ccc; text-align:center; font-weight:bold; color:#666;`;
         tdNum.innerText = rIdx + 1;
         tdNum.onclick = (e) => {
             if (e.shiftKey && window.infState.lastClickedRow !== -1) {
-                const start = Math.min(window.infState.lastClickedRow, rIdx);
-                const end = Math.max(window.infState.lastClickedRow, rIdx);
+                const start = Math.min(window.infState.lastClickedRow, rIdx), end = Math.max(window.infState.lastClickedRow, rIdx);
                 for(let i=start; i<=end; i++) tData.selectedRows.add(i);
             } else {
                 if (!e.ctrlKey && !e.metaKey) tData.selectedRows.clear();
-                if (tData.selectedRows.has(rIdx)) tData.selectedRows.delete(rIdx);
-                else tData.selectedRows.add(rIdx);
+                tData.selectedRows.has(rIdx) ? tData.selectedRows.delete(rIdx) : tData.selectedRows.add(rIdx);
             }
             window.infState.lastClickedRow = rIdx;
             tData.selectedCols.clear();
@@ -273,35 +295,29 @@ window.infRenderTable = function() {
         };
         tr.appendChild(tdNum);
 
-        // 데이터 셀
         for(let c = 0; c < colCount; c++) {
             const isColSel = tData.selectedCols.has(c) ? 'inf-sel-col' : '';
             tr.innerHTML += `<td class="${isColSel}" style="border:1px solid #eee; padding:6px 10px; max-width:200px; overflow:hidden; text-overflow:ellipsis;">${row[c] !== undefined ? row[c] : ''}</td>`;
         }
         
-        // 2단계일 경우 빈 인풋 셀 추가
-        if(window.infState.step === 2) {
-            step2Cols.forEach(c => { tr.innerHTML += `<td style="border:1px solid #eee; background:#f0fdf4;">-</td>`; });
-        }
+        if(window.infState.step === 2) step2Cols.forEach(c => { tr.innerHTML += `<td style="border:1px solid #eee; background:#f0fdf4;">-</td>`; });
         tbody.appendChild(tr);
     });
 };
 
-// 히스토리 저장
+// 히스토리 및 단축키 로직
 window.infSaveHistory = function() {
     const tData = window.infState.data[window.infState.activeTab];
     if(tData.history.length > 10) tData.history.shift();
     tData.history.push(JSON.parse(JSON.stringify(tData.raw)));
 };
 
-// Ctrl + '-' 지우기 & Ctrl + 'Z' 되돌리기
 document.addEventListener('keydown', function(e) {
     const sec = document.getElementById('sec-2-3');
     if (!sec || !sec.classList.contains('active')) return;
     const tData = window.infState.data[window.infState.activeTab];
     if(!tData) return;
 
-    // Ctrl + Z (되돌리기)
     if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
         if(tData.history.length === 0) return alert("더 이상 되돌릴 작업이 없습니다.");
@@ -310,15 +326,13 @@ document.addEventListener('keydown', function(e) {
         infRenderTable();
     }
     
-    // Ctrl + - (선택된 행/열 삭제)
     if ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_')) {
         e.preventDefault();
         if (tData.selectedRows.size === 0 && tData.selectedCols.size === 0) return;
         infSaveHistory();
         
         if (tData.selectedRows.size > 0) {
-            const rowsToDelete = Array.from(tData.selectedRows).sort((a,b) => b - a);
-            rowsToDelete.forEach(rIdx => tData.raw.splice(rIdx, 1));
+            Array.from(tData.selectedRows).sort((a,b) => b - a).forEach(rIdx => tData.raw.splice(rIdx, 1));
             tData.selectedRows.clear();
         } else if (tData.selectedCols.size > 0) {
             const colsToDelete = Array.from(tData.selectedCols).sort((a,b) => b - a);
