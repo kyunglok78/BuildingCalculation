@@ -272,18 +272,18 @@ window.infUpdateCellData = function(rIdx, cIdx, val) {
     }
 };
 
-// ★ [추가] 다른 구분 셀 클릭/수정 시 최종 구분에 즉시 동기화하는 함수
+// ★ 다른 구분 셀 클릭/수정 시 최종 구분에 즉시 동기화하는 함수
 window.syncToFinal = function(rIdx, finalCIdx, val) {
-    if (!val) return; // 값이 비어있을 때는 덮어쓰지 않음
+    if (!val) return; 
     
     const tData = window.infState.data[window.infState.activeTab];
     if(tData && tData.raw[rIdx]) {
-        tData.raw[rIdx][finalCIdx] = val; // 원본 데이터 업데이트
+        tData.raw[rIdx][finalCIdx] = val; 
         
         const finalInput = document.getElementById(`infInput_${rIdx}_${finalCIdx}`);
         if (finalInput) {
-            finalInput.value = val; // 화면 입력창 업데이트
-            finalInput.parentElement.style.backgroundColor = '#ffe5e5'; // 옅은 붉은색으로 강조
+            finalInput.value = val; 
+            finalInput.parentElement.style.backgroundColor = '#ffe5e5'; 
         }
     }
 };
@@ -401,11 +401,18 @@ window.infRenderTable = function() {
         headerTr.appendChild(th);
     }
     
-    // ★ [2단계] 헤더 지정 버튼 추가
+    // ★ [2, 3단계] 헤더 지정 버튼 및 동적 렌더링
     if(window.infState.step >= 2) {
+        // 인덱스 HTML에 있는 evalYear 값 가져오기 (없으면 기본값 2026)
+        const evalYearEl = document.getElementById('evalYear');
+        const currentYear = evalYearEl ? evalYearEl.value : '2026';
+
         step2Cols.forEach((colName, idx) => {
             let topButtonHtml = '';
             let displayName = colName;
+            
+            // ★ 3단계일 경우 앞의 4개 열(과거, 기본, 평가, 부보) 숨김 처리
+            let thDisplay = (window.infState.step === 3 && idx < 4) ? 'display:none;' : '';
 
             if (idx === 0) {
                 topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#17A2B8; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="document.getElementById('infPastExcelFile').click()"><i class="fa-solid fa-file-import"></i> 과거 연동</button>`;
@@ -419,11 +426,16 @@ window.infRenderTable = function() {
             } else if (idx === 3) {
                 topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#6c757d; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="window.assignExcludeCoverage()"><i class="fa-solid fa-ban"></i> 부보 제외</button>`;
             } else if (idx === 4) {
-                // ★ 최종 선택 시작 버튼
-                topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#1C5691; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="window.assignFinalClass()"><i class="fa-solid fa-check-double"></i> 최종 선택 시작</button>`;
+                // ★ 3단계에서는 최종구분 버튼을 숨기고 텍스트를 '[해당연도] 구분'으로 변경
+                if(window.infState.step === 3) {
+                    topButtonHtml = `<div style="height:25px; margin-bottom:6px;"></div>`;
+                    displayName = `${currentYear} 구분`;
+                } else {
+                    topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#1C5691; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="window.assignFinalClass()"><i class="fa-solid fa-check-double"></i> 최종 선택 시작</button>`;
+                }
             }
 
-            headerTr.innerHTML += `<th style="background:#e9ecef; color:#1C5691; border:1px solid #ccc; padding:8px 4px; text-align:center; vertical-align:bottom; min-width:90px;">
+            headerTr.innerHTML += `<th style="background:#e9ecef; color:#1C5691; border:1px solid #ccc; padding:8px 4px; text-align:center; vertical-align:bottom; min-width:90px; ${thDisplay}">
                 ${topButtonHtml}
                 <div>${displayName}</div>
             </th>`;
@@ -439,6 +451,7 @@ window.infRenderTable = function() {
         });
     }
     thead.appendChild(headerTr);
+
 
     const yearColIdx = wiz.mapped['취득년도']; 
     
@@ -493,27 +506,28 @@ window.infRenderTable = function() {
             step2Cols.forEach((cName, idx) => {
                 const dataIdx = colCount + idx;
                 const savedVal = row[dataIdx] || '';
-                const finalDataIdx = colCount + 4; // 최종 구분 열의 데이터 인덱스
+                const finalDataIdx = colCount + 4;
+                
+                // ★ 3단계일 경우 앞의 4개 열(과거, 기본, 평가, 부보) 숨김 처리
+                let tdDisplay = (window.infState.step === 3 && idx < 4) ? 'display:none;' : '';
                 
                 if (isSubtotalRow || isGrandTotalRow) {
-                    rowHtml += `<td style="border:1px solid #eee; ${bgStyle}"></td>`;
+                    rowHtml += `<td style="border:1px solid #eee; ${bgStyle} ${tdDisplay}"></td>`;
                 } else {
                     const isFinalCol = (idx === 4);
-                    // ★ 최종 구분 열에 값이 있으면 배경을 옅은 붉은색(#ffe5e5)으로 지정
                     const cellBg = (isFinalCol && savedVal !== '') ? '#ffe5e5' : '#fff';
                     
-                    // ★ 다른 셀을 클릭(onfocus)하거나 수정(oninput)하면 최종 구분에 즉시 반영
                     let syncEvent = '';
                     let onClickEvent = `onclick="event.stopPropagation();"`;
                     
-                    if (!isFinalCol) { // 과거, 기본, 평가, 부보 열인 경우
+                    if (!isFinalCol) { 
                         syncEvent = `oninput="window.syncToFinal(${rIdx}, ${finalDataIdx}, this.value)" onfocus="window.syncToFinal(${rIdx}, ${finalDataIdx}, this.value)"`;
                         onClickEvent = `onclick="event.stopPropagation(); window.syncToFinal(${rIdx}, ${finalDataIdx}, this.value);"`;
-                    } else { // 최종 구분 열 자체인 경우 (직접 수정 시 색상 제어)
+                    } else { 
                         syncEvent = `oninput="this.parentElement.style.backgroundColor = this.value ? '#ffe5e5' : '#fff';"`;
                     }
 
-                    rowHtml += `<td style="border:1px solid #ccc; padding:0; background:${cellBg}; min-width:70px; transition: background 0.3s;">
+                    rowHtml += `<td style="border:1px solid #ccc; padding:0; background:${cellBg}; min-width:70px; transition: background 0.3s; ${tdDisplay}">
                         <input type="text" id="infInput_${rIdx}_${dataIdx}" maxlength="20" value="${savedVal}" 
                                style="width:100%; height:100%; min-height:28px; border:none; text-align:center; outline:none; background:transparent; font-family:inherit; font-size:13px; color:#333;" 
                                onchange="window.infUpdateCellData(${rIdx}, ${dataIdx}, this.value)"
