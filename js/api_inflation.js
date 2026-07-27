@@ -272,6 +272,22 @@ window.infUpdateCellData = function(rIdx, cIdx, val) {
     }
 };
 
+// ★ [추가] 다른 구분 셀 클릭/수정 시 최종 구분에 즉시 동기화하는 함수
+window.syncToFinal = function(rIdx, finalCIdx, val) {
+    if (!val) return; // 값이 비어있을 때는 덮어쓰지 않음
+    
+    const tData = window.infState.data[window.infState.activeTab];
+    if(tData && tData.raw[rIdx]) {
+        tData.raw[rIdx][finalCIdx] = val; // 원본 데이터 업데이트
+        
+        const finalInput = document.getElementById(`infInput_${rIdx}_${finalCIdx}`);
+        if (finalInput) {
+            finalInput.value = val; // 화면 입력창 업데이트
+            finalInput.parentElement.style.backgroundColor = '#ffe5e5'; // 옅은 붉은색으로 강조
+        }
+    }
+};
+
 window.infHandleInputKey = function(e, rIdx, cIdx) {
     const tData = window.infState.data[window.infState.activeTab];
     let nextR = rIdx;
@@ -385,7 +401,7 @@ window.infRenderTable = function() {
         headerTr.appendChild(th);
     }
     
-    // ★ [2단계] 헤더 지정 버튼 추가 완료!
+    // ★ [2단계] 헤더 지정 버튼 추가
     if(window.infState.step >= 2) {
         step2Cols.forEach((colName, idx) => {
             let topButtonHtml = '';
@@ -403,7 +419,7 @@ window.infRenderTable = function() {
             } else if (idx === 3) {
                 topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#6c757d; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="window.assignExcludeCoverage()"><i class="fa-solid fa-ban"></i> 부보 제외</button>`;
             } else if (idx === 4) {
-                // ★ 최종 선택 시작 버튼 추가됨
+                // ★ 최종 선택 시작 버튼
                 topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#1C5691; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="window.assignFinalClass()"><i class="fa-solid fa-check-double"></i> 최종 선택 시작</button>`;
             }
 
@@ -423,7 +439,6 @@ window.infRenderTable = function() {
         });
     }
     thead.appendChild(headerTr);
-
 
     const yearColIdx = wiz.mapped['취득년도']; 
     
@@ -478,16 +493,33 @@ window.infRenderTable = function() {
             step2Cols.forEach((cName, idx) => {
                 const dataIdx = colCount + idx;
                 const savedVal = row[dataIdx] || '';
+                const finalDataIdx = colCount + 4; // 최종 구분 열의 데이터 인덱스
                 
                 if (isSubtotalRow || isGrandTotalRow) {
                     rowHtml += `<td style="border:1px solid #eee; ${bgStyle}"></td>`;
                 } else {
-                    rowHtml += `<td style="border:1px solid #ccc; padding:0; background:#fff; min-width:70px;">
+                    const isFinalCol = (idx === 4);
+                    // ★ 최종 구분 열에 값이 있으면 배경을 옅은 붉은색(#ffe5e5)으로 지정
+                    const cellBg = (isFinalCol && savedVal !== '') ? '#ffe5e5' : '#fff';
+                    
+                    // ★ 다른 셀을 클릭(onfocus)하거나 수정(oninput)하면 최종 구분에 즉시 반영
+                    let syncEvent = '';
+                    let onClickEvent = `onclick="event.stopPropagation();"`;
+                    
+                    if (!isFinalCol) { // 과거, 기본, 평가, 부보 열인 경우
+                        syncEvent = `oninput="window.syncToFinal(${rIdx}, ${finalDataIdx}, this.value)" onfocus="window.syncToFinal(${rIdx}, ${finalDataIdx}, this.value)"`;
+                        onClickEvent = `onclick="event.stopPropagation(); window.syncToFinal(${rIdx}, ${finalDataIdx}, this.value);"`;
+                    } else { // 최종 구분 열 자체인 경우 (직접 수정 시 색상 제어)
+                        syncEvent = `oninput="this.parentElement.style.backgroundColor = this.value ? '#ffe5e5' : '#fff';"`;
+                    }
+
+                    rowHtml += `<td style="border:1px solid #ccc; padding:0; background:${cellBg}; min-width:70px; transition: background 0.3s;">
                         <input type="text" id="infInput_${rIdx}_${dataIdx}" maxlength="20" value="${savedVal}" 
                                style="width:100%; height:100%; min-height:28px; border:none; text-align:center; outline:none; background:transparent; font-family:inherit; font-size:13px; color:#333;" 
                                onchange="window.infUpdateCellData(${rIdx}, ${dataIdx}, this.value)"
                                onkeydown="window.infHandleInputKey(event, ${rIdx}, ${dataIdx})"
-                               onclick="event.stopPropagation();">
+                               ${onClickEvent}
+                               ${syncEvent}>
                     </td>`;
                 }
             });
@@ -876,7 +908,7 @@ window.applyBasicClass = function() {
     infRenderTable(); 
 };
 
-// ★ 신규: 평가제외 자동 감지 및 일괄 지정
+// ★ 평가제외 자동 감지 및 일괄 지정
 window.assignExcludeEval = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
@@ -912,7 +944,7 @@ window.assignExcludeEval = function() {
     alert(`✅ 평가제외 일괄 지정 완료!\n총 ${applyCount}건의 데이터에 평가제외 구분이 자동 적용되었습니다.`);
 };
 
-// ★ 신규: 부보제외 자동 감지 및 일괄 지정
+// ★ 부보제외 자동 감지 및 일괄 지정
 window.assignExcludeCoverage = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
@@ -947,7 +979,52 @@ window.assignExcludeCoverage = function() {
     alert(`✅ 부보제외 일괄 지정 완료!\n총 ${applyCount}건의 데이터에 부보제외 구분이 자동 적용되었습니다.`);
 };
 
-window.assignFinalClass = function() { alert("준비 중: '최종 선택' 일괄 지정 로직이 곧 적용됩니다."); };
+// ★ 업데이트: 최종 선택 시작 자동화 (우선순위 반영)
+window.assignFinalClass = function() {
+    const wiz = window.infState.wizard;
+    const tData = window.infState.data[window.infState.activeTab];
+    if(!tData || !tData.raw || tData.raw.length === 0) return alert("데이터가 없습니다.");
+
+    // 매핑된 기본 열 개수를 기반으로 각 구분 열의 인덱스 추적
+    const mappedColCount = Object.keys(wiz.mapped).length;
+    const pastIdx = mappedColCount + 0;
+    const basicIdx = mappedColCount + 1;
+    const evalExIdx = mappedColCount + 2;
+    const covExIdx = mappedColCount + 3;
+    const finalIdx = mappedColCount + 4;
+    const yearIdx = wiz.mapped['취득년도'];
+
+    infSaveHistory(); // 실행 전 뒤로가기(Ctrl+Z)를 위한 히스토리 저장
+    let applyCount = 0;
+
+    tData.raw.forEach(row => {
+        const yearVal = String(row[yearIdx] || '');
+        if (yearVal.includes('소계') || yearVal.includes('총계')) return; // 소계/총계 행 무시
+
+        // 각 셀의 값 가져오기
+        const past = String(row[pastIdx] || '').trim();
+        const basic = String(row[basicIdx] || '').trim();
+        const evalEx = String(row[evalExIdx] || '').trim();
+        const covEx = String(row[covExIdx] || '').trim();
+
+        let finalVal = "";
+        
+        // ★ 우선순위 평가: 1.과거 -> 2.평가제외 -> 3.부보제외 -> 4.기본
+        if (past) finalVal = past;
+        else if (evalEx) finalVal = evalEx;
+        else if (covEx) finalVal = covEx;
+        else if (basic) finalVal = basic;
+
+        // 최종 구분에 값이 할당되면 데이터 갱신
+        if (finalVal !== "") {
+            row[finalIdx] = finalVal;
+            applyCount++;
+        }
+    });
+
+    infRenderTable(); // 화면 다시 그리기 (배경색 자동 적용됨)
+    alert(`✅ '최종 구분' 일괄 지정 완료!\n\n우선순위 [과거 연동 > 평가제외 > 부보제외 > 기본 지정] 규칙에 따라 총 ${applyCount}건이 확정되었습니다.`);
+};
 
 // ============================================================================
 // [섹션 8] 매핑 마스터 데이터 관리 (3가지 정책 통합 관리)
