@@ -408,12 +408,12 @@ window.infRenderTable = function() {
         const currentYear = evalYearEl ? evalYearEl.value : '2026';
 
         step2Cols.forEach((colName, idx) => {
+            // ★ 3단계일 경우 앞의 4개 열(과거, 기본, 평가, 부보)을 렌더링에서 완전히 제외
+            if (window.infState.step === 3 && idx < 4) return;
+
             let topButtonHtml = '';
             let displayName = colName;
             
-            // ★ 3단계일 경우 앞의 4개 열(과거, 기본, 평가, 부보) 숨김 처리
-            let thDisplay = (window.infState.step === 3 && idx < 4) ? 'display:none;' : '';
-
             if (idx === 0) {
                 topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#17A2B8; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="document.getElementById('infPastExcelFile').click()"><i class="fa-solid fa-file-import"></i> 과거 연동</button>`;
                 if (window.infState.pastYear) {
@@ -435,7 +435,7 @@ window.infRenderTable = function() {
                 }
             }
 
-            headerTr.innerHTML += `<th style="background:#e9ecef; color:#1C5691; border:1px solid #ccc; padding:8px 4px; text-align:center; vertical-align:bottom; min-width:90px; ${thDisplay}">
+            headerTr.innerHTML += `<th style="background:#e9ecef; color:#1C5691; border:1px solid #ccc; padding:8px 4px; text-align:center; vertical-align:bottom; min-width:90px;">
                 ${topButtonHtml}
                 <div>${displayName}</div>
             </th>`;
@@ -504,15 +504,15 @@ window.infRenderTable = function() {
         
         if(window.infState.step >= 2) {
             step2Cols.forEach((cName, idx) => {
+                // ★ 3단계일 경우 앞의 4개 열(과거, 기본, 평가, 부보)을 렌더링에서 제외
+                if (window.infState.step === 3 && idx < 4) return;
+                
                 const dataIdx = colCount + idx;
                 const savedVal = row[dataIdx] || '';
                 const finalDataIdx = colCount + 4;
                 
-                // ★ 3단계일 경우 앞의 4개 열(과거, 기본, 평가, 부보) 숨김 처리
-                let tdDisplay = (window.infState.step === 3 && idx < 4) ? 'display:none;' : '';
-                
                 if (isSubtotalRow || isGrandTotalRow) {
-                    rowHtml += `<td style="border:1px solid #eee; ${bgStyle} ${tdDisplay}"></td>`;
+                    rowHtml += `<td style="border:1px solid #eee; ${bgStyle}"></td>`;
                 } else {
                     const isFinalCol = (idx === 4);
                     const cellBg = (isFinalCol && savedVal !== '') ? '#ffe5e5' : '#fff';
@@ -527,7 +527,7 @@ window.infRenderTable = function() {
                         syncEvent = `oninput="this.parentElement.style.backgroundColor = this.value ? '#ffe5e5' : '#fff';"`;
                     }
 
-                    rowHtml += `<td style="border:1px solid #ccc; padding:0; background:${cellBg}; min-width:70px; transition: background 0.3s; ${tdDisplay}">
+                    rowHtml += `<td style="border:1px solid #ccc; padding:0; background:${cellBg}; min-width:70px; transition: background 0.3s;">
                         <input type="text" id="infInput_${rIdx}_${dataIdx}" maxlength="20" value="${savedVal}" 
                                style="width:100%; height:100%; min-height:28px; border:none; text-align:center; outline:none; background:transparent; font-family:inherit; font-size:13px; color:#333;" 
                                onchange="window.infUpdateCellData(${rIdx}, ${dataIdx}, this.value)"
