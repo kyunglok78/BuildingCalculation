@@ -1193,13 +1193,36 @@ window.saveRules = function() {
 // 1. 물가지수 불러오기 및 재조달가액 계산
 window.applyInflationIndex = function() {
     const fileInput = document.getElementById('priceIndexFile');
-    if (!fileInput || !fileInput.files || !fileInput.files[0]) {
-        return alert("❌ 1단계 '1.2 평가지수 등록' 메뉴에서 [물가지수] 엑셀 파일을 먼저 업로드해 주세요.");
+    let file = (fileInput && fileInput.files && fileInput.files.length > 0) ? fileInput.files[0] : null;
+
+    // ★ 브라우저 메모리에서 파일이 날아갔거나 업로드되지 않은 경우 스마트 폴백(Fallback) 실행
+    if (!file) {
+        const tempInput = document.createElement('input');
+        tempInput.type = 'file';
+        tempInput.accept = '.xlsx, .xls';
+        tempInput.onchange = function(event) {
+            const selectedFile = event.target.files[0];
+            if (!selectedFile) return;
+            
+            // 1.2 메뉴의 텍스트 박스도 최신화 시켜줌
+            const pathBox = document.getElementById('priceIndexPath');
+            if (pathBox) pathBox.value = selectedFile.name;
+            
+            // 파일 선택 즉시 데이터 처리 함수로 넘김
+            window.processInflationData(selectedFile);
+        };
+        alert("⚠️ 물가지수 엑셀 파일이 등록되지 않았거나, 새로고침/임시저장 불러오기로 인해 초기화되었습니다.\n\n[확인]을 누르신 후 '물가지수 엑셀 파일(2026년 6월적용_배포용.xls)'을 바로 선택해 주세요.");
+        tempInput.click();
+        return;
     }
 
-    const file = fileInput.files[0];
-    const reader = new FileReader();
+    // 정상적으로 파일이 있으면 바로 실행
+    window.processInflationData(file);
+};
 
+// 분리된 데이터 처리 핵심 함수
+window.processInflationData = function(file) {
+    const reader = new FileReader();
     reader.onload = function(e) {
         try {
             const data = new Uint8Array(e.target.result);
@@ -1216,7 +1239,7 @@ window.applyInflationIndex = function() {
             const accIdx = wiz.mapped['자산계정'];
             const yearIdx = wiz.mapped['취득년도'];
             const originIdx = wiz.mapped['국산/외산'];
-            const priceIdx = wiz.mapped['취득가액']; // ★ 취득가액 인덱스 추가 (재조달가액 계산용)
+            const priceIdx = wiz.mapped['취득가액']; 
             
             const finalIdx = mappedColCount + 4;     // 최종 구분
             const inflationIdx = mappedColCount + 5; // 물가지수
@@ -1242,7 +1265,6 @@ window.applyInflationIndex = function() {
                 const accVal = String(row[accIdx] || '').trim();
                 const originVal = String(row[originIdx] || '').trim();
                 
-                // 취득가액 숫자 변환
                 const acqPriceStr = String(row[priceIdx] || '').replace(/,/g, '');
                 const acqPrice = Number(acqPriceStr) || 0;
 
@@ -1253,11 +1275,11 @@ window.applyInflationIndex = function() {
 
                 if (finalVal.includes('부보제외')) {
                     indexValue = "-";
-                    replacementCost = "-"; // 부보제외는 재조달가액도 제외 표시
+                    replacementCost = "-"; 
                 }
                 else if (finalVal.includes('평가제외')) {
                     indexValue = "1";
-                    replacementCost = acqPrice * 1; // 1을 곱해 취득가액 그대로 반영
+                    replacementCost = acqPrice * 1; 
                 }
                 else {
                     let targetSheet = null;
@@ -1267,7 +1289,6 @@ window.applyInflationIndex = function() {
                         targetSheet = sheetConst;
                         isConstSheet = true;
                     } else {
-                        // ★ '외산'이 아니면(공란 포함) 모두 생산자물가(국산) 적용
                         targetSheet = (originVal === '외산') ? sheetImp : sheetProd;
                     }
 
@@ -1295,8 +1316,8 @@ window.applyInflationIndex = function() {
                 }
 
                 if (indexValue !== "") {
-                    row[inflationIdx] = isNaN(indexValue) ? indexValue : Number(indexValue).toFixed(4); // 지수는 소수점 4자리까지 표시
-                    row[replacementIdx] = isNaN(replacementCost) ? replacementCost : Math.round(replacementCost); // 재조달가액은 반올림
+                    row[inflationIdx] = isNaN(indexValue) ? indexValue : Number(indexValue).toFixed(4); 
+                    row[replacementIdx] = isNaN(replacementCost) ? replacementCost : Math.round(replacementCost); 
                     applyCount++;
                 } else {
                     missingCount++;
@@ -1336,9 +1357,9 @@ window.applyCurrentValue = function() {
         if (yearVal.includes('소계') || yearVal.includes('총계')) return;
 
         const repCostStr = String(row[replacementIdx] || '').replace(/,/g, '');
-        const deprStr = String(row[deprIdx] || '').replace(/,/g, ''); // 입력된 감가율 (%)
+        const deprStr = String(row[deprIdx] || '').replace(/,/g, ''); 
         
-        if (repCostStr === '-') { // 부보제외 등
+        if (repCostStr === '-') { 
             row[residualIdx] = '-';
             row[currentValIdx] = '-';
             return;
@@ -1348,13 +1369,11 @@ window.applyCurrentValue = function() {
         const deprRate = Number(deprStr);
 
         if (!isNaN(repCost) && !isNaN(deprRate) && deprStr !== '') {
-            // 잔가율 계산: 100 - 감가율
             const residualRate = 100 - deprRate;
             row[residualIdx] = residualRate;
 
-            // 현재가액 계산: 재조달가액 * (잔가율 / 100)
             const currentVal = repCost * (residualRate / 100);
-            row[currentValIdx] = Math.round(currentVal); // 소수점 반올림
+            row[currentValIdx] = Math.round(currentVal); 
             
             applyCount++;
         }
