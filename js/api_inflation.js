@@ -1158,10 +1158,11 @@ window.saveRules = function() {
 };
 
 // ============================================================================
-// [섹션 9] 물가지수 일괄 적용 로직 (5대 원칙 기반 자동 매칭)
+// [섹션 9] 3단계 가액평가 일괄 계산 (물가지수, 재조달가액, 감가율, 현재가액)
 // ============================================================================
+
+// 1. 물가지수 불러오기 및 재조달가액 계산
 window.applyInflationIndex = function() {
-    // 1단계에서 업로드한 물가지수 파일 가져오기
     const fileInput = document.getElementById('priceIndexFile');
     if (!fileInput || !fileInput.files || !fileInput.files[0]) {
         return alert("❌ 1단계 '1.2 평가지수 등록' 메뉴에서 [물가지수] 엑셀 파일을 먼저 업로드해 주세요.");
@@ -1175,7 +1176,6 @@ window.applyInflationIndex = function() {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, {type: 'array'});
 
-            // 필요한 3가지 시트 파싱
             const sheetConst = XLSX.utils.sheet_to_json(workbook.Sheets['건축지수'], {header: 1, defval: ""});
             const sheetProd = XLSX.utils.sheet_to_json(workbook.Sheets['생산자물가'], {header: 1, defval: ""});
             const sheetImp = XLSX.utils.sheet_to_json(workbook.Sheets['수입물가'], {header: 1, defval: ""});
@@ -1183,86 +1183,91 @@ window.applyInflationIndex = function() {
             const wiz = window.infState.wizard;
             const tData = window.infState.data[window.infState.activeTab];
 
-            // 데이터 열(Column) 인덱스 추적
             const mappedColCount = Object.keys(wiz.mapped).length;
             const accIdx = wiz.mapped['자산계정'];
             const yearIdx = wiz.mapped['취득년도'];
             const originIdx = wiz.mapped['국산/외산'];
+            const priceIdx = wiz.mapped['취득가액']; // ★ 취득가액 인덱스 추가 (재조달가액 계산용)
+            
             const finalIdx = mappedColCount + 4;     // 최종 구분
-            const inflationIdx = mappedColCount + 5; // 물가지수 열 (Step3의 첫번째)
+            const inflationIdx = mappedColCount + 5; // 물가지수
+            const replacementIdx = mappedColCount + 6; // 재조달가액
 
-            window.infSaveHistory(); // 되돌리기(Ctrl+Z) 지원
+            window.infSaveHistory(); 
             let applyCount = 0;
             let missingCount = 0;
 
-            // 시트에서 "취득연도"가 적힌 열(Column)의 번호를 찾는 헬퍼 함수
             const getYearColIndex = (sheet, yearStr) => {
-                for (let i = 0; i < Math.min(5, sheet.length); i++) { // 상위 5행 내에 연도 헤더가 있다고 가정
+                for (let i = 0; i < Math.min(5, sheet.length); i++) {
                     const colIdx = sheet[i].findIndex(cell => String(cell).includes(yearStr));
                     if (colIdx !== -1) return { rowIdx: i, colIdx: colIdx };
                 }
                 return null;
             };
 
-            tData.raw.forEach((row, rIdx) => {
+            tData.raw.forEach(row => {
                 const yearVal = String(row[yearIdx] || '').trim();
                 if (yearVal.includes('소계') || yearVal.includes('총계')) return;
 
                 const finalVal = String(row[finalIdx] || '').trim();
                 const accVal = String(row[accIdx] || '').trim();
                 const originVal = String(row[originIdx] || '').trim();
+                
+                // 취득가액 숫자 변환
+                const acqPriceStr = String(row[priceIdx] || '').replace(/,/g, '');
+                const acqPrice = Number(acqPriceStr) || 0;
 
                 if (!finalVal) return;
 
                 let indexValue = "";
+                let replacementCost = 0;
 
-                // 1. 부보제외
                 if (finalVal.includes('부보제외')) {
                     indexValue = "-";
+                    replacementCost = "-"; // 부보제외는 재조달가액도 제외 표시
                 }
-                // 2. 평가제외
                 else if (finalVal.includes('평가제외')) {
                     indexValue = "1";
+                    replacementCost = acqPrice * 1; // 1을 곱해 취득가액 그대로 반영
                 }
-                // 3, 4, 5. 엑셀 매칭 로직
                 else {
                     let targetSheet = null;
                     let isConstSheet = false;
 
-                    // 계정에 따른 시트 분기
                     if (['건물', '구축물', '건물부속설비'].includes(accVal)) {
                         targetSheet = sheetConst;
                         isConstSheet = true;
                     } else {
+                        // ★ '외산'이 아니면(공란 포함) 모두 생산자물가(국산) 적용
                         targetSheet = (originVal === '외산') ? sheetImp : sheetProd;
                     }
 
                     if (targetSheet && targetSheet.length > 0) {
-                        // 해당 연도의 열(Column) 인덱스 찾기
                         const yearInfo = getYearColIndex(targetSheet, yearVal);
 
                         if (yearInfo) {
                             let matchRow = null;
 
-                            // 건축지수 & 최종구분 50 인 경우 (A, B열에서 노무비/인건비 검색)
                             if (isConstSheet && finalVal === '50') {
                                 matchRow = targetSheet.find((r, i) => i > yearInfo.rowIdx && (String(r[0] || '').includes('노무비') || String(r[1] || '').includes('노무비') || String(r[0] || '').includes('인건비') || String(r[1] || '').includes('인건비')));
                             } 
-                            // 일반 자산 (생산자/수입물가) 인 경우 (A열에서 최종구분 숫자 검색)
                             else {
                                 matchRow = targetSheet.find((r, i) => i > yearInfo.rowIdx && String(r[0] || '').trim() === finalVal);
                             }
 
                             if (matchRow) {
-                                indexValue = matchRow[yearInfo.colIdx];
+                                indexValue = Number(matchRow[yearInfo.colIdx]);
+                                if (!isNaN(indexValue)) {
+                                    replacementCost = acqPrice * indexValue;
+                                }
                             }
                         }
                     }
                 }
 
-                // 값 화면에 반영
-                if (indexValue !== "" && indexValue !== undefined && indexValue !== null) {
-                    row[inflationIdx] = indexValue;
+                if (indexValue !== "") {
+                    row[inflationIdx] = isNaN(indexValue) ? indexValue : Number(indexValue).toFixed(4); // 지수는 소수점 4자리까지 표시
+                    row[replacementIdx] = isNaN(replacementCost) ? replacementCost : Math.round(replacementCost); // 재조달가액은 반올림
                     applyCount++;
                 } else {
                     missingCount++;
@@ -1270,11 +1275,62 @@ window.applyInflationIndex = function() {
             });
 
             window.infRenderTable();
-            alert(`✅ 물가지수 일괄 적용 완료!\n- 성공적으로 매칭된 데이터: ${applyCount}건\n- 지수 누락(해당 연도/코드 없음): ${missingCount}건`);
+            alert(`✅ 물가지수 및 재조달가액 산출 완료!\n- 적용 완료: ${applyCount}건\n- 누락(연도/코드 없음): ${missingCount}건`);
 
         } catch (err) {
             alert("물가지수 엑셀 파일을 분석하는 중 오류가 발생했습니다.\n" + err.message);
         }
     };
     reader.readAsArrayBuffer(file);
+};
+
+// 2. 감가율 기반 잔가율 및 현재가액 계산
+window.applyCurrentValue = function() {
+    const wiz = window.infState.wizard;
+    const tData = window.infState.data[window.infState.activeTab];
+
+    if(!tData || !tData.raw || tData.raw.length === 0) return alert("데이터가 없습니다.");
+
+    const mappedColCount = Object.keys(wiz.mapped).length;
+    const yearIdx = wiz.mapped['취득년도'];
+    
+    const replacementIdx = mappedColCount + 6; // 재조달가액
+    const deprIdx = mappedColCount + 7;        // 감가율
+    const residualIdx = mappedColCount + 8;    // 잔가율
+    const currentValIdx = mappedColCount + 9;  // 현재가액
+
+    window.infSaveHistory();
+    let applyCount = 0;
+
+    tData.raw.forEach(row => {
+        const yearVal = String(row[yearIdx] || '').trim();
+        if (yearVal.includes('소계') || yearVal.includes('총계')) return;
+
+        const repCostStr = String(row[replacementIdx] || '').replace(/,/g, '');
+        const deprStr = String(row[deprIdx] || '').replace(/,/g, ''); // 입력된 감가율 (%)
+        
+        if (repCostStr === '-') { // 부보제외 등
+            row[residualIdx] = '-';
+            row[currentValIdx] = '-';
+            return;
+        }
+
+        const repCost = Number(repCostStr);
+        const deprRate = Number(deprStr);
+
+        if (!isNaN(repCost) && !isNaN(deprRate) && deprStr !== '') {
+            // 잔가율 계산: 100 - 감가율
+            const residualRate = 100 - deprRate;
+            row[residualIdx] = residualRate;
+
+            // 현재가액 계산: 재조달가액 * (잔가율 / 100)
+            const currentVal = repCost * (residualRate / 100);
+            row[currentValIdx] = Math.round(currentVal); // 소수점 반올림
+            
+            applyCount++;
+        }
+    });
+
+    window.infRenderTable();
+    alert(`✅ 잔가율 및 현재가액 산출 완료!\n- 총 ${applyCount}건의 현재가액이 계산되었습니다.`);
 };
