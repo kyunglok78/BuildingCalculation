@@ -1156,3 +1156,125 @@ window.saveRules = function() {
     
     alert(`✅ 현재 선택된 규칙 카테고리가 성공적으로 영구 저장되었습니다.`);
 };
+
+// ============================================================================
+// [섹션 9] 물가지수 일괄 적용 로직 (5대 원칙 기반 자동 매칭)
+// ============================================================================
+window.applyInflationIndex = function() {
+    // 1단계에서 업로드한 물가지수 파일 가져오기
+    const fileInput = document.getElementById('priceIndexFile');
+    if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+        return alert("❌ 1단계 '1.2 평가지수 등록' 메뉴에서 [물가지수] 엑셀 파일을 먼저 업로드해 주세요.");
+    }
+
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+
+            // 필요한 3가지 시트 파싱
+            const sheetConst = XLSX.utils.sheet_to_json(workbook.Sheets['건축지수'], {header: 1, defval: ""});
+            const sheetProd = XLSX.utils.sheet_to_json(workbook.Sheets['생산자물가'], {header: 1, defval: ""});
+            const sheetImp = XLSX.utils.sheet_to_json(workbook.Sheets['수입물가'], {header: 1, defval: ""});
+
+            const wiz = window.infState.wizard;
+            const tData = window.infState.data[window.infState.activeTab];
+
+            // 데이터 열(Column) 인덱스 추적
+            const mappedColCount = Object.keys(wiz.mapped).length;
+            const accIdx = wiz.mapped['자산계정'];
+            const yearIdx = wiz.mapped['취득년도'];
+            const originIdx = wiz.mapped['국산/외산'];
+            const finalIdx = mappedColCount + 4;     // 최종 구분
+            const inflationIdx = mappedColCount + 5; // 물가지수 열 (Step3의 첫번째)
+
+            window.infSaveHistory(); // 되돌리기(Ctrl+Z) 지원
+            let applyCount = 0;
+            let missingCount = 0;
+
+            // 시트에서 "취득연도"가 적힌 열(Column)의 번호를 찾는 헬퍼 함수
+            const getYearColIndex = (sheet, yearStr) => {
+                for (let i = 0; i < Math.min(5, sheet.length); i++) { // 상위 5행 내에 연도 헤더가 있다고 가정
+                    const colIdx = sheet[i].findIndex(cell => String(cell).includes(yearStr));
+                    if (colIdx !== -1) return { rowIdx: i, colIdx: colIdx };
+                }
+                return null;
+            };
+
+            tData.raw.forEach((row, rIdx) => {
+                const yearVal = String(row[yearIdx] || '').trim();
+                if (yearVal.includes('소계') || yearVal.includes('총계')) return;
+
+                const finalVal = String(row[finalIdx] || '').trim();
+                const accVal = String(row[accIdx] || '').trim();
+                const originVal = String(row[originIdx] || '').trim();
+
+                if (!finalVal) return;
+
+                let indexValue = "";
+
+                // 1. 부보제외
+                if (finalVal.includes('부보제외')) {
+                    indexValue = "-";
+                }
+                // 2. 평가제외
+                else if (finalVal.includes('평가제외')) {
+                    indexValue = "1";
+                }
+                // 3, 4, 5. 엑셀 매칭 로직
+                else {
+                    let targetSheet = null;
+                    let isConstSheet = false;
+
+                    // 계정에 따른 시트 분기
+                    if (['건물', '구축물', '건물부속설비'].includes(accVal)) {
+                        targetSheet = sheetConst;
+                        isConstSheet = true;
+                    } else {
+                        targetSheet = (originVal === '외산') ? sheetImp : sheetProd;
+                    }
+
+                    if (targetSheet && targetSheet.length > 0) {
+                        // 해당 연도의 열(Column) 인덱스 찾기
+                        const yearInfo = getYearColIndex(targetSheet, yearVal);
+
+                        if (yearInfo) {
+                            let matchRow = null;
+
+                            // 건축지수 & 최종구분 50 인 경우 (A, B열에서 노무비/인건비 검색)
+                            if (isConstSheet && finalVal === '50') {
+                                matchRow = targetSheet.find((r, i) => i > yearInfo.rowIdx && (String(r[0] || '').includes('노무비') || String(r[1] || '').includes('노무비') || String(r[0] || '').includes('인건비') || String(r[1] || '').includes('인건비')));
+                            } 
+                            // 일반 자산 (생산자/수입물가) 인 경우 (A열에서 최종구분 숫자 검색)
+                            else {
+                                matchRow = targetSheet.find((r, i) => i > yearInfo.rowIdx && String(r[0] || '').trim() === finalVal);
+                            }
+
+                            if (matchRow) {
+                                indexValue = matchRow[yearInfo.colIdx];
+                            }
+                        }
+                    }
+                }
+
+                // 값 화면에 반영
+                if (indexValue !== "" && indexValue !== undefined && indexValue !== null) {
+                    row[inflationIdx] = indexValue;
+                    applyCount++;
+                } else {
+                    missingCount++;
+                }
+            });
+
+            window.infRenderTable();
+            alert(`✅ 물가지수 일괄 적용 완료!\n- 성공적으로 매칭된 데이터: ${applyCount}건\n- 지수 누락(해당 연도/코드 없음): ${missingCount}건`);
+
+        } catch (err) {
+            alert("물가지수 엑셀 파일을 분석하는 중 오류가 발생했습니다.\n" + err.message);
+        }
+    };
+    reader.readAsArrayBuffer(file);
+};
