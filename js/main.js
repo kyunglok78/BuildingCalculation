@@ -689,7 +689,7 @@ window.batchApplyRatio = function(mode, siteName) {
 };
 
 // ============================================================================
-// [10] ★ 프로젝트 임시 저장 및 불러오기 (사이드바 완료/대기/미평가 상태 완벽 복원 버전)
+// [10] ★ 프로젝트 임시 저장 및 불러오기 (사이드바 상태 및 물가보정 데이터 완벽 복원)
 // ============================================================================
 
 (function enforceTabColors() {
@@ -717,8 +717,11 @@ window.quickSaveProject = function() {
         
         const hasTempKfpa = Object.keys(window.tempKfpaDataStore || {}).length > 0;
         const hasCostData = window.kbState.costData && window.kbState.costData.length > 0;
+        
+        // ★ 물가보정 데이터가 존재하는지 확인
+        const hasInfData = window.infState && window.infState.data && Object.keys(window.infState.data).length > 0;
                             
-        if (Object.keys(window.kbState.fetchedData).length === 0 && !hasEvalData && !hasTempKfpa && !hasCostData) {
+        if (Object.keys(window.kbState.fetchedData).length === 0 && !hasEvalData && !hasTempKfpa && !hasCostData && !hasInfData) {
             alert("저장할 데이터가 존재하지 않습니다. 대장 조회, 엑셀 업로드 등을 먼저 진행해 주세요.");
             return;
         }
@@ -740,7 +743,6 @@ window.quickSaveProject = function() {
             });
         });
 
-        // 사이드바 메뉴들의 현재 상태(완료, 대기, 미평가 뱃지 및 클래스) 수집
         const sidebarStates = {};
         document.querySelectorAll('.sidebar .menu-item').forEach(menu => {
             const badge = menu.querySelector('.status-badge');
@@ -750,8 +752,9 @@ window.quickSaveProject = function() {
             };
         });
 
+        // ★ JSON 객체에 물가보정용 상태(infState) 추가
         const projectData = {
-            version: "1.7", 
+            version: "1.8", // 버전 업
             contractor: contractorName,
             evalYear: evalYear,
             locations: locations, 
@@ -761,7 +764,8 @@ window.quickSaveProject = function() {
             tempKfpaDataStore: window.tempKfpaDataStore || {},
             targetKfpaSite: window.targetKfpaSite || "",
             targetKfpaAddress: window.targetKfpaAddress || "",
-            kbState: window.kbState 
+            kbState: window.kbState,
+            infState: window.infState || null  // 물가보정 상태 저장!
         };
 
         const jsonString = JSON.stringify(projectData);
@@ -797,6 +801,43 @@ window.quickLoadProject = function(event) {
             
             if (projectData.targetKfpaSite) window.targetKfpaSite = projectData.targetKfpaSite;
             if (projectData.targetKfpaAddress) window.targetKfpaAddress = projectData.targetKfpaAddress;
+
+            // ★ 물가보정 데이터 복구 및 화면 렌더링 세팅
+            if (projectData.infState) {
+                window.infState = projectData.infState;
+                
+                // 물가보정 매핑 룰이 파일에 없으면 로컬 스토리지 또는 기본값 적용
+                if (!window.infState.mappingRules) {
+                    window.infState.mappingRules = JSON.parse(localStorage.getItem('kb_mapping_rules_v3')) || initialRules;
+                }
+                
+                // 3단계(물가보정) 화면 복구를 위한 UI 갱신 함수 호출
+                if (typeof window.infInitTabs === 'function' && window.infState.tabs && window.infState.tabs.length > 0) {
+                    // 저장 시점에 화면에 표시되던 탭을 그대로 그리기 위해 UI 업데이트
+                    setTimeout(() => {
+                        window.infInitTabs();
+                        
+                        // 저장 당시의 step(단계) 패널 노출 상태 복구
+                        if (window.infState.step === 2) {
+                            document.getElementById('infStep1Panel').style.display = 'none';
+                            document.getElementById('infStep2Panel').style.display = 'block';
+                            document.getElementById('infStep3Panel').style.display = 'none';
+                            document.getElementById('infWizardArea').style.display = 'flex';
+                            document.getElementById('btnStartWizard').style.display = 'none';
+                            document.getElementById('infWizardText').innerHTML = `🧹 1.5단계: 불필요한 행 삭제 후 다음 단계 진행완료.`;
+                        } else if (window.infState.step === 3) {
+                            document.getElementById('infStep1Panel').style.display = 'none';
+                            document.getElementById('infStep2Panel').style.display = 'none';
+                            document.getElementById('infStep3Panel').style.display = 'block';
+                        }
+                        
+                        if (typeof window.infRenderTable === 'function') window.infRenderTable();
+                    }, 500); // UI 생성 후 렌더링될 수 있도록 약간의 지연
+                }
+            } else {
+                // 저장된 파일에 물가보정 데이터가 없으면 초기화
+                window.infState = { mode: 'location', tabs: [], activeTab: '', step: 1, data: {}, wizard: { active: false, phase: 'idle', columns: ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득일', '취득가액'], activeTarget: '', mapped: {} }, foldingLevel: 3, lastClickedRow: -1, lastClickedCol: -1, pastYear: null };
+            }
 
             if (projectData.contractor) {
                 document.querySelectorAll('.contractor-sync').forEach(el => el.value = projectData.contractor);
@@ -840,7 +881,6 @@ window.quickLoadProject = function(event) {
 
             runGroupedRenderTest();
 
-            // 저장되어 있던 사이드바 상태(완료, 대기, 미평가) 복원
             if (projectData.sidebarStates) {
                 for (const [menuId, state] of Object.entries(projectData.sidebarStates)) {
                     const menu = document.getElementById(menuId);
@@ -985,7 +1025,7 @@ window.quickLoadProject = function(event) {
 
             if (typeof backupLocationData === 'function') backupLocationData();
 
-            alert("✅ 임시 저장 데이터 완벽 로드 완료!\n(화상단에 현재 로드한 파일 이름이 표시됩니다.)");
+            alert("✅ 임시 저장 데이터 완벽 로드 완료!\n(물가보정 상태까지 완벽하게 복구되었습니다.)");
         } catch (err) {
             alert("⚠️ 파일 형식이 잘못되었거나 과거의 손상된 저장 파일입니다.\n(에러: " + err.message + ")");
         }
