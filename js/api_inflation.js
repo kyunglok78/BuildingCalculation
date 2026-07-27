@@ -414,7 +414,7 @@ window.infRenderTable = function() {
         headerTr.appendChild(th);
     }
     
-    // [2, 3단계] 헤더 지정 버튼 및 동적 렌더링
+    // [2단계] 헤더 지정 버튼 및 동적 렌더링
     if(window.infState.step >= 2) {
         const evalYearEl = document.getElementById('evalYear');
         const currentYear = evalYearEl ? evalYearEl.value : '2026';
@@ -453,10 +453,20 @@ window.infRenderTable = function() {
         });
     }
 
+    // ★ [3단계] 헤더 렌더링 및 실행 버튼 삽입
     if(window.infState.step === 3) {
         step3Cols.forEach(colName => {
-            headerTr.innerHTML += `<th style="background:#e9ecef; color:#1C5691; border:1px solid #ccc; padding:8px; text-align:center; vertical-align:bottom;">
-                <div style="height:23px; margin-bottom:6px;"></div>
+            let topButtonHtml = `<div style="height:25px; margin-bottom:6px;"></div>`;
+            
+            // 물가지수 및 감가율 헤더에 실행 버튼 동적 추가
+            if (colName === '물가지수') {
+                topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#007BFF; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="window.applyInflationIndex()"><i class="fa-solid fa-bolt"></i> 지수/재조달 계산</button>`;
+            } else if (colName === '감가율') {
+                topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#28A745; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="window.applyCurrentValue()"><i class="fa-solid fa-bolt"></i> 감가/현재 계산</button>`;
+            }
+
+            headerTr.innerHTML += `<th style="background:#e9ecef; color:#1C5691; border:1px solid #ccc; padding:8px 4px; text-align:center; vertical-align:bottom; min-width:90px;">
+                ${topButtonHtml}
                 <div>${colName}</div>
             </th>`;
         });
@@ -571,7 +581,26 @@ window.infRenderTable = function() {
         
         if(window.infState.step === 3) {
             step3Cols.forEach((cName, idx) => { 
-                rowHtml += `<td style="border:1px solid #eee; ${bgStyle ? bgStyle : 'background:#f0fdf4;'}"></td>`; 
+                const dataIdx = colCount + 5 + idx; // 물가지수 열부터 시작
+                const savedVal = row[dataIdx] !== undefined ? row[dataIdx] : '';
+                
+                if (isSubtotalRow || isGrandTotalRow) {
+                    rowHtml += `<td style="border:1px solid #eee; ${bgStyle}"></td>`; 
+                } else {
+                    // 계산된 값들 렌더링 (천단위 콤마 처리 적용)
+                    let displayVal = savedVal;
+                    if (displayVal !== '' && !isNaN(String(displayVal).replace(/,/g, '')) && cName !== '비고' && cName !== '물가지수') {
+                        displayVal = Number(String(displayVal).replace(/,/g, '')).toLocaleString('ko-KR');
+                    }
+
+                    rowHtml += `<td style="border:1px solid #ccc; padding:0; background:#f0fdf4; min-width:80px;">
+                        <input type="text" id="infInput_${rIdx}_${dataIdx}" maxlength="20" value="${displayVal}" 
+                               style="width:100%; height:100%; min-height:28px; border:none; text-align:center; outline:none; background:transparent; font-family:inherit; font-size:13px; color:#333;" 
+                               onchange="window.infUpdateCellData(${rIdx}, ${dataIdx}, this.value)"
+                               onkeydown="window.infHandleInputKey(event, ${rIdx}, ${dataIdx})"
+                               onclick="event.stopPropagation();">
+                    </td>`;
+                }
             });
         }
         
