@@ -272,18 +272,31 @@ window.infUpdateCellData = function(rIdx, cIdx, val) {
     }
 };
 
-// ★ 다른 구분 셀 클릭/수정 시 최종 구분에 즉시 동기화하는 함수
-window.syncToFinal = function(rIdx, finalCIdx, val) {
+// ★ 다른 구분 셀 클릭/수정 시 최종 구분에 즉시 동기화 및 배경색 처리
+window.syncToFinal = function(rIdx, finalCIdx, val, currentCIdx) {
     if (!val) return; 
     
     const tData = window.infState.data[window.infState.activeTab];
     if(tData && tData.raw[rIdx]) {
         tData.raw[rIdx][finalCIdx] = val; 
         
+        // 1. 최종 구분 셀 업데이트 및 배경색 적용
         const finalInput = document.getElementById(`infInput_${rIdx}_${finalCIdx}`);
         if (finalInput) {
             finalInput.value = val; 
             finalInput.parentElement.style.backgroundColor = '#ffe5e5'; 
+        }
+        
+        // 2. 현재 작업 중인 행의 4개 원본 셀 배경색 동적 제어 (선택된 것만 붉은색)
+        if (currentCIdx !== undefined) {
+            const startIdx = finalCIdx - 4;
+            for (let i = 0; i < 4; i++) {
+                const colIdx = startIdx + i;
+                const cellInput = document.getElementById(`infInput_${rIdx}_${colIdx}`);
+                if (cellInput) {
+                    cellInput.parentElement.style.backgroundColor = (colIdx === currentCIdx) ? '#ffe5e5' : '#fff';
+                }
+            }
         }
     }
 };
@@ -401,14 +414,13 @@ window.infRenderTable = function() {
         headerTr.appendChild(th);
     }
     
-    // ★ [2, 3단계] 헤더 지정 버튼 및 동적 렌더링
+    // [2, 3단계] 헤더 지정 버튼 및 동적 렌더링
     if(window.infState.step >= 2) {
-        // 인덱스 HTML에 있는 evalYear 값 가져오기 (없으면 기본값 2026)
         const evalYearEl = document.getElementById('evalYear');
         const currentYear = evalYearEl ? evalYearEl.value : '2026';
 
         step2Cols.forEach((colName, idx) => {
-            // ★ 3단계일 경우 앞의 4개 열(과거, 기본, 평가, 부보)을 렌더링에서 완전히 제외
+            // 3단계일 경우 앞의 4개 열(과거, 기본, 평가, 부보)을 렌더링에서 완전히 제외
             if (window.infState.step === 3 && idx < 4) return;
 
             let topButtonHtml = '';
@@ -426,7 +438,6 @@ window.infRenderTable = function() {
             } else if (idx === 3) {
                 topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#6c757d; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="window.assignExcludeCoverage()"><i class="fa-solid fa-ban"></i> 부보 제외</button>`;
             } else if (idx === 4) {
-                // ★ 3단계에서는 최종구분 버튼을 숨기고 텍스트를 '[해당연도] 구분'으로 변경
                 if(window.infState.step === 3) {
                     topButtonHtml = `<div style="height:25px; margin-bottom:6px;"></div>`;
                     displayName = `${currentYear} 구분`;
@@ -503,26 +514,45 @@ window.infRenderTable = function() {
         }
         
         if(window.infState.step >= 2) {
+            const finalDataIdx = colCount + 4;
+            const finalVal = String(row[finalDataIdx] || '').trim();
+            
+            // ★ 렌더링 시점에 어떤 원본 열이 최종구분에 반영되었는지 우선순위에 따라 역추적
+            let sourceMatchIdx = -1;
+            if (finalVal !== '') {
+                const pastV = String(row[colCount + 0] || '').trim();
+                const basicV = String(row[colCount + 1] || '').trim();
+                const evalExV = String(row[colCount + 2] || '').trim();
+                const covExV = String(row[colCount + 3] || '').trim();
+                
+                // 우선순위: 과거 -> 평가제외 -> 부보제외 -> 기본
+                if (pastV === finalVal) sourceMatchIdx = colCount + 0;
+                else if (evalExV === finalVal) sourceMatchIdx = colCount + 2;
+                else if (covExV === finalVal) sourceMatchIdx = colCount + 3;
+                else if (basicV === finalVal) sourceMatchIdx = colCount + 1;
+            }
+
             step2Cols.forEach((cName, idx) => {
-                // ★ 3단계일 경우 앞의 4개 열(과거, 기본, 평가, 부보)을 렌더링에서 제외
+                // 3단계일 경우 앞의 4개 열(과거, 기본, 평가, 부보)을 렌더링에서 제외
                 if (window.infState.step === 3 && idx < 4) return;
                 
                 const dataIdx = colCount + idx;
                 const savedVal = row[dataIdx] || '';
-                const finalDataIdx = colCount + 4;
                 
                 if (isSubtotalRow || isGrandTotalRow) {
                     rowHtml += `<td style="border:1px solid #eee; ${bgStyle}"></td>`;
                 } else {
                     const isFinalCol = (idx === 4);
-                    const cellBg = (isFinalCol && savedVal !== '') ? '#ffe5e5' : '#fff';
+                    // ★ 최종 구분이거나, 최종 구분과 일치하는 원본 셀인 경우 배경을 붉은색으로 지정
+                    const cellBg = ((isFinalCol && savedVal !== '') || (dataIdx === sourceMatchIdx)) ? '#ffe5e5' : '#fff';
                     
                     let syncEvent = '';
                     let onClickEvent = `onclick="event.stopPropagation();"`;
                     
                     if (!isFinalCol) { 
-                        syncEvent = `oninput="window.syncToFinal(${rIdx}, ${finalDataIdx}, this.value)" onfocus="window.syncToFinal(${rIdx}, ${finalDataIdx}, this.value)"`;
-                        onClickEvent = `onclick="event.stopPropagation(); window.syncToFinal(${rIdx}, ${finalDataIdx}, this.value);"`;
+                        // 파라미터로 현재 컬럼의 인덱스(dataIdx)를 함께 넘겨 배경색 칠하기 수행
+                        syncEvent = `oninput="window.syncToFinal(${rIdx}, ${finalDataIdx}, this.value, ${dataIdx})" onfocus="window.syncToFinal(${rIdx}, ${finalDataIdx}, this.value, ${dataIdx})"`;
+                        onClickEvent = `onclick="event.stopPropagation(); window.syncToFinal(${rIdx}, ${finalDataIdx}, this.value, ${dataIdx});"`;
                     } else { 
                         syncEvent = `oninput="this.parentElement.style.backgroundColor = this.value ? '#ffe5e5' : '#fff';"`;
                     }
