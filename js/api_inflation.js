@@ -791,20 +791,17 @@ window.infLoadPastData = function(event) {
 };
 
 // ============================================================================
-// [섹션 7] 자산 구분 일괄 지정 (동적 매핑 적용)
+// [섹션 7] 자산 구분 일괄 지정 (기본/평가제외/부보제외 자동화)
 // ============================================================================
 
-// ★ 동적 매핑 룰 탐색기
 function getDynamicMapping(accountName) {
     if (!accountName) return "";
     const acc = accountName.trim();
-    const rules = window.infState.mappingRules || [];
+    const rules = window.infState.mappingRules.basic || [];
     
-    // 1. 완전 일치하는지 먼저 확인
     let matched = rules.find(r => r.keyword === acc);
     if (matched) return matched.val;
     
-    // 2. 포함되는 단어가 있는지 확인 (예: '차량' 이라는 룰이 '영업용 차량운반구'에 매칭됨)
     matched = rules.find(r => acc.includes(r.keyword));
     if (matched) return matched.val;
     
@@ -834,7 +831,6 @@ window.assignBasicClass = function() {
     const tbody = document.getElementById('basicClassTbody');
     tbody.innerHTML = '';
     uniqueAccounts.forEach(acc => {
-        // 하드코딩 대신 관리자가 설정한 동적 룰을 불러옴
         const defaultVal = getDynamicMapping(acc); 
         tbody.innerHTML += `
             <tr>
@@ -880,68 +876,149 @@ window.applyBasicClass = function() {
     infRenderTable(); 
 };
 
-window.assignExcludeEval = function() { alert("준비 중: '평가제외' 일괄 지정 로직이 곧 적용됩니다."); };
-window.assignExcludeCoverage = function() { alert("준비 중: '부보제외' 일괄 지정 로직이 곧 적용됩니다."); };
+// ★ 신규: 평가제외 자동 감지 및 일괄 지정
+window.assignExcludeEval = function() {
+    const wiz = window.infState.wizard;
+    const tData = window.infState.data[window.infState.activeTab];
+    if(!tData || !tData.raw || tData.raw.length === 0) return alert("데이터가 없습니다.");
+
+    const accIdx = wiz.mapped['자산계정'];
+    const nameIdx = wiz.mapped['자산명'];
+    const yearIdx = wiz.mapped['취득년도'];
+    const targetIdx = Object.keys(wiz.mapped).length + 2;
+
+    if (accIdx === undefined || nameIdx === undefined) return alert("자산계정 및 자산명 열이 매핑되지 않았습니다.");
+
+    infSaveHistory();
+    let applyCount = 0;
+    const rules = window.infState.mappingRules.evalExclude || [];
+
+    tData.raw.forEach(row => {
+        const yearVal = String(row[yearIdx] || '');
+        if (yearVal.includes('소계') || yearVal.includes('총계')) return;
+
+        const accStr = String(row[accIdx] || '').toUpperCase();
+        const nameStr = String(row[nameIdx] || '').toUpperCase();
+        
+        // 자산명이나 자산계정에 키워드가 하나라도 포함되면 지정
+        const matched = rules.find(r => accStr.includes(r.keyword.toUpperCase()) || nameStr.includes(r.keyword.toUpperCase()));
+        if (matched) {
+            row[targetIdx] = matched.val;
+            applyCount++;
+        }
+    });
+
+    infRenderTable();
+    alert(`✅ 평가제외 일괄 지정 완료!\n총 ${applyCount}건의 데이터에 평가제외 구분이 자동 적용되었습니다.`);
+};
+
+// ★ 신규: 부보제외 자동 감지 및 일괄 지정
+window.assignExcludeCoverage = function() {
+    const wiz = window.infState.wizard;
+    const tData = window.infState.data[window.infState.activeTab];
+    if(!tData || !tData.raw || tData.raw.length === 0) return alert("데이터가 없습니다.");
+
+    const accIdx = wiz.mapped['자산계정'];
+    const nameIdx = wiz.mapped['자산명'];
+    const yearIdx = wiz.mapped['취득년도'];
+    const targetIdx = Object.keys(wiz.mapped).length + 3;
+
+    if (accIdx === undefined || nameIdx === undefined) return alert("자산계정 및 자산명 열이 매핑되지 않았습니다.");
+
+    infSaveHistory();
+    let applyCount = 0;
+    const rules = window.infState.mappingRules.covExclude || [];
+
+    tData.raw.forEach(row => {
+        const yearVal = String(row[yearIdx] || '');
+        if (yearVal.includes('소계') || yearVal.includes('총계')) return;
+
+        const accStr = String(row[accIdx] || '').toUpperCase();
+        const nameStr = String(row[nameIdx] || '').toUpperCase();
+        
+        const matched = rules.find(r => accStr.includes(r.keyword.toUpperCase()) || nameStr.includes(r.keyword.toUpperCase()));
+        if (matched) {
+            row[targetIdx] = matched.val;
+            applyCount++;
+        }
+    });
+
+    infRenderTable();
+    alert(`✅ 부보제외 일괄 지정 완료!\n총 ${applyCount}건의 데이터에 부보제외 구분이 자동 적용되었습니다.`);
+};
+
 window.assignFinalClass = function() { alert("준비 중: '최종 선택' 일괄 지정 로직이 곧 적용됩니다."); };
 
-
 // ============================================================================
-// [섹션 8] 매핑 마스터 데이터 관리 (항목 관리 로직)
+// [섹션 8] 매핑 마스터 데이터 관리 (3가지 정책 통합 관리)
 // ============================================================================
 
-// ★ 초기 기본 세팅 (요청하신 11개 + 공구, 기구 반영)
-const defaultMappingRules = [
-    { keyword: '건물', val: '50' },
-    { keyword: '토지', val: '부보제외(토지)' },
-    { keyword: '구축물', val: '50' },
-    { keyword: '기계장치', val: '47' },
-    { keyword: '공기구', val: '47' },
-    { keyword: '공구', val: '47' }, // 추가
-    { keyword: '기구', val: '47' }, // 추가
-    { keyword: '시설', val: '47' },
-    { keyword: '시설장치', val: '47' },
-    { keyword: '비품', val: '평가제외(비품)' },
-    { keyword: '차량운반구', val: '47' },
-    { keyword: '건설중 자산', val: '평가제외(건설중 자산)' },
-    { keyword: '건설중자산', val: '평가제외(건설중 자산)' },
-    { keyword: '건물부속설비', val: '50' },
-    { keyword: '금형', val: '47' }
-];
+// ★ 초기 엑셀 데이터 100% 내장 (기본, 평가제외, 부보제외)
+const initialRules = {
+    basic: [
+        { keyword: '건물', val: '50' },
+        { keyword: '토지', val: '부보제외(토지)' },
+        { keyword: '구축물', val: '50' },
+        { keyword: '기계장치', val: '47' },
+        { keyword: '공기구', val: '47' },
+        { keyword: '공구', val: '47' }, 
+        { keyword: '기구', val: '47' }, 
+        { keyword: '시설', val: '47' },
+        { keyword: '시설장치', val: '47' },
+        { keyword: '비품', val: '평가제외(비품)' },
+        { keyword: '차량운반구', val: '47' },
+        { keyword: '건설중 자산', val: '평가제외(건설중 자산)' },
+        { keyword: '건설중자산', val: '평가제외(건설중 자산)' },
+        { keyword: '건물부속설비', val: '50' },
+        { keyword: '금형', val: '47' }
+    ],
+    evalExclude: [
+        {'keyword': 'SOFTWARE', 'val': '평가제외(S/W)'}, {'keyword': 'S.W', 'val': '평가제외(S/W)'}, {'keyword': 'PROGRAM', 'val': '평가제외(S/W)'}, {'keyword': '소프트웨어', 'val': '평가제외(S/W)'}, {'keyword': '프로그램', 'val': '평가제외(S/W)'}, {'keyword': 'S/W', 'val': '평가제외(S/W)'}, {'keyword': 'LICENSE', 'val': '평가제외(S/W)'}, {'keyword': '설계비', 'val': '평가제외(설계/감리/용역)'}, {'keyword': '감리비', 'val': '평가제외(설계/감리/용역)'}, {'keyword': '용역비', 'val': '평가제외(설계/감리/용역)'}, {'keyword': '설계', 'val': '평가제외(설계/감리/용역)'}, {'keyword': '감리', 'val': '평가제외(설계/감리/용역)'}, {'keyword': '용역', 'val': '평가제외(설계/감리/용역)'}, {'keyword': '운송비', 'val': '평가제외(운송비용)'}, {'keyword': '운송', 'val': '평가제외(운송비용)'}, {'keyword': '운임', 'val': '평가제외(운임비용)'}, {'keyword': '운임비', 'val': '평가제외(운임비용)'}, {'keyword': '조사비', 'val': '평가제외(조사비용)'}, {'keyword': '인건비', 'val': '평가제외(인건비용)'}, {'keyword': '미술품', 'val': '평가제외(미술품)'}, {'keyword': '예술품', 'val': '평가제외(예술품)'}, {'keyword': '조각상', 'val': '평가제외(조각상)'}, {'keyword': '시운전', 'val': '평가제외(건설중인자산)'}, {'keyword': '중고', 'val': '평가제외(중고자산)'}, {'keyword': '조경', 'val': '평가제외(조경)'}, {'keyword': '연못', 'val': '평가제외(조경)'}, {'keyword': '정원', 'val': '평가제외(조경)'}, {'keyword': '이전공사', 'val': '평가제외(이전/이설자산)'}, {'keyword': '이설공사', 'val': '평가제외(이전/이설자산)'}, {'keyword': '이전', 'val': '평가제외(이전/이설자산)'}, {'keyword': '이설', 'val': '평가제외(이전/이설자산)'}, {'keyword': 'OVERHAUL', 'val': '평가제외(오버홀)'}, {'keyword': '오버홀', 'val': '평가제외(오버홀)'}, {'keyword': '레이아웃변경', 'val': '평가제외(레이아웃변경)'}, {'keyword': 'LAYOUT', 'val': '평가제외(레이아웃변경)'}, {'keyword': 'LAY OUT', 'val': '평가제외(레이아웃변경)'}, {'keyword': '수리', 'val': '평가제외(수리비용)'}, {'keyword': '보수', 'val': '평가제외(보수비용)'}, {'keyword': '인허가', 'val': '평가제외(인허가비용)'}, {'keyword': '검사', 'val': '평가제외(검사)'}, {'keyword': '컨설팅업체 선정', 'val': '평가제외(업체선정용역)'}, {'keyword': '광고판', 'val': '평가제외(간판)'}, {'keyword': '아스콘작업', 'val': '평가제외(아스콘)'}, {'keyword': '임대', 'val': '평가제외(임대비)'}, {'keyword': '입목', 'val': '평가제외(입목)'}, {'keyword': '시설분담금', 'val': '평가제외(시설분담금)'}, {'keyword': '개발비', 'val': '평가제외(개발비)'}, {'keyword': '투자비', 'val': '평가제외(투자비)'}, {'keyword': 'USED', 'val': '평가제외(중고자산)'}, {'keyword': '아파트', 'val': '평가제외(주택화재보험대상)'}, {'keyword': '기숙사', 'val': '평가제외(주택화재보험대상)'}, {'keyword': '사택', 'val': '평가제외(주택화재보험대상)'}, {'keyword': '숙소', 'val': '평가제외(주택화재보험대상)'}
+    ],
+    covExclude: [
+        {'keyword': '취득세', 'val': '부보제외(세금)'}, {'keyword': '등록세', 'val': '부보제외(세금)'}, {'keyword': '농특세', 'val': '부보제외(세금)'}, {'keyword': '상표권', 'val': '부보제외(상표권)'}, {'keyword': '회원권', 'val': '부보제외(회원권)'}, {'keyword': '콘도', 'val': '부보제외(회원권)'}, {'keyword': '이용권', 'val': '부보제외(이용권)'}, {'keyword': '특허권', 'val': '부보제외(특허권)'}, {'keyword': '특허', 'val': '부보제외(특허권)'}, {'keyword': '철거', 'val': '부보제외(철거비용)'}, {'keyword': '복구', 'val': '부보제외(복구비용)'}, {'keyword': '이자', 'val': '부보제외(이자비용)'}, {'keyword': '부담금', 'val': '부보제외(부담금)'}, {'keyword': '분담금', 'val': '부보제외(분담금)'}, {'keyword': '사용료', 'val': '부보제외(사용료)'}, {'keyword': '수수료', 'val': '부보제외(수수료)'}, {'keyword': '양도', 'val': '부보제외(양도자산)'}, {'keyword': '실용신안', 'val': '부보제외(실용신안권)'}, {'keyword': '디자인등록', 'val': '부보제외(의장권)'}, {'keyword': '지하수개발', 'val': '부보제외(지하자산)'}, {'keyword': '수수료 및 이자, 등기비용', 'val': '부보제외(비용성격)'}, {'keyword': '한전불입금', 'val': '부보제외(한전불입금)'}, {'keyword': '무형자산', 'val': '부보제외(무형자산)'}, {'keyword': '안전진단비', 'val': '부보제외(비용성격)'}, {'keyword': '구조검토비용', 'val': '부보제외(비용성격)'}, {'keyword': '등기비', 'val': '부보제외(비용성격)'}, {'keyword': '시설부담금', 'val': '부보제외(시설부담금)'}, {'keyword': '권리금', 'val': '부보제외(권리금)'}, {'keyword': '지질조사', 'val': '부보제외(지질조사)'}, {'keyword': '도로부담금', 'val': '부보제외(도로부담금)'}, {'keyword': '측량비', 'val': '부보제외(비용성격)'}, {'keyword': '자동차보험가입대상', 'val': '부보제외(중복보험)'}, {'keyword': '주택화재보험가입대상', 'val': '부보제외(중복보험)'}
+    ]
+};
 
-// 브라우저 캐시(localStorage)에서 불러오기. 없으면 기본 세팅 적용.
-window.infState.mappingRules = JSON.parse(localStorage.getItem('kb_mapping_rules')) || defaultMappingRules;
+// 캐시에서 가져오기 (없으면 엑셀 데이터 초기값 적용)
+window.infState.mappingRules = JSON.parse(localStorage.getItem('kb_mapping_rules_v3')) || initialRules;
 
-// 관리 팝업 열기 및 렌더링
 window.openRuleManager = function() {
-    const tbody = document.getElementById('ruleManagerTbody');
-    tbody.innerHTML = '';
-    window.infState.mappingRules.forEach((rule, idx) => {
-        window.renderRuleRow(tbody, rule.keyword, rule.val, idx);
-    });
+    document.getElementById('ruleTypeSelect').value = 'basic';
+    window.renderRuleManagerRows();
     document.getElementById('ruleManagerModal').style.display = 'flex';
 };
 
-// 행 렌더링용 유틸
+window.renderRuleManagerRows = function() {
+    const ruleType = document.getElementById('ruleTypeSelect').value;
+    const tbody = document.getElementById('ruleManagerTbody');
+    tbody.innerHTML = '';
+    const rules = window.infState.mappingRules[ruleType] || [];
+    
+    rules.forEach((rule, idx) => {
+        window.renderRuleRow(tbody, rule.keyword, rule.val, idx);
+    });
+};
+
 window.renderRuleRow = function(tbody, keyword, val, idx) {
     const tr = document.createElement('tr');
     tr.id = `ruleRow_${idx}`;
     tr.innerHTML = `
-        <td style="padding:4px;"><input type="text" class="input-box rule-keyword" value="${keyword}" placeholder="예: 비품" style="width:100%; box-sizing:border-box;"></td>
-        <td style="padding:4px;"><input type="text" class="input-box rule-val" value="${val}" placeholder="예: 평가제외(비품)" style="width:100%; box-sizing:border-box;"></td>
+        <td style="padding:4px;"><input type="text" class="input-box rule-keyword" value="${keyword}" placeholder="검색할 키워드" style="width:100%; box-sizing:border-box;"></td>
+        <td style="padding:4px;"><input type="text" class="input-box rule-val" value="${val}" placeholder="입력할 구분 값" style="width:100%; box-sizing:border-box;"></td>
         <td style="text-align:center;"><button type="button" style="background:#dc3545; color:white; border:none; padding:4px 8px; border-radius:3px; cursor:pointer;" onclick="document.getElementById('ruleRow_${idx}').remove()"><i class="fa-solid fa-trash"></i></button></td>
     `;
     tbody.appendChild(tr);
 };
 
-// 규칙 행 한 줄 추가
 window.addRuleRow = function() {
     const tbody = document.getElementById('ruleManagerTbody');
-    const newIdx = Date.now(); // 임시 고유 ID
+    const newIdx = Date.now();
     window.renderRuleRow(tbody, "", "", newIdx);
 };
 
-// 저장 로직 (localStorage 에 영구 보존)
 window.saveRules = function() {
+    const ruleType = document.getElementById('ruleTypeSelect').value;
     const tbody = document.getElementById('ruleManagerTbody');
     const newRules = [];
     
@@ -953,9 +1030,8 @@ window.saveRules = function() {
         }
     });
 
-    window.infState.mappingRules = newRules;
-    localStorage.setItem('kb_mapping_rules', JSON.stringify(newRules)); // 브라우저 캐시에 저장
+    window.infState.mappingRules[ruleType] = newRules;
+    localStorage.setItem('kb_mapping_rules_v3', JSON.stringify(window.infState.mappingRules)); 
     
-    document.getElementById('ruleManagerModal').style.display = 'none';
-    alert("✅ 매핑 정책이 성공적으로 저장되었습니다. (브라우저를 껐다 켜도 유지됩니다.)");
+    alert(`✅ 현재 선택된 규칙 카테고리가 성공적으로 영구 저장되었습니다.`);
 };

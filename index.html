@@ -562,26 +562,34 @@
                 </div>
             </div>
 
-            <!-- ★ 신규 추가: 매핑 룰 관리 팝업창 -->
+            <!-- ★ 매핑 룰 관리 팝업창 (3가지 카테고리 관리 기능 추가) -->
             <div class="modal-overlay" id="ruleManagerModal" style="display:none; z-index: 1000; justify-content: center; align-items: center;">
-                <div class="modal-content" style="width: 500px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+                <div class="modal-content" style="width: 600px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
                     <div class="modal-header" style="background:#2C2C2C; color:#FFCC00; padding:15px; display: flex; justify-content: space-between; align-items: center;">
                         <span style="font-weight:bold;"><i class="fa-solid fa-list-check"></i> 자동 매핑 정책 마스터 관리</span>
                         <i class="fa-solid fa-xmark modal-close" style="cursor:pointer; font-size:18px; color:#fff;" onclick="document.getElementById('ruleManagerModal').style.display='none'"></i>
                     </div>
                     <div class="modal-body" style="padding: 20px; background:#f4f5f7;">
-                        <p style="font-size:13px; color:#555; margin-bottom:10px;">👉 자산계정명에 포함된 <b>키워드</b>를 감지하여 우측의 <b>구분 값</b>을 자동으로 세팅합니다. 회사 정책에 맞게 추가/삭제하세요. (브라우저에 영구 저장됩니다.)</p>
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
+                            <span style="font-size:14px; font-weight:bold; color:#333;">관리할 정책 항목 선택: </span>
+                            <select id="ruleTypeSelect" class="input-box" style="padding:6px; font-weight:bold;" onchange="window.renderRuleManagerRows()">
+                                <option value="basic">1. 기본 구분 규칙 (자산계정명 일치)</option>
+                                <option value="evalExclude">2. 평가 제외 규칙 (자산계정/자산명 포함)</option>
+                                <option value="covExclude">3. 부보 제외 규칙 (자산계정/자산명 포함)</option>
+                            </select>
+                        </div>
+                        <p style="font-size:12px; color:#555; margin-bottom:10px;">👉 데이터에서 키워드를 감지하여 우측의 구분 값을 자동으로 세팅합니다. (저장 시 브라우저에 영구 보존)</p>
                         <div style="height: 350px; overflow-y: auto; background:#fff; border:1px solid #ddd; border-radius:4px; margin-bottom: 10px;">
                             <table class="data-table" style="margin-bottom:0;">
                                 <thead style="position: sticky; top: 0; z-index: 1; background: #eee;">
-                                    <tr><th>자산계정 키워드</th><th>자동 입력될 구분 값</th><th style="width:50px;">삭제</th></tr>
+                                    <tr><th>감지할 키워드</th><th>자동 입력될 구분 값</th><th style="width:50px;">삭제</th></tr>
                                 </thead>
                                 <tbody id="ruleManagerTbody"></tbody>
                             </table>
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <button type="button" class="btn-yellow" onclick="window.addRuleRow()"><i class="fa-solid fa-plus"></i> 규칙 추가</button>
-                            <button type="button" class="btn-dark" style="background:#17A2B8; padding:8px 25px; border:none; font-size:14px;" onclick="window.saveRules()">💾 정책 저장 및 닫기</button>
+                            <button type="button" class="btn-yellow" onclick="window.addRuleRow()"><i class="fa-solid fa-plus"></i> 키워드 규칙 추가</button>
+                            <button type="button" class="btn-dark" style="background:#17A2B8; padding:8px 25px; border:none; font-size:14px;" onclick="window.saveRules()">💾 화면에 보이는 규칙 영구 저장</button>
                         </div>
                     </div>
                 </div>
