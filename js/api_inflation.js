@@ -896,10 +896,37 @@ window.infLoadPastData = function(event) {
 // [섹션 7] 자산 구분 일괄 지정 (기본/평가제외/부보제외 자동화)
 // ============================================================================
 
-function getDynamicMapping(accountName) {
+// ★ 안전한 룰 로드 함수: 메모리가 초기화되어도 내장된 사전을 복구합니다.
+window.getSafeMappingRules = function() {
+    if (window.infState && window.infState.mappingRules) return window.infState.mappingRules;
+    
+    const defaultRules = {
+        basic: [
+            { keyword: '건물', val: '50' }, { keyword: '구축물', val: '50' }, { keyword: '기계장치', val: '47' }, 
+            { keyword: '공기구', val: '47' }, { keyword: '공구', val: '47' }, { keyword: '기구', val: '47' }, 
+            { keyword: '시설', val: '47' }, { keyword: '시설장치', val: '47' }, { keyword: '차량운반구', val: '47' }, 
+            { keyword: '건물부속설비', val: '50' }, { keyword: '금형', val: '47' }
+        ],
+        evalExclude: [
+            {'keyword': 'SOFTWARE', 'val': '평가제외(S/W)'}, {'keyword': 'S.W', 'val': '평가제외(S/W)'}, {'keyword': 'PROGRAM', 'val': '평가제외(S/W)'}, {'keyword': '소프트웨어', 'val': '평가제외(S/W)'}, {'keyword': '프로그램', 'val': '평가제외(S/W)'}, {'keyword': 'S/W', 'val': '평가제외(S/W)'}, {'keyword': 'LICENSE', 'val': '평가제외(S/W)'}, {'keyword': '설계비', 'val': '평가제외(설계/감리/용역)'}, {'keyword': '감리비', 'val': '평가제외(설계/감리/용역)'}, {'keyword': '용역비', 'val': '평가제외(설계/감리/용역)'}, {'keyword': '설계', 'val': '평가제외(설계/감리/용역)'}, {'keyword': '감리', 'val': '평가제외(설계/감리/용역)'}, {'keyword': '용역', 'val': '평가제외(설계/감리/용역)'}, {'keyword': '운송비', 'val': '평가제외(운송비용)'}, {'keyword': '운송', 'val': '평가제외(운송비용)'}, {'keyword': '운임', 'val': '평가제외(운임비용)'}, {'keyword': '운임비', 'val': '평가제외(운임비용)'}, {'keyword': '조사비', 'val': '평가제외(조사비용)'}, {'keyword': '인건비', 'val': '평가제외(인건비용)'}, {'keyword': '미술품', 'val': '평가제외(미술품)'}, {'keyword': '예술품', 'val': '평가제외(예술품)'}, {'keyword': '조각상', 'val': '평가제외(조각상)'}, {'keyword': '시운전', 'val': '평가제외(건설중인자산)'}, {'keyword': '중고', 'val': '평가제외(중고자산)'}, {'keyword': '조경', 'val': '평가제외(조경)'}, {'keyword': '연못', 'val': '평가제외(조경)'}, {'keyword': '정원', 'val': '평가제외(조경)'}, {'keyword': '이전공사', 'val': '평가제외(이전/이설자산)'}, {'keyword': '이설공사', 'val': '평가제외(이전/이설자산)'}, {'keyword': '이전', 'val': '평가제외(이전/이설자산)'}, {'keyword': '이설', 'val': '평가제외(이전/이설자산)'}, {'keyword': 'OVERHAUL', 'val': '평가제외(오버홀)'}, {'keyword': '오버홀', 'val': '평가제외(오버홀)'}, {'keyword': '레이아웃변경', 'val': '평가제외(레이아웃변경)'}, {'keyword': 'LAYOUT', 'val': '평가제외(레이아웃변경)'}, {'keyword': 'LAY OUT', 'val': '평가제외(레이아웃변경)'}, {'keyword': '수리', 'val': '평가제외(수리비용)'}, {'keyword': '보수', 'val': '평가제외(보수비용)'}, {'keyword': '인허가', 'val': '평가제외(인허가비용)'}, {'keyword': '검사', 'val': '평가제외(검사)'}, {'keyword': '컨설팅업체 선정', 'val': '평가제외(업체선정용역)'}, {'keyword': '광고판', 'val': '평가제외(간판)'}, {'keyword': '아스콘작업', 'val': '평가제외(아스콘)'}, {'keyword': '임대', 'val': '평가제외(임대비)'}, {'keyword': '입목', 'val': '평가제외(입목)'}, {'keyword': '시설분담금', 'val': '평가제외(시설분담금)'}, {'keyword': '개발비', 'val': '평가제외(개발비)'}, {'keyword': '투자비', 'val': '평가제외(투자비)'}, {'keyword': 'USED', 'val': '평가제외(중고자산)'}, {'keyword': '아파트', 'val': '평가제외(주택화재보험대상)'}, {'keyword': '기숙사', 'val': '평가제외(주택화재보험대상)'}, {'keyword': '사택', 'val': '평가제외(주택화재보험대상)'}, {'keyword': '숙소', 'val': '평가제외(주택화재보험대상)'}, {'keyword': '비품', 'val': '평가제외(비품)'}, {'keyword': '건설중 자산', 'val': '평가제외(건설중 자산)'}, {'keyword': '건설중자산', 'val': '평가제외(건설중 자산)'}
+        ],
+        covExclude: [
+            {'keyword': '토지', 'val': '부보제외(토지)'}, {'keyword': '취득세', 'val': '부보제외(세금)'}, {'keyword': '등록세', 'val': '부보제외(세금)'}, {'keyword': '농특세', 'val': '부보제외(세금)'}, {'keyword': '상표권', 'val': '부보제외(상표권)'}, {'keyword': '회원권', 'val': '부보제외(회원권)'}, {'keyword': '콘도', 'val': '부보제외(회원권)'}, {'keyword': '이용권', 'val': '부보제외(이용권)'}, {'keyword': '특허권', 'val': '부보제외(특허권)'}, {'keyword': '특허', 'val': '부보제외(특허권)'}, {'keyword': '철거', 'val': '부보제외(철거비용)'}, {'keyword': '복구', 'val': '부보제외(복구비용)'}, {'keyword': '이자', 'val': '부보제외(이자비용)'}, {'keyword': '부담금', 'val': '부보제외(부담금)'}, {'keyword': '분담금', 'val': '부보제외(분담금)'}, {'keyword': '사용료', 'val': '부보제외(사용료)'}, {'keyword': '수수료', 'val': '부보제외(수수료)'}, {'keyword': '양도', 'val': '부보제외(양도자산)'}, {'keyword': '실용신안', 'val': '부보제외(실용신안권)'}, {'keyword': '디자인등록', 'val': '부보제외(의장권)'}, {'keyword': '지하수개발', 'val': '부보제외(지하자산)'}, {'keyword': '수수료 및 이자, 등기비용', 'val': '부보제외(비용성격)'}, {'keyword': '한전불입금', 'val': '부보제외(한전불입금)'}, {'keyword': '무형자산', 'val': '부보제외(무형자산)'}, {'keyword': '안전진단비', 'val': '부보제외(비용성격)'}, {'keyword': '구조검토비용', 'val': '부보제외(비용성격)'}, {'keyword': '등기비', 'val': '부보제외(비용성격)'}, {'keyword': '시설부담금', 'val': '부보제외(시설부담금)'}, {'keyword': '권리금', 'val': '부보제외(권리금)'}, {'keyword': '지질조사', 'val': '부보제외(지질조사)'}, {'keyword': '도로부담금', 'val': '부보제외(도로부담금)'}, {'keyword': '측량비', 'val': '부보제외(비용성격)'}, {'keyword': '자동차보험가입대상', 'val': '부보제외(중복보험)'}, {'keyword': '주택화재보험가입대상', 'val': '부보제외(중복보험)'}
+        ]
+    };
+    
+    let storedRules = null;
+    try { storedRules = JSON.parse(localStorage.getItem('kb_mapping_rules_v3')); } catch(e) {}
+    
+    if (!window.infState) window.infState = {};
+    window.infState.mappingRules = storedRules || defaultRules;
+    return window.infState.mappingRules;
+};
+
+window.getDynamicMapping = function(accountName) {
     if (!accountName) return "";
     const acc = accountName.trim();
-    const rules = window.infState.mappingRules.basic || [];
+    const rules = window.getSafeMappingRules().basic || [];
     
     let matched = rules.find(r => r.keyword === acc);
     if (matched) return matched.val;
@@ -908,7 +935,7 @@ function getDynamicMapping(accountName) {
     if (matched) return matched.val;
     
     return "";
-}
+};
 
 window.assignBasicClass = function() {
     const wiz = window.infState.wizard;
@@ -933,7 +960,7 @@ window.assignBasicClass = function() {
     const tbody = document.getElementById('basicClassTbody');
     tbody.innerHTML = '';
     uniqueAccounts.forEach(acc => {
-        const defaultVal = getDynamicMapping(acc); 
+        const defaultVal = window.getDynamicMapping(acc); 
         tbody.innerHTML += `
             <tr>
                 <td style="text-align:center; font-weight:bold; color:#1C5691; vertical-align:middle;">${acc}</td>
@@ -960,25 +987,30 @@ window.applyBasicClass = function() {
         inputMap[acc] = input.value.trim();
     });
 
-    infSaveHistory();
+    if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
 
     let applyCount = 0;
-    tData.raw.forEach(row => {
+    tData.raw.forEach((row, rIdx) => {
         const yearVal = String(row[yearIdx] || '');
         if (yearVal.includes('소계') || yearVal.includes('총계')) return;
 
         const acc = String(row[accIdx] || '').trim();
         if (inputMap[acc] !== undefined && inputMap[acc] !== "") {
             row[basicClassIdx] = inputMap[acc]; 
+            
+            // ★ 값이 들어가면 최종 구분 열도 함께 업데이트되도록 연동!
+            const finalIdx = Object.keys(wiz.mapped).length + 4;
+            if(typeof window.syncToFinal === 'function') {
+                window.syncToFinal(rIdx, finalIdx, inputMap[acc], basicClassIdx);
+            }
             applyCount++;
         }
     });
 
     document.getElementById('basicClassModal').style.display = 'none';
-    infRenderTable(); 
+    if(typeof window.infRenderTable === 'function') window.infRenderTable(); 
 };
 
-// ★ 평가제외 자동 감지 및 일괄 지정
 window.assignExcludeEval = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
@@ -988,33 +1020,36 @@ window.assignExcludeEval = function() {
     const nameIdx = wiz.mapped['자산명'];
     const yearIdx = wiz.mapped['취득년도'];
     const targetIdx = Object.keys(wiz.mapped).length + 2;
+    const finalIdx = Object.keys(wiz.mapped).length + 4;
 
     if (accIdx === undefined || nameIdx === undefined) return alert("자산계정 및 자산명 열이 매핑되지 않았습니다.");
 
-    infSaveHistory();
+    if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
     let applyCount = 0;
-    const rules = window.infState.mappingRules.evalExclude || [];
+    const rules = window.getSafeMappingRules().evalExclude || [];
 
-    tData.raw.forEach(row => {
+    tData.raw.forEach((row, rIdx) => {
         const yearVal = String(row[yearIdx] || '');
         if (yearVal.includes('소계') || yearVal.includes('총계')) return;
 
         const accStr = String(row[accIdx] || '').toUpperCase();
         const nameStr = String(row[nameIdx] || '').toUpperCase();
         
-        // 자산명이나 자산계정에 키워드가 하나라도 포함되면 지정
         const matched = rules.find(r => accStr.includes(r.keyword.toUpperCase()) || nameStr.includes(r.keyword.toUpperCase()));
         if (matched) {
             row[targetIdx] = matched.val;
+            // ★ 값이 들어가면 최종 구분 열도 함께 업데이트되도록 연동!
+            if(typeof window.syncToFinal === 'function') {
+                window.syncToFinal(rIdx, finalIdx, matched.val, targetIdx);
+            }
             applyCount++;
         }
     });
 
-    infRenderTable();
+    if(typeof window.infRenderTable === 'function') window.infRenderTable();
     alert(`✅ 평가제외 일괄 지정 완료!\n총 ${applyCount}건의 데이터에 평가제외 구분이 자동 적용되었습니다.`);
 };
 
-// ★ 부보제외 자동 감지 및 일괄 지정
 window.assignExcludeCoverage = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
@@ -1024,14 +1059,15 @@ window.assignExcludeCoverage = function() {
     const nameIdx = wiz.mapped['자산명'];
     const yearIdx = wiz.mapped['취득년도'];
     const targetIdx = Object.keys(wiz.mapped).length + 3;
+    const finalIdx = Object.keys(wiz.mapped).length + 4;
 
     if (accIdx === undefined || nameIdx === undefined) return alert("자산계정 및 자산명 열이 매핑되지 않았습니다.");
 
-    infSaveHistory();
+    if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
     let applyCount = 0;
-    const rules = window.infState.mappingRules.covExclude || [];
+    const rules = window.getSafeMappingRules().covExclude || [];
 
-    tData.raw.forEach(row => {
+    tData.raw.forEach((row, rIdx) => {
         const yearVal = String(row[yearIdx] || '');
         if (yearVal.includes('소계') || yearVal.includes('총계')) return;
 
@@ -1041,21 +1077,23 @@ window.assignExcludeCoverage = function() {
         const matched = rules.find(r => accStr.includes(r.keyword.toUpperCase()) || nameStr.includes(r.keyword.toUpperCase()));
         if (matched) {
             row[targetIdx] = matched.val;
+            // ★ 값이 들어가면 최종 구분 열도 함께 업데이트되도록 연동!
+            if(typeof window.syncToFinal === 'function') {
+                window.syncToFinal(rIdx, finalIdx, matched.val, targetIdx);
+            }
             applyCount++;
         }
     });
 
-    infRenderTable();
+    if(typeof window.infRenderTable === 'function') window.infRenderTable();
     alert(`✅ 부보제외 일괄 지정 완료!\n총 ${applyCount}건의 데이터에 부보제외 구분이 자동 적용되었습니다.`);
 };
 
-// ★ 업데이트: 최종 선택 시작 자동화 (우선순위 반영)
 window.assignFinalClass = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
     if(!tData || !tData.raw || tData.raw.length === 0) return alert("데이터가 없습니다.");
 
-    // 매핑된 기본 열 개수를 기반으로 각 구분 열의 인덱스 추적
     const mappedColCount = Object.keys(wiz.mapped).length;
     const pastIdx = mappedColCount + 0;
     const basicIdx = mappedColCount + 1;
@@ -1064,14 +1102,13 @@ window.assignFinalClass = function() {
     const finalIdx = mappedColCount + 4;
     const yearIdx = wiz.mapped['취득년도'];
 
-    infSaveHistory(); // 실행 전 뒤로가기(Ctrl+Z)를 위한 히스토리 저장
+    if(typeof window.infSaveHistory === 'function') window.infSaveHistory(); 
     let applyCount = 0;
 
     tData.raw.forEach(row => {
         const yearVal = String(row[yearIdx] || '');
-        if (yearVal.includes('소계') || yearVal.includes('총계')) return; // 소계/총계 행 무시
+        if (yearVal.includes('소계') || yearVal.includes('총계')) return; 
 
-        // 각 셀의 값 가져오기
         const past = String(row[pastIdx] || '').trim();
         const basic = String(row[basicIdx] || '').trim();
         const evalEx = String(row[evalExIdx] || '').trim();
@@ -1085,14 +1122,13 @@ window.assignFinalClass = function() {
         else if (covEx) finalVal = covEx;
         else if (basic) finalVal = basic;
 
-        // 최종 구분에 값이 할당되면 데이터 갱신
         if (finalVal !== "") {
             row[finalIdx] = finalVal;
             applyCount++;
         }
     });
 
-    infRenderTable(); // 화면 다시 그리기 (배경색 자동 적용됨)
+    if(typeof window.infRenderTable === 'function') window.infRenderTable(); 
     alert(`✅ '최종 구분' 일괄 지정 완료!\n\n우선순위 [과거 연동 > 평가제외 > 부보제외 > 기본 지정] 규칙에 따라 총 ${applyCount}건이 확정되었습니다.`);
 };
 
