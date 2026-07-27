@@ -1195,7 +1195,6 @@ window.applyInflationIndex = function() {
     const fileInput = document.getElementById('priceIndexFile');
     let file = (fileInput && fileInput.files && fileInput.files.length > 0) ? fileInput.files[0] : null;
 
-    // ★ 브라우저 메모리에서 파일이 날아갔거나 업로드되지 않은 경우 스마트 폴백(Fallback) 실행
     if (!file) {
         const tempInput = document.createElement('input');
         tempInput.type = 'file';
@@ -1204,19 +1203,16 @@ window.applyInflationIndex = function() {
             const selectedFile = event.target.files[0];
             if (!selectedFile) return;
             
-            // 1.2 메뉴의 텍스트 박스도 최신화 시켜줌
             const pathBox = document.getElementById('priceIndexPath');
             if (pathBox) pathBox.value = selectedFile.name;
             
-            // 파일 선택 즉시 데이터 처리 함수로 넘김
             window.processInflationData(selectedFile);
         };
-        alert("⚠️ 물가지수 엑셀 파일이 등록되지 않았거나, 새로고침/임시저장 불러오기로 인해 초기화되었습니다.\n\n[확인]을 누르신 후 '물가지수 엑셀 파일(2026년 6월적용_배포용.xls)'을 바로 선택해 주세요.");
+        alert("⚠️ 물가지수 엑셀 파일이 등록되지 않았거나, 새로고침/임시저장 불러오기로 인해 초기화되었습니다.\n\n[확인]을 누르신 후 '물가지수 엑셀 파일(2026년 6월적용_배포용.xls)'을 다시 선택해 주세요.");
         tempInput.click();
         return;
     }
 
-    // 정상적으로 파일이 있으면 바로 실행
     window.processInflationData(file);
 };
 
@@ -1285,10 +1281,12 @@ window.processInflationData = function(file) {
                     let targetSheet = null;
                     let isConstSheet = false;
 
+                    // ★ 건물, 구축물, 건물부속설비는 건축지수 매핑
                     if (['건물', '구축물', '건물부속설비'].includes(accVal)) {
                         targetSheet = sheetConst;
                         isConstSheet = true;
                     } else {
+                        // ★ 외산인 경우 수입물가, 그 외(국산 및 공란)는 생산자물가
                         targetSheet = (originVal === '외산') ? sheetImp : sheetProd;
                     }
 
@@ -1298,8 +1296,9 @@ window.processInflationData = function(file) {
                         if (yearInfo) {
                             let matchRow = null;
 
-                            if (isConstSheet && finalVal === '50') {
-                                matchRow = targetSheet.find((r, i) => i > yearInfo.rowIdx && (String(r[0] || '').includes('노무비') || String(r[1] || '').includes('노무비') || String(r[0] || '').includes('인건비') || String(r[1] || '').includes('인건비')));
+                            if (isConstSheet) {
+                                // ★ 수정됨: 건축지수는 B열(인덱스 1)에 노무비 비율(50 등)이 기재되어 있으므로, 텍스트가 아닌 숫자로 직접 매칭
+                                matchRow = targetSheet.find((r, i) => i > yearInfo.rowIdx && String(r[1] || '').trim() === finalVal);
                             } 
                             else {
                                 matchRow = targetSheet.find((r, i) => i > yearInfo.rowIdx && String(r[0] || '').trim() === finalVal);
