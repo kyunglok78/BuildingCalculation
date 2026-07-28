@@ -1220,139 +1220,8 @@ window.saveRules = function() {
 };
 
 // ============================================================================
-// [섹션 9] 3단계 가액평가 일괄 계산 및 감가율 모달 로직
+// [섹션 9 - 하단] 팝업 연동 및 감가율 적용 로직
 // ============================================================================
-
-// 1.2 평가지수 등록 시 물가보정용 3개 시트를 캐싱하도록 main.js 함수 오버라이딩
-window.loadIndexExcel = function(event) {
-    const file = event.target.files[0];
-    if(!file) return;
-    document.getElementById('priceIndexPath').value = file.name;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, {type: 'array'});
-            
-            window.kbState.indexData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {defval: "-"});
-            
-            window.kbState.inflationSheets = {
-                const: XLSX.utils.sheet_to_json(workbook.Sheets['건축지수'] || workbook.Sheets[workbook.SheetNames[0]], {header: 1, defval: ""}),
-                prod: XLSX.utils.sheet_to_json(workbook.Sheets['생산자물가'] || workbook.Sheets[workbook.SheetNames[0]], {header: 1, defval: ""}),
-                imp: XLSX.utils.sheet_to_json(workbook.Sheets['수입물가'] || workbook.Sheets[workbook.SheetNames[0]], {header: 1, defval: ""})
-            };
-            
-            alert(`✅ 건축물가지수 및 물가보정용 엑셀 분석 완료!`);
-            if(window.retroactiveApplyPriceIndex) window.retroactiveApplyPriceIndex();
-        } catch(err) { alert("물가지수 파싱 중 오류 발생: " + err); }
-    };
-    reader.readAsArrayBuffer(file);
-    event.target.value = ''; 
-};
-
-// 1. 물가지수 불러오기 및 재조달가액 계산
-window.applyInflationIndex = function() {
-    if (!window.kbState.inflationSheets) {
-        alert("⚠️ 1.2 평가지수 등록 메뉴에서 [물가지수] 엑셀 파일을 한 번 더 첨부해 주세요.\n(시스템 업데이트로 인한 최초 1회 캐싱 작업이 필요합니다.)");
-        const fileInput = document.getElementById('priceIndexFile');
-        if (fileInput) fileInput.click();
-        return;
-    }
-
-    try {
-        const sheetConst = window.kbState.inflationSheets.const;
-        const sheetProd  = window.kbState.inflationSheets.prod;
-        const sheetImp   = window.kbState.inflationSheets.imp;
-
-        const wiz = window.infState.wizard;
-        const tData = window.infState.data[window.infState.activeTab];
-
-        const mappedColCount = Object.keys(wiz.mapped).length;
-        const accIdx = wiz.mapped['자산계정'];
-        const yearIdx = wiz.mapped['취득년도'];
-        const originIdx = wiz.mapped['국산/외산'];
-        const priceIdx = wiz.mapped['취득가액']; 
-        
-        const finalIdx = mappedColCount + 4;
-        const inflationIdx = mappedColCount + 5;
-        const replacementIdx = mappedColCount + 6;
-
-        if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
-        let applyCount = 0, missingCount = 0;
-        let subRep = 0, totRep = 0;
-
-        const getYearColIndex = (sheet, yearStr) => {
-            if (!sheet) return null;
-            for (let i = 0; i < Math.min(5, sheet.length); i++) {
-                const colIdx = sheet[i].findIndex(cell => String(cell).includes(yearStr));
-                if (colIdx !== -1) return { rowIdx: i, colIdx: colIdx };
-            }
-            return null;
-        };
-
-        tData.raw.forEach(row => {
-            const yearVal = String(row[yearIdx] || '').trim();
-            
-            if (yearVal.includes('소계')) {
-                row[replacementIdx] = subRep > 0 ? Math.round(subRep) : '';
-                subRep = 0; 
-                return;
-            } else if (yearVal.includes('총계')) {
-                row[replacementIdx] = totRep > 0 ? Math.round(totRep) : '';
-                return;
-            }
-
-            const finalVal = String(row[finalIdx] || '').trim();
-            const accVal = String(row[accIdx] || '').trim();
-            const originVal = String(row[originIdx] || '').trim();
-            const acqPrice = Number(String(row[priceIdx] || '').replace(/,/g, '')) || 0;
-
-            if (!finalVal) return;
-
-            let indexValue = "";
-            let replacementCost = 0;
-
-            if (finalVal.includes('부보제외')) {
-                indexValue = "-"; replacementCost = "-"; 
-            } else if (finalVal.includes('평가제외')) {
-                indexValue = "1"; replacementCost = acqPrice * 1; 
-            } else {
-                let targetSheet = ['건물', '구축물', '건물부속설비'].includes(accVal) ? sheetConst : (originVal === '외산' ? sheetImp : sheetProd);
-                let isConstSheet = ['건물', '구축물', '건물부속설비'].includes(accVal);
-
-                if (targetSheet && targetSheet.length > 0) {
-                    const yearInfo = getYearColIndex(targetSheet, yearVal);
-                    if (yearInfo) {
-                        let matchRow = null;
-                        if (isConstSheet) matchRow = targetSheet.find((r, i) => i > yearInfo.rowIdx && String(r[1] || '').trim() === finalVal);
-                        else matchRow = targetSheet.find((r, i) => i > yearInfo.rowIdx && String(r[0] || '').trim() === finalVal);
-
-                        if (matchRow) {
-                            indexValue = Number(matchRow[yearInfo.colIdx]);
-                            if (!isNaN(indexValue)) replacementCost = acqPrice * indexValue;
-                        }
-                    }
-                }
-            }
-
-            if (indexValue !== "") {
-                row[inflationIdx] = isNaN(indexValue) ? indexValue : Number(indexValue).toFixed(4); 
-                row[replacementIdx] = isNaN(replacementCost) ? replacementCost : Math.round(replacementCost); 
-                
-                if (!isNaN(replacementCost)) {
-                    subRep += replacementCost;
-                    totRep += replacementCost;
-                }
-                applyCount++;
-            } else { 
-                missingCount++; 
-            }
-        });
-
-        if(typeof window.infRenderTable === 'function') window.infRenderTable();
-        alert(`✅ 물가지수 및 재조달가액 산출 완료!\n- 적용 완료: ${applyCount}건\n- 누락(연도/코드 없음): ${missingCount}건`);
-    } catch (err) { alert("계산 중 오류가 발생했습니다.\n" + err.message); }
-};
 
 // 2. 감가율 팝업 모달 열기
 window.openDeprBatchModal = function() {
@@ -1378,16 +1247,29 @@ window.openDeprBatchModal = function() {
     const tbody = document.getElementById('deprBatchTbody');
     tbody.innerHTML = '';
     
-    // 편의를 위한 기본 추천값 세팅
+    // 편의를 위한 기본 추천값 세팅 (감가율)
     const defaultDepr = { '건물': 1.78, '구축물': 1.33, '기계장치': 5.33, '공기구': 5.33, '공구와 기구': 5.33, '차량운반구': 5.33, '비품': '-' };
+    
+    // ★ 전달받은 최종 잔가율(하한선) 기본값 세팅
+    const defaultMinRes = { 
+        '건물': 30, '건물부속설비': 30, '구축물': 20, '기계장치': 30, '금형': 30, 
+        '시설장치': 20, '차량운반구': 20, '공구와기구': 20, '공구와 기구': 20, 
+        '공기구': 20, '집기비품': 20, '비품': 20, '기타유형자산': 20 
+    };
 
     uniqueAccounts.forEach(acc => {
         const defaultVal = defaultDepr[acc] !== undefined ? defaultDepr[acc] : ''; 
+        // 하한선 매핑 안된 자산은 기본값 0 처리
+        const defaultMinVal = defaultMinRes[acc] !== undefined ? defaultMinRes[acc] : 0; 
+        
         tbody.innerHTML += `
             <tr>
                 <td style="text-align:center; font-weight:bold; color:#1C5691; vertical-align:middle;">${acc}</td>
                 <td style="padding:4px;">
                     <input type="text" id="deprInput_${acc}" class="input-box" value="${defaultVal}" style="width:100%; text-align:center; box-sizing:border-box; font-weight:bold; color:#333;">
+                </td>
+                <td style="padding:4px;">
+                    <input type="number" id="minResInput_${acc}" class="input-box" value="${defaultMinVal}" style="width:100%; text-align:center; box-sizing:border-box; font-weight:bold; color:#d32f2f;">
                 </td>
             </tr>
         `;
@@ -1398,7 +1280,7 @@ window.openDeprBatchModal = function() {
     else alert("감가율 팝업창 HTML 코드가 index.html에 추가되지 않았습니다.");
 };
 
-// 3. 팝업에서 입력한 감가율 값을 데이터 표에 일괄 반영
+// 3. 팝업에서 입력한 감가율 및 최종 잔가율 값을 데이터에 저장
 window.applyDeprBatch = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
@@ -1409,9 +1291,17 @@ window.applyDeprBatch = function() {
     const deprIdx = mappedColCount + 7; // 감가율 열
 
     const inputMap = {};
+    if (!window.infState.minResidualMap) window.infState.minResidualMap = {};
+
     document.querySelectorAll('[id^="deprInput_"]').forEach(input => {
         const acc = input.id.replace('deprInput_', '');
         inputMap[acc] = input.value.trim();
+        
+        // 최종 잔가율 메모리에 저장
+        const minResInput = document.getElementById(`minResInput_${acc}`);
+        if (minResInput) {
+            window.infState.minResidualMap[acc] = Number(minResInput.value) || 0;
+        }
     });
 
     if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
@@ -1436,16 +1326,17 @@ window.applyDeprBatch = function() {
 
     document.getElementById('deprBatchModal').style.display = 'none';
     if(typeof window.infRenderTable === 'function') window.infRenderTable(); 
-    alert(`✅ 총 ${applyCount}건의 감가율이 표에 입력되었습니다.\n표 상단의 [⚡ 감가/현재 계산] 버튼을 클릭해 잔가율과 현재가액을 산출해 주세요.`);
+    alert(`✅ 총 ${applyCount}건의 감가율 및 최종 잔가율 기준이 저장되었습니다.\n표 상단의 [⚡ 감가/현재 계산] 버튼을 클릭해 가액을 산출해 주세요.`);
 };
 
-// 4. 감가율 기반 잔가율 및 현재가액 일괄 계산 (공식: 100 - ((평가년도 - 취득년도) * 감가율))
+// 4. 감가율 기반 잔가율 및 현재가액 일괄 계산 (하한선 방어 로직 추가)
 window.applyCurrentValue = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
     if(!tData || !tData.raw || tData.raw.length === 0) return alert("데이터가 없습니다.");
 
     const mappedColCount = Object.keys(wiz.mapped).length;
+    const accIdx = wiz.mapped['자산계정'];
     const yearIdx = wiz.mapped['취득년도'];
     const replacementIdx = mappedColCount + 6; 
     const deprIdx = mappedColCount + 7;        
@@ -1471,6 +1362,7 @@ window.applyCurrentValue = function() {
             return;
         }
 
+        const accVal = String(row[accIdx] || '').trim();
         const repCostStr = String(row[replacementIdx] || '').replace(/,/g, '');
         const deprStr = String(row[deprIdx] || '').replace(/,/g, ''); 
         
@@ -1481,13 +1373,16 @@ window.applyCurrentValue = function() {
         const repCost = Number(repCostStr);
         const acqYear = parseInt(yearVal);
         const deprRate = Number(deprStr);
+        
+        // 메모리에 저장해둔 최종 잔가율(하한선) 가져오기 (없으면 0)
+        const minResRate = (window.infState.minResidualMap && window.infState.minResidualMap[accVal] !== undefined) 
+                            ? window.infState.minResidualMap[accVal] : 0;
 
         if (!isNaN(repCost) && !isNaN(acqYear)) {
-            // 감가율이 '-'이거나 '0'인 경우
             if (deprStr === '-' || deprRate === 0) {
                 row[deprIdx] = '-';
-                row[residualIdx] = '-';  // 잔가율도 '-' 처리
-                row[currentValIdx] = repCost; // 현재가액 = 재조달가액
+                row[residualIdx] = '-';  
+                row[currentValIdx] = repCost; 
                 subCur += repCost; 
                 totCur += repCost;
                 applyCount++;
@@ -1497,7 +1392,9 @@ window.applyCurrentValue = function() {
                 
                 // 공식 적용: 잔가율 = 100 - ((현재평가년도 - 취득년도) * 감가율)
                 let residualRate = 100 - (elapsed * deprRate);
-                residualRate = Math.max(0, residualRate); // 잔가율 0 미만 방지
+                
+                // ★ 최종 잔가율 하한선 방어 로직 (입력받은 하한선 밑으로 떨어지지 않게 고정)
+                residualRate = Math.max(minResRate, residualRate);
 
                 row[residualIdx] = residualRate === 0 ? "-" : residualRate.toFixed(2);
                 

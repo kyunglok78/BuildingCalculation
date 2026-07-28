@@ -689,25 +689,8 @@ window.batchApplyRatio = function(mode, siteName) {
 };
 
 // ============================================================================
-// [10] ★ 프로젝트 임시 저장 및 불러오기 (사이드바 상태 및 물가보정 데이터 완벽 복원)
+// [10] ★ 프로젝트 임시 저장 및 불러오기 (건물평가 + 물가보정 통합 저장 완벽 지원)
 // ============================================================================
-
-(function enforceTabColors() {
-    if(document.getElementById('kb-tab-colors')) return;
-    const style = document.createElement('style');
-    style.id = 'kb-tab-colors';
-    style.innerHTML = `
-        #slide3Tabs div[style*="background: #fff"], #slide3Tabs div[style*="background:#fff"], #slide3Tabs div[style*="background: rgb(255, 255, 255)"],
-        #slide6Tabs div[style*="background: #fff"], #slide6Tabs div[style*="background:#fff"], #slide6Tabs div[style*="background: rgb(255, 255, 255)"] {
-            background: #1C5691 !important; color: #ffffff !important; font-weight: bold !important; border-color: #1C5691 !important;
-        }
-        #slide3Tabs div[style*="background: #f8f9fa"], #slide3Tabs div[style*="background:#f8f9fa"], #slide3Tabs div[style*="background: rgb(248, 249, 250)"],
-        #slide6Tabs div[style*="background: #f8f9fa"], #slide6Tabs div[style*="background:#f8f9fa"], #slide6Tabs div[style*="background: rgb(248, 249, 250)"] {
-            background: #f1f5f9 !important; color: #94a3b8 !important; font-weight: normal !important; border-color: #e2e8f0 !important;
-        }
-    `;
-    document.head.appendChild(style);
-})();
 
 window.quickSaveProject = function() {
     try {
@@ -718,7 +701,7 @@ window.quickSaveProject = function() {
         const hasTempKfpa = Object.keys(window.tempKfpaDataStore || {}).length > 0;
         const hasCostData = window.kbState.costData && window.kbState.costData.length > 0;
         
-        // ★ 물가보정 데이터가 존재하는지 확인
+        // ★ 물가보정 데이터가 존재하는지 확인 (추가됨)
         const hasInfData = window.infState && window.infState.data && Object.keys(window.infState.data).length > 0;
                             
         if (Object.keys(window.kbState.fetchedData).length === 0 && !hasEvalData && !hasTempKfpa && !hasCostData && !hasInfData) {
@@ -752,9 +735,9 @@ window.quickSaveProject = function() {
             };
         });
 
-        // ★ JSON 객체에 물가보정용 상태(infState) 추가
+        // ★ 건물평가(kbState)와 물가보정(infState) 데이터를 모두 담아 저장!
         const projectData = {
-            version: "1.8", // 버전 업
+            version: "2.0", 
             contractor: contractorName,
             evalYear: evalYear,
             locations: locations, 
@@ -777,7 +760,7 @@ window.quickSaveProject = function() {
         a.href = url;
         
         const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, "");
-        a.download = `${contractorName || '가액평가'}_임시저장_${dateStr}.kbproj`;
+        a.download = `${contractorName || '통합가액평가'}_임시저장_${dateStr}.kbproj`;
         a.click();
         URL.revokeObjectURL(url);
     } catch (e) {
@@ -794,37 +777,32 @@ window.quickLoadProject = function(event) {
         try {
             const projectData = JSON.parse(e.target.result);
             
+            // 1. 기존 건물평가 데이터 복구
             if (projectData.kbState) window.kbState = projectData.kbState;
-            
             if (projectData.tempKfpaDataStore) window.tempKfpaDataStore = projectData.tempKfpaDataStore;
             else window.tempKfpaDataStore = {};
-            
             if (projectData.targetKfpaSite) window.targetKfpaSite = projectData.targetKfpaSite;
             if (projectData.targetKfpaAddress) window.targetKfpaAddress = projectData.targetKfpaAddress;
 
-            // ★ 물가보정 데이터 복구 및 화면 렌더링 세팅
+            // 2. ★ 물가보정 데이터 복구 및 화면 세팅
             if (projectData.infState) {
                 window.infState = projectData.infState;
                 
-                // 물가보정 매핑 룰이 파일에 없으면 로컬 스토리지 또는 기본값 적용
+                // 물가보정 매핑 룰이 없으면 기본값 복구
                 if (!window.infState.mappingRules) {
-                    window.infState.mappingRules = JSON.parse(localStorage.getItem('kb_mapping_rules_v3')) || initialRules;
+                    window.infState.mappingRules = JSON.parse(localStorage.getItem('kb_mapping_rules_v3')) || window.initialRules;
                 }
                 
-                // 3단계(물가보정) 화면 복구를 위한 UI 갱신 함수 호출
+                // 물가보정 화면(탭 및 테이블) UI 복구 실행
                 if (typeof window.infInitTabs === 'function' && window.infState.tabs && window.infState.tabs.length > 0) {
-                    // 저장 시점에 화면에 표시되던 탭을 그대로 그리기 위해 UI 업데이트
                     setTimeout(() => {
                         window.infInitTabs();
                         
-                        // 저장 당시의 step(단계) 패널 노출 상태 복구
+                        // 저장 당시의 step(단계) 화면 복구
                         if (window.infState.step === 2) {
                             document.getElementById('infStep1Panel').style.display = 'none';
                             document.getElementById('infStep2Panel').style.display = 'block';
                             document.getElementById('infStep3Panel').style.display = 'none';
-                            document.getElementById('infWizardArea').style.display = 'flex';
-                            document.getElementById('btnStartWizard').style.display = 'none';
-                            document.getElementById('infWizardText').innerHTML = `🧹 1.5단계: 불필요한 행 삭제 후 다음 단계 진행완료.`;
                         } else if (window.infState.step === 3) {
                             document.getElementById('infStep1Panel').style.display = 'none';
                             document.getElementById('infStep2Panel').style.display = 'none';
@@ -832,29 +810,20 @@ window.quickLoadProject = function(event) {
                         }
                         
                         if (typeof window.infRenderTable === 'function') window.infRenderTable();
-                    }, 500); // UI 생성 후 렌더링될 수 있도록 약간의 지연
+                    }, 500);
                 }
             } else {
-                // 저장된 파일에 물가보정 데이터가 없으면 초기화
+                // 과거 버전의 파일이거나 물가보정 데이터가 없는 경우 초기화
                 window.infState = { mode: 'location', tabs: [], activeTab: '', step: 1, data: {}, wizard: { active: false, phase: 'idle', columns: ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득일', '취득가액'], activeTarget: '', mapped: {} }, foldingLevel: 3, lastClickedRow: -1, lastClickedCol: -1, pastYear: null };
             }
 
-            if (projectData.contractor) {
-                document.querySelectorAll('.contractor-sync').forEach(el => el.value = projectData.contractor);
-            }
-            if (projectData.evalYear) {
-                const evalYearInput = document.getElementById('evalYear');
-                if (evalYearInput) evalYearInput.value = projectData.evalYear;
-            }
-            if (projectData.unitCostPath) {
-                const uPath = document.getElementById('unitCostPath');
-                if (uPath) uPath.value = projectData.unitCostPath;
-            }
-            if (projectData.priceIndexPath) {
-                const pPath = document.getElementById('priceIndexPath');
-                if (pPath) pPath.value = projectData.priceIndexPath;
-            }
+            // 3. UI 텍스트 박스 정보 복구
+            if (projectData.contractor) document.querySelectorAll('.contractor-sync').forEach(el => el.value = projectData.contractor);
+            if (projectData.evalYear) { const y = document.getElementById('evalYear'); if(y) y.value = projectData.evalYear; }
+            if (projectData.unitCostPath) { const u = document.getElementById('unitCostPath'); if(u) u.value = projectData.unitCostPath; }
+            if (projectData.priceIndexPath) { const p = document.getElementById('priceIndexPath'); if(p) p.value = projectData.priceIndexPath; }
 
+            // 4. 1.1 소재지 등록 테이블 복구
             const tbody = document.getElementById('locationTbody');
             if (tbody) {
                 tbody.innerHTML = ''; 
@@ -879,8 +848,7 @@ window.quickLoadProject = function(event) {
                 } 
             }
 
-            runGroupedRenderTest();
-
+            // 5. 사이드바 메뉴 뱃지 상태 복구
             if (projectData.sidebarStates) {
                 for (const [menuId, state] of Object.entries(projectData.sidebarStates)) {
                     const menu = document.getElementById(menuId);
@@ -897,142 +865,17 @@ window.quickLoadProject = function(event) {
                 if (typeof updateMenuState === 'function') updateMenuState();
             }
 
-            if (window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
-                const dataContainer = document.getElementById('fetchedDataContainer');
-                const tabsContainer = document.getElementById('slide3Tabs');
-                const emptyMsg = document.getElementById('emptyStateMsg');
-                
-                if (emptyMsg) emptyMsg.style.display = 'none';
-                if (dataContainer && tabsContainer) {
-                    dataContainer.style.display = 'block';
-                    dataContainer.innerHTML = ''; 
-                    tabsContainer.innerHTML = '';
+            if (typeof runGroupedRenderTest === 'function') runGroupedRenderTest();
 
-                    const korMap = {
-                        "platPlc": "대지위치", "bldNm": "건물명", "mainPurpsCdNm": "주용도",
-                        "mainBldCnt": "주건축물수", "subBldCnt": "부속건축물수", "totArea": "연면적(㎡)",
-                        "pmsDay": "허가일", "stcnsDay": "착공일", "useAprDay": "사용승인일",
-                        "dongNm": "동명칭", "grndFlrCnt": "지상층수", "ugrndFlrCnt": "지하층수",
-                        "heit": "높이(m)", "strctCdNm": "구조명", "roofCdNm": "지붕코드명",
-                        "flrGbCdNm": "층구분", "flrNoNm": "층번호", "area": "면적(㎡)", "etcPurps": "기타용도"
-                    };
-
-                    let isFirst = true;
-                    for (const [siteName, siteData] of Object.entries(window.kbState.fetchedData)) {
-                        const tabBtn = document.createElement('div');
-                        tabBtn.innerText = siteName;
-                        tabBtn.style.cssText = `padding:10px 20px; cursor:pointer; font-weight:${isFirst ? 'bold' : 'normal'}; border:1px solid ${isFirst ? '#1C5691' : '#e2e8f0'}; border-bottom:none; border-radius:4px 4px 0 0; margin-right:5px; background:${isFirst ? '#1C5691' : '#f1f5f9'}; color:${isFirst ? '#ffffff' : '#94a3b8'};`;
-                        
-                        const contentDiv = document.createElement('div');
-                        contentDiv.style.display = isFirst ? 'block' : 'none';
-                        
-                        tabBtn.onclick = () => { 
-                            Array.from(tabsContainer.children).forEach(c => { c.style.background = '#f1f5f9'; c.style.color = '#94a3b8'; c.style.fontWeight = 'normal'; c.style.borderColor = '#e2e8f0'; });
-                            Array.from(dataContainer.children).forEach(c => c.style.display = 'none');
-                            tabBtn.style.background = '#1C5691'; tabBtn.style.color = '#ffffff'; tabBtn.style.fontWeight = 'bold'; tabBtn.style.borderColor = '#1C5691';
-                            contentDiv.style.display = 'block';
-                        };
-                        tabsContainer.appendChild(tabBtn);
-
-                        for (const [title, rows] of Object.entries(siteData)) {
-                            if (title === 'address' || title === 'errors' || !Array.isArray(rows) || rows.length === 0) continue;
-                            
-                            const sectionTitle = document.createElement('h3');
-                            let korTitle = title === 'recap' ? '총괄표제부 정보' : (title === 'title' ? '표제부 상세' : (title === 'floor' ? '층별 개요' : title));
-                            sectionTitle.innerText = `■ ${korTitle}`; 
-                            sectionTitle.style.cssText = 'font-size:15px; margin: 20px 0 10px 0; color:#1C5691;';
-                            contentDiv.appendChild(sectionTitle);
-
-                            const tableWrapper = document.createElement('div');
-                            tableWrapper.style.cssText = 'overflow-x:auto; margin-bottom:20px; border:1px solid #ddd; max-height: 300px; overflow-y: auto;';
-                            
-                            const table = document.createElement('table');
-                            table.className = 'data-table'; 
-                            table.style.margin = '0';
-                            
-                            const thead = document.createElement('thead');
-                            const headerRow = document.createElement('tr');
-                            thead.style.position = 'sticky';
-                            thead.style.top = '0';
-                            thead.style.zIndex = '1';
-                            
-                            const cols = Object.keys(rows[0]);
-                            cols.forEach(col => {
-                                const th = document.createElement('th');
-                                const korName = korMap[col] || col;
-                                th.innerHTML = `${korName} <span style="font-size:10px; color:#ccc;">▲▼</span>`;
-                                th.style.cursor = 'pointer';
-                                
-                                th.dataset.sortOrder = 'asc';
-                                th.onclick = () => {
-                                    const isAsc = th.dataset.sortOrder === 'asc';
-                                    th.dataset.sortOrder = isAsc ? 'desc' : 'asc';
-                                    
-                                    const tbody = table.querySelector('tbody');
-                                    const rowArray = Array.from(tbody.querySelectorAll('tr'));
-                                    const colIndex = Array.from(headerRow.children).indexOf(th);
-                                    
-                                    rowArray.sort((a, b) => {
-                                        const cellA = a.children[colIndex].innerText.replace(/,/g, '');
-                                        const cellB = b.children[colIndex].innerText.replace(/,/g, '');
-                                        const valA = isNaN(cellA) ? cellA : parseFloat(cellA);
-                                        const valB = isNaN(cellB) ? cellB : parseFloat(cellB);
-                                        
-                                        if(valA > valB) return isAsc ? 1 : -1;
-                                        if(valA < valB) return isAsc ? -1 : 1;
-                                        return 0;
-                                    });
-                                    rowArray.forEach(tr => tbody.appendChild(tr)); 
-                                };
-                                headerRow.appendChild(th);
-                            });
-                            thead.appendChild(headerRow);
-                            table.appendChild(thead);
-                            
-                            const tbody = document.createElement('tbody');
-                            rows.forEach((row, rIdx) => {
-                                const tr = document.createElement('tr');
-                                tr.style.background = rIdx % 2 === 0 ? '#fff' : '#f9f9fa';
-                                cols.forEach(col => {
-                                    const td = document.createElement('td');
-                                    td.innerText = row[col] || '-';
-                                    td.style.textAlign = 'center';
-                                    tr.appendChild(td);
-                                });
-                                tbody.appendChild(tr);
-                            });
-                            table.appendChild(tbody);
-                            tableWrapper.appendChild(table);
-                            contentDiv.appendChild(tableWrapper);
-                        }
-                        dataContainer.appendChild(contentDiv);
-                        isFirst = false;
-                    }
-                }
-            }
-
-            const loadTime = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-            document.querySelectorAll('.window-title').forEach(title => {
-                let badge = title.querySelector('.loaded-badge');
-                if(!badge) {
-                    badge = document.createElement('span');
-                    badge.className = 'loaded-badge';
-                    title.appendChild(badge);
-                }
-                badge.style.cssText = 'margin-left: 20px; padding: 4px 15px; background: #e74c3c; color: white; border-radius: 20px; font-size: 13px; font-weight: bold; vertical-align: middle; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.2); border: 1px solid #c0392b;';
-                badge.innerHTML = `<i class="fa-solid fa-folder-open"></i> 최근 로드: ${file.name} (${loadTime})`;
-            });
-
-            if (typeof backupLocationData === 'function') backupLocationData();
-
-            alert("✅ 임시 저장 데이터 완벽 로드 완료!\n(물가보정 상태까지 완벽하게 복구되었습니다.)");
+            alert("✅ 모든 가액평가 데이터(물가보정 포함)가 완벽하게 복구되었습니다!");
         } catch (err) {
-            alert("⚠️ 파일 형식이 잘못되었거나 과거의 손상된 저장 파일입니다.\n(에러: " + err.message + ")");
+            alert("⚠️ 파일 형식이 잘못되었거나 손상된 파일입니다.\n(에러: " + err.message + ")");
         }
     };
     reader.readAsText(file);
     event.target.value = ''; 
 };
+
 
 // ============================================================================
 // [11] ★ 화협(KFPA) 다중 사업장 바구니 보존 및 일괄 확정 로직 

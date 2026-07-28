@@ -193,17 +193,17 @@
 
 <!-- 3-5. 감가율 일괄 지정 팝업창 -->
 <div class="modal-overlay" id="deprBatchModal" style="display:none; z-index: 1000; justify-content: center; align-items: center;">
-    <div class="modal-content" style="width: 500px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+    <div class="modal-content" style="width: 700px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
         <div class="modal-header" style="background:#28A745; color:white; padding:15px; display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-weight:bold;"><i class="fa-solid fa-wand-magic-sparkles"></i> 자산계정별 감가율 일괄 지정</span>
+            <span style="font-weight:bold;"><i class="fa-solid fa-wand-magic-sparkles"></i> 자산계정별 감가율 및 최종 잔가율 일괄 지정</span>
             <i class="fa-solid fa-xmark modal-close" style="cursor:pointer; font-size:18px;" onclick="document.getElementById('deprBatchModal').style.display='none'"></i>
         </div>
         <div class="modal-body" style="padding: 20px; background:#f4f5f7;">
-            <p style="font-size:13px; color:#555; margin-bottom:10px;">👉 현재 명세서에 존재하는 <b>자산계정</b> 항목들입니다. 소수점 둘째자리까지 숫자를 기입해 주세요.</p>
+            <p style="font-size:13px; color:#555; margin-bottom:10px;">👉 <b>감가율(%)</b>과 하한선이 되는 <b>최종 잔가율(%)</b>을 확인하고 기입해 주세요. 산출된 잔가율은 최종 잔가율 밑으로 내려가지 않습니다.</p>
             <div style="max-height: 350px; overflow-y: auto; background:#fff; border:1px solid #ddd; border-radius:4px; margin-bottom: 15px;">
                 <table class="data-table" style="margin-bottom:0;">
                     <thead style="position: sticky; top: 0; z-index: 1; background: #eee;">
-                        <tr><th>자산계정 항목</th><th>감가율 입력 (%)</th></tr>
+                        <tr><th>자산계정 항목</th><th>감가율 입력 (%)</th><th>최종 잔가율 (하한선 %)</th></tr>
                     </thead>
                     <tbody id="deprBatchTbody"></tbody>
                 </table>
