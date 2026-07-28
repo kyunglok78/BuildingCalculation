@@ -1220,10 +1220,39 @@ window.saveRules = function() {
 };
 
 // ============================================================================
-// [섹션 9] 3단계 가액평가 일괄 계산 (물가지수, 재조달가액, 감가율, 현재가액)
+// [섹션 9] 3단계 가액평가 일괄 계산 및 감가율 모달 로직
 // ============================================================================
 
-// ★ 1.2 평가지수 등록 시 물가보정용 3개 시트를 캐싱하도록 main.js 함수 오버라이딩
+// ★ 감가율 일괄 지정 모달창을 HTML에 동적으로 삽입 (최초 1회)
+(function addDeprModal() {
+    if(document.getElementById('deprBatchModal')) return;
+    const modalHtml = `
+    <div class="modal-overlay" id="deprBatchModal" style="display:none; z-index: 1000; justify-content: center; align-items: center;">
+        <div class="modal-content" style="width: 500px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+            <div class="modal-header" style="background:#6c757d; color:white; padding:15px; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight:bold;"><i class="fa-solid fa-wand-magic-sparkles"></i> 자산계정별 감가율 일괄 지정</span>
+                <i class="fa-solid fa-xmark modal-close" style="cursor:pointer; font-size:18px;" onclick="document.getElementById('deprBatchModal').style.display='none'"></i>
+            </div>
+            <div class="modal-body" style="padding: 20px; background:#f4f5f7;">
+                <p style="font-size:13px; color:#555; margin-bottom:10px;">👉 현재 명세서에 존재하는 <b>자산계정</b> 항목들입니다. 소수점 둘째자리까지 숫자를 기입해 주세요.</p>
+                <div style="max-height: 350px; overflow-y: auto; background:#fff; border:1px solid #ddd; border-radius:4px; margin-bottom: 15px;">
+                    <table class="data-table" style="margin-bottom:0;">
+                        <thead style="position: sticky; top: 0; z-index: 1; background: #eee;">
+                            <tr><th>자산계정 항목</th><th>감가율 입력 (%)</th></tr>
+                        </thead>
+                        <tbody id="deprBatchTbody"></tbody>
+                    </table>
+                </div>
+                <div style="text-align: right;">
+                    <button type="button" class="btn-dark" style="background:#17A2B8; padding:8px 25px; border:none; font-size:14px;" onclick="window.applyDeprBatch()">⚡ 일괄 적용하기</button>
+                </div>
+            </div>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+})();
+
+// 1.2 평가지수 등록 시 물가보정용 3개 시트를 캐싱하도록 main.js 함수 오버라이딩
 window.loadIndexExcel = function(event) {
     const file = event.target.files[0];
     if(!file) return;
@@ -1234,10 +1263,8 @@ window.loadIndexExcel = function(event) {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, {type: 'array'});
             
-            // 기존 1단계 기능 (건축물가지수)
             window.kbState.indexData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {defval: "-"});
             
-            // ★ 물가보정 계산을 위한 3개 핵심 시트를 메모리에 별도 저장 (캐싱)
             window.kbState.inflationSheets = {
                 const: XLSX.utils.sheet_to_json(workbook.Sheets['건축지수'] || workbook.Sheets[workbook.SheetNames[0]], {header: 1, defval: ""}),
                 prod: XLSX.utils.sheet_to_json(workbook.Sheets['생산자물가'] || workbook.Sheets[workbook.SheetNames[0]], {header: 1, defval: ""}),
@@ -1252,10 +1279,8 @@ window.loadIndexExcel = function(event) {
     event.target.value = ''; 
 };
 
-
 // 1. 물가지수 불러오기 및 재조달가액 계산
 window.applyInflationIndex = function() {
-    // 1.2 단계에서 로드된 시트 캐시가 있는지 확인
     if (!window.kbState.inflationSheets) {
         alert("⚠️ 1.2 평가지수 등록 메뉴에서 [물가지수] 엑셀 파일을 한 번 더 첨부해 주세요.\n(시스템 업데이트로 인한 최초 1회 캐싱 작업이 필요합니다.)");
         const fileInput = document.getElementById('priceIndexFile');
@@ -1281,9 +1306,9 @@ window.applyInflationIndex = function() {
         const inflationIdx = mappedColCount + 5;
         const replacementIdx = mappedColCount + 6;
 
-        window.infSaveHistory(); 
+        if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
         let applyCount = 0, missingCount = 0;
-        let subRep = 0, totRep = 0; // 소계, 합계 누적 변수
+        let subRep = 0, totRep = 0;
 
         const getYearColIndex = (sheet, yearStr) => {
             if (!sheet) return null;
@@ -1297,10 +1322,9 @@ window.applyInflationIndex = function() {
         tData.raw.forEach(row => {
             const yearVal = String(row[yearIdx] || '').trim();
             
-            // ★ 소계, 합계 행에 누적된 재조달가액 반영
             if (yearVal.includes('소계')) {
                 row[replacementIdx] = subRep > 0 ? Math.round(subRep) : '';
-                subRep = 0; // 다음 그룹을 위해 초기화
+                subRep = 0; 
                 return;
             } else if (yearVal.includes('총계')) {
                 row[replacementIdx] = totRep > 0 ? Math.round(totRep) : '';
@@ -1344,7 +1368,6 @@ window.applyInflationIndex = function() {
                 row[inflationIdx] = isNaN(indexValue) ? indexValue : Number(indexValue).toFixed(4); 
                 row[replacementIdx] = isNaN(replacementCost) ? replacementCost : Math.round(replacementCost); 
                 
-                // 재조달가액 누적
                 if (!isNaN(replacementCost)) {
                     subRep += replacementCost;
                     totRep += replacementCost;
@@ -1355,12 +1378,90 @@ window.applyInflationIndex = function() {
             }
         });
 
-        window.infRenderTable();
+        if(typeof window.infRenderTable === 'function') window.infRenderTable();
         alert(`✅ 물가지수 및 재조달가액 산출 완료!\n- 적용 완료: ${applyCount}건\n- 누락(연도/코드 없음): ${missingCount}건`);
     } catch (err) { alert("계산 중 오류가 발생했습니다.\n" + err.message); }
 };
 
-// 2. 감가율 기반 잔가율 및 현재가액 계산
+// 2. 감가율 팝업 모달 열기
+window.openDeprBatchModal = function() {
+    const wiz = window.infState.wizard;
+    const tData = window.infState.data[window.infState.activeTab];
+    if(!tData || !tData.raw || tData.raw.length === 0) return alert("데이터가 없습니다.");
+
+    const accIdx = wiz.mapped['자산계정'];
+    const yearIdx = wiz.mapped['취득년도'];
+
+    if (accIdx === undefined) return alert("자산계정 열이 매핑되지 않았습니다.");
+
+    let uniqueAccounts = new Set();
+    tData.raw.forEach(row => {
+        const yearVal = String(row[yearIdx] || '');
+        if (yearVal.includes('소계') || yearVal.includes('총계')) return;
+        const acc = String(row[accIdx] || '').trim();
+        if (acc) uniqueAccounts.add(acc);
+    });
+
+    if (uniqueAccounts.size === 0) return alert("명세서에 자산계정 데이터가 없습니다.");
+
+    const tbody = document.getElementById('deprBatchTbody');
+    tbody.innerHTML = '';
+    
+    // 편의를 위한 기본 추천값 세팅
+    const defaultDepr = { '건물': 1.78, '구축물': 1.33, '기계장치': 5.33, '공기구': 5.33, '공구와 기구': 5.33, '차량운반구': 5.33 };
+
+    uniqueAccounts.forEach(acc => {
+        const defaultVal = defaultDepr[acc] || ''; 
+        tbody.innerHTML += `
+            <tr>
+                <td style="text-align:center; font-weight:bold; color:#1C5691; vertical-align:middle;">${acc}</td>
+                <td style="padding:4px;">
+                    <input type="number" step="0.01" id="deprInput_${acc}" class="input-box" value="${defaultVal}" style="width:100%; text-align:center; box-sizing:border-box; font-weight:bold; color:#333;">
+                </td>
+            </tr>
+        `;
+    });
+
+    document.getElementById('deprBatchModal').style.display = 'flex';
+};
+
+// 3. 팝업에서 입력한 감가율 값을 데이터에 반영
+window.applyDeprBatch = function() {
+    const wiz = window.infState.wizard;
+    const tData = window.infState.data[window.infState.activeTab];
+    const accIdx = wiz.mapped['자산계정'];
+    const yearIdx = wiz.mapped['취득년도'];
+    
+    const mappedColCount = Object.keys(wiz.mapped).length;
+    const deprIdx = mappedColCount + 7; // 감가율 열
+
+    const inputMap = {};
+    document.querySelectorAll('[id^="deprInput_"]').forEach(input => {
+        const acc = input.id.replace('deprInput_', '');
+        inputMap[acc] = input.value.trim();
+    });
+
+    if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
+
+    let applyCount = 0;
+    tData.raw.forEach(row => {
+        const yearVal = String(row[yearIdx] || '');
+        if (yearVal.includes('소계') || yearVal.includes('총계')) return;
+
+        const acc = String(row[accIdx] || '').trim();
+        if (inputMap[acc] !== undefined && inputMap[acc] !== "") {
+            const deprVal = Number(inputMap[acc]);
+            row[deprIdx] = deprVal === 0 ? "-" : deprVal.toFixed(2);
+            applyCount++;
+        }
+    });
+
+    document.getElementById('deprBatchModal').style.display = 'none';
+    if(typeof window.infRenderTable === 'function') window.infRenderTable(); 
+    alert(`✅ 총 ${applyCount}건의 감가율이 표에 입력되었습니다.\n표 상단의 [⚡ 감가/현재 계산] 버튼을 클릭해 가액을 산출해 주세요.`);
+};
+
+// 4. 감가율 기반 잔가율 및 현재가액 일괄 계산
 window.applyCurrentValue = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
@@ -1373,17 +1474,20 @@ window.applyCurrentValue = function() {
     const residualIdx = mappedColCount + 8;    
     const currentValIdx = mappedColCount + 9;  
 
-    window.infSaveHistory();
+    // 인덱스 HTML의 '평가시점 연도' 가져오기
+    const evalYearInput = document.getElementById('evalYear');
+    const evalYear = parseInt(evalYearInput ? evalYearInput.value : new Date().getFullYear());
+
+    if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
     let applyCount = 0;
-    let subCur = 0, totCur = 0; // 소계, 합계 누적 변수
+    let subCur = 0, totCur = 0; 
 
     tData.raw.forEach(row => {
         const yearVal = String(row[yearIdx] || '').trim();
         
-        // ★ 소계, 합계 행에 누적된 현재가액 반영
         if (yearVal.includes('소계')) {
             row[currentValIdx] = subCur > 0 ? Math.round(subCur) : '';
-            subCur = 0; // 다음 그룹을 위해 초기화
+            subCur = 0; 
             return;
         } else if (yearVal.includes('총계')) {
             row[currentValIdx] = totCur > 0 ? Math.round(totCur) : '';
@@ -1393,26 +1497,45 @@ window.applyCurrentValue = function() {
         const repCostStr = String(row[replacementIdx] || '').replace(/,/g, '');
         const deprStr = String(row[deprIdx] || '').replace(/,/g, ''); 
         
-        if (repCostStr === '-') { 
+        if (repCostStr === '-' || repCostStr === '') { 
             row[residualIdx] = '-'; row[currentValIdx] = '-'; return;
         }
 
         const repCost = Number(repCostStr);
+        const acqYear = parseInt(yearVal);
         const deprRate = Number(deprStr);
 
-        if (!isNaN(repCost) && !isNaN(deprRate) && deprStr !== '') {
-            const residualRate = 100 - deprRate;
-            row[residualIdx] = residualRate;
-            const currentVal = repCost * (residualRate / 100);
-            row[currentValIdx] = Math.round(currentVal); 
-            
-            // 현재가액 누적
-            subCur += currentVal; 
-            totCur += currentVal;
-            applyCount++;
+        if (!isNaN(repCost) && !isNaN(acqYear)) {
+            // 감가율이 0이거나 '-'로 입력된 경우 -> 잔가율 100%, 값 유지
+            if (deprStr === '-' || deprRate === 0) {
+                row[deprIdx] = '-';
+                row[residualIdx] = 100;
+                row[currentValIdx] = repCost;
+                subCur += repCost; 
+                totCur += repCost;
+                applyCount++;
+            } 
+            // 감가율 값이 정상적으로 있을 경우 계산 수행
+            else if (!isNaN(deprRate)) {
+                const elapsed = Math.max(0, evalYear - acqYear);
+                
+                // ★ 잔가율 = 100 - ((현재평가년도 - 취득년도) * 감가율)
+                let residualRate = 100 - (elapsed * deprRate);
+                residualRate = Math.max(0, residualRate); // 0 미만 방지
+
+                // 잔가율이 0인 경우 "-"로 표시 (요구사항 반영)
+                row[residualIdx] = residualRate === 0 ? "-" : residualRate.toFixed(2);
+                
+                const currentVal = repCost * (residualRate / 100);
+                row[currentValIdx] = Math.round(currentVal); 
+                
+                subCur += currentVal; 
+                totCur += currentVal;
+                applyCount++;
+            }
         }
     });
 
-    window.infRenderTable();
+    if(typeof window.infRenderTable === 'function') window.infRenderTable();
     alert(`✅ 잔가율 및 현재가액 산출 완료!\n- 총 ${applyCount}건의 현재가액이 계산되었습니다.`);
 };
