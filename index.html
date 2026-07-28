@@ -191,6 +191,30 @@
     </div>
 </div>
 
+<!-- 3-5. 감가율 일괄 지정 팝업창 -->
+<div class="modal-overlay" id="deprBatchModal" style="display:none; z-index: 1000; justify-content: center; align-items: center;">
+    <div class="modal-content" style="width: 600px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+        <div class="modal-header" style="background:#28A745; color:white; padding:15px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight:bold;"><i class="fa-solid fa-wand-magic-sparkles"></i> 자산계정별 감가율 일괄 지정</span>
+            <i class="fa-solid fa-xmark modal-close" style="cursor:pointer; font-size:18px;" onclick="document.getElementById('deprBatchModal').style.display='none'"></i>
+        </div>
+        <div class="modal-body" style="padding: 20px; background:#f4f5f7;">
+            <p style="font-size:13px; color:#555; margin-bottom:10px;">👉 현재 명세서에 존재하는 <b>자산계정</b> 항목들입니다. 적용할 감가율(%)을 소수점 둘째자리까지 확인 및 수정 후 적용하세요. (예: 5.33)</p>
+            <div style="height: 350px; overflow-y: auto; background:#fff; border:1px solid #ddd; border-radius:4px; margin-bottom: 15px;">
+                <table class="data-table" style="margin-bottom:0;">
+                    <thead style="position: sticky; top: 0; z-index: 1; background: #eee;">
+                        <tr><th>자산계정 항목</th><th>감가율 값 입력 (%)</th></tr>
+                    </thead>
+                    <tbody id="deprBatchTbody"></tbody>
+                </table>
+            </div>
+            <div style="text-align: right;">
+                <button type="button" class="btn-dark" style="background:#17A2B8; padding:8px 25px; border:none; font-size:14px;" onclick="window.applyDeprBatch()">⚡ 일괄 적용하기</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- ============================================================================ -->
 <!-- [SEC-4] ★ 좌측 네비게이션 사이드바 (One-Stop 통합본) -->
 <!-- ============================================================================ -->
@@ -602,7 +626,7 @@
                     <button type="button" style="background:#fff; color:#333; border:1px solid #ccc; padding:4px 10px; border-radius:3px; font-weight:bold; font-size:12px; cursor:pointer;" onclick="infBackToStep2()">◀ 2단계(자산구분)로 돌아가기</button>
                 </div>
                 <div class="card-body" style="padding: 10px 20px; display: flex; gap: 10px;">
-                    <button type="button" class="btn-dark" style="background:#28A745;" onclick="window.applyCurrentValue()"><i class="fa-solid fa-bolt"></i> 감가율 일괄 적용</button>
+                    <button type="button" class="btn-dark" style="background:#28A745;" onclick="window.applyCurrentValue()"><i class="fa-solid fa-bolt"></i> 감가율 일괄 적용 </button>
                 </div>
             </div>
 
