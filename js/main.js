@@ -781,6 +781,18 @@ window.quickLoadProject = function(event) {
             if (projectData.targetKfpaSite) window.targetKfpaSite = projectData.targetKfpaSite;
             if (projectData.targetKfpaAddress) window.targetKfpaAddress = projectData.targetKfpaAddress;
 
+            // ★ 1.5 대장 불러오기 화면의 빈 화면 아이콘 숨기고 데이터 렌더링 강제 실행
+            if (window.kbState && window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
+                setTimeout(() => {
+                    const emptyMsg = document.getElementById('emptyStateMsg');
+                    const dataCont = document.getElementById('fetchedDataContainer');
+                    if (emptyMsg) emptyMsg.style.display = 'none';
+                    if (dataCont) dataCont.style.display = 'block';
+                    
+                    if (typeof window.renderSlide3Tabs === 'function') window.renderSlide3Tabs();
+                }, 300);
+            }
+
             // 2. UI 텍스트 박스 정보 복구
             if (projectData.contractor) document.querySelectorAll('.contractor-sync').forEach(el => el.value = projectData.contractor);
             if (projectData.evalYear) { const y = document.getElementById('evalYear'); if(y) y.value = projectData.evalYear; }
@@ -812,11 +824,11 @@ window.quickLoadProject = function(event) {
                 } 
             }
 
-            // 4. ★ 물가보정 데이터 복구 및 화면 세팅
+            // 4. 물가보정 데이터 복구 및 화면 세팅
             if (projectData.infState) {
                 window.infState = projectData.infState;
                 
-                // ★ [오류 수정] JSON 변환 시 소실된 Set 객체(선택 영역) 재생성
+                // JSON 변환 시 소실된 Set 객체(선택 영역) 재생성
                 if (window.infState.data) {
                     for (const tab in window.infState.data) {
                         window.infState.data[tab].selectedRows = new Set();
@@ -839,13 +851,13 @@ window.quickLoadProject = function(event) {
                         window.infInitTabs();
                         
                         if (window.infState.step === 2) {
-                            document.getElementById('infStep1Panel').style.display = 'none';
-                            document.getElementById('infStep2Panel').style.display = 'block';
-                            document.getElementById('infStep3Panel').style.display = 'none';
+                            if (document.getElementById('sec-2-3-1')) document.getElementById('sec-2-3-1').classList.remove('active');
+                            if (document.getElementById('sec-2-3-3')) document.getElementById('sec-2-3-3').classList.remove('active');
+                            if (document.getElementById('sec-2-3-2')) document.getElementById('sec-2-3-2').classList.add('active');
                         } else if (window.infState.step === 3) {
-                            document.getElementById('infStep1Panel').style.display = 'none';
-                            document.getElementById('infStep2Panel').style.display = 'none';
-                            document.getElementById('infStep3Panel').style.display = 'block';
+                            if (document.getElementById('sec-2-3-1')) document.getElementById('sec-2-3-1').classList.remove('active');
+                            if (document.getElementById('sec-2-3-2')) document.getElementById('sec-2-3-2').classList.remove('active');
+                            if (document.getElementById('sec-2-3-3')) document.getElementById('sec-2-3-3').classList.add('active');
                         }
                         
                         if (typeof window.infRenderTable === 'function') window.infRenderTable();
