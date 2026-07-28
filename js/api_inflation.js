@@ -1223,35 +1223,6 @@ window.saveRules = function() {
 // [섹션 9] 3단계 가액평가 일괄 계산 및 감가율 모달 로직
 // ============================================================================
 
-// ★ 감가율 일괄 지정 모달창을 HTML에 동적으로 삽입 (최초 1회)
-(function addDeprModal() {
-    if(document.getElementById('deprBatchModal')) return;
-    const modalHtml = `
-    <div class="modal-overlay" id="deprBatchModal" style="display:none; z-index: 1000; justify-content: center; align-items: center;">
-        <div class="modal-content" style="width: 500px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
-            <div class="modal-header" style="background:#6c757d; color:white; padding:15px; display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-weight:bold;"><i class="fa-solid fa-wand-magic-sparkles"></i> 자산계정별 감가율 일괄 지정</span>
-                <i class="fa-solid fa-xmark modal-close" style="cursor:pointer; font-size:18px;" onclick="document.getElementById('deprBatchModal').style.display='none'"></i>
-            </div>
-            <div class="modal-body" style="padding: 20px; background:#f4f5f7;">
-                <p style="font-size:13px; color:#555; margin-bottom:10px;">👉 현재 명세서에 존재하는 <b>자산계정</b> 항목들입니다. 소수점 둘째자리까지 숫자를 기입해 주세요.</p>
-                <div style="max-height: 350px; overflow-y: auto; background:#fff; border:1px solid #ddd; border-radius:4px; margin-bottom: 15px;">
-                    <table class="data-table" style="margin-bottom:0;">
-                        <thead style="position: sticky; top: 0; z-index: 1; background: #eee;">
-                            <tr><th>자산계정 항목</th><th>감가율 입력 (%)</th></tr>
-                        </thead>
-                        <tbody id="deprBatchTbody"></tbody>
-                    </table>
-                </div>
-                <div style="text-align: right;">
-                    <button type="button" class="btn-dark" style="background:#17A2B8; padding:8px 25px; border:none; font-size:14px;" onclick="window.applyDeprBatch()">⚡ 일괄 적용하기</button>
-                </div>
-            </div>
-        </div>
-    </div>`;
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-})();
-
 // 1.2 평가지수 등록 시 물가보정용 3개 시트를 캐싱하도록 main.js 함수 오버라이딩
 window.loadIndexExcel = function(event) {
     const file = event.target.files[0];
@@ -1408,24 +1379,26 @@ window.openDeprBatchModal = function() {
     tbody.innerHTML = '';
     
     // 편의를 위한 기본 추천값 세팅
-    const defaultDepr = { '건물': 1.78, '구축물': 1.33, '기계장치': 5.33, '공기구': 5.33, '공구와 기구': 5.33, '차량운반구': 5.33 };
+    const defaultDepr = { '건물': 1.78, '구축물': 1.33, '기계장치': 5.33, '공기구': 5.33, '공구와 기구': 5.33, '차량운반구': 5.33, '비품': '-' };
 
     uniqueAccounts.forEach(acc => {
-        const defaultVal = defaultDepr[acc] || ''; 
+        const defaultVal = defaultDepr[acc] !== undefined ? defaultDepr[acc] : ''; 
         tbody.innerHTML += `
             <tr>
                 <td style="text-align:center; font-weight:bold; color:#1C5691; vertical-align:middle;">${acc}</td>
                 <td style="padding:4px;">
-                    <input type="number" step="0.01" id="deprInput_${acc}" class="input-box" value="${defaultVal}" style="width:100%; text-align:center; box-sizing:border-box; font-weight:bold; color:#333;">
+                    <input type="text" id="deprInput_${acc}" class="input-box" value="${defaultVal}" style="width:100%; text-align:center; box-sizing:border-box; font-weight:bold; color:#333;">
                 </td>
             </tr>
         `;
     });
 
-    document.getElementById('deprBatchModal').style.display = 'flex';
+    const modal = document.getElementById('deprBatchModal');
+    if(modal) modal.style.display = 'flex';
+    else alert("감가율 팝업창 HTML 코드가 index.html에 추가되지 않았습니다.");
 };
 
-// 3. 팝업에서 입력한 감가율 값을 데이터에 반영
+// 3. 팝업에서 입력한 감가율 값을 데이터 표에 일괄 반영
 window.applyDeprBatch = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
@@ -1450,18 +1423,23 @@ window.applyDeprBatch = function() {
 
         const acc = String(row[accIdx] || '').trim();
         if (inputMap[acc] !== undefined && inputMap[acc] !== "") {
-            const deprVal = Number(inputMap[acc]);
-            row[deprIdx] = deprVal === 0 ? "-" : deprVal.toFixed(2);
+            const inputVal = inputMap[acc];
+            // '0'이거나 '-'로 입력되면 예외 처리
+            if (inputVal === '-' || inputVal === '0' || inputVal === 0) {
+                row[deprIdx] = '-';
+            } else {
+                row[deprIdx] = Number(inputVal).toFixed(2);
+            }
             applyCount++;
         }
     });
 
     document.getElementById('deprBatchModal').style.display = 'none';
     if(typeof window.infRenderTable === 'function') window.infRenderTable(); 
-    alert(`✅ 총 ${applyCount}건의 감가율이 표에 입력되었습니다.\n표 상단의 [⚡ 감가/현재 계산] 버튼을 클릭해 가액을 산출해 주세요.`);
+    alert(`✅ 총 ${applyCount}건의 감가율이 표에 입력되었습니다.\n표 상단의 [⚡ 감가/현재 계산] 버튼을 클릭해 잔가율과 현재가액을 산출해 주세요.`);
 };
 
-// 4. 감가율 기반 잔가율 및 현재가액 일괄 계산
+// 4. 감가율 기반 잔가율 및 현재가액 일괄 계산 (공식: 100 - ((평가년도 - 취득년도) * 감가율))
 window.applyCurrentValue = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
@@ -1474,7 +1452,6 @@ window.applyCurrentValue = function() {
     const residualIdx = mappedColCount + 8;    
     const currentValIdx = mappedColCount + 9;  
 
-    // 인덱스 HTML의 '평가시점 연도' 가져오기
     const evalYearInput = document.getElementById('evalYear');
     const evalYear = parseInt(evalYearInput ? evalYearInput.value : new Date().getFullYear());
 
@@ -1506,24 +1483,22 @@ window.applyCurrentValue = function() {
         const deprRate = Number(deprStr);
 
         if (!isNaN(repCost) && !isNaN(acqYear)) {
-            // 감가율이 0이거나 '-'로 입력된 경우 -> 잔가율 100%, 값 유지
+            // 감가율이 '-'이거나 '0'인 경우
             if (deprStr === '-' || deprRate === 0) {
                 row[deprIdx] = '-';
-                row[residualIdx] = 100;
-                row[currentValIdx] = repCost;
+                row[residualIdx] = '-';  // 잔가율도 '-' 처리
+                row[currentValIdx] = repCost; // 현재가액 = 재조달가액
                 subCur += repCost; 
                 totCur += repCost;
                 applyCount++;
             } 
-            // 감가율 값이 정상적으로 있을 경우 계산 수행
             else if (!isNaN(deprRate)) {
                 const elapsed = Math.max(0, evalYear - acqYear);
                 
-                // ★ 잔가율 = 100 - ((현재평가년도 - 취득년도) * 감가율)
+                // 공식 적용: 잔가율 = 100 - ((현재평가년도 - 취득년도) * 감가율)
                 let residualRate = 100 - (elapsed * deprRate);
-                residualRate = Math.max(0, residualRate); // 0 미만 방지
+                residualRate = Math.max(0, residualRate); // 잔가율 0 미만 방지
 
-                // 잔가율이 0인 경우 "-"로 표시 (요구사항 반영)
                 row[residualIdx] = residualRate === 0 ? "-" : residualRate.toFixed(2);
                 
                 const currentVal = repCost * (residualRate / 100);
