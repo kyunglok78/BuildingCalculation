@@ -245,7 +245,13 @@
                 <div class="menu-item" id="nav-sec-2-2-2" onclick="switchSection('sec-2-2-2')">2.2.2 화협자료 평가<span class="status-badge status-wait">대기</span></div>
 
                 <div style="padding-left: 10px; margin: 15px 0 5px 0; font-size: 13px; color:#888;">[추가 모듈 평가]</div>
-                <div class="menu-item disabled" id="nav-sec-2-3" onclick="switchSection('sec-2-3')"><i class="fa-solid fa-arrow-trend-up"></i> 2.3 물가보정 평가<span class="status-badge status-none">미평가</span></div>
+                <div style="padding-left: 10px; margin: 15px 0 5px 0; font-size: 13px; color:#888;">[물가보정 평가]</div>
+                <div class="menu-item" id="nav-sec-2-3-1" onclick="switchSection('sec-2-3-1')">2.3.1 명세서 정제 및 매핑<span class="status-badge status-wait">대기</span></div>
+                <div class="menu-item" id="nav-sec-2-3-2" onclick="switchSection('sec-2-3-2')">2.3.2 자산 구분 및 예외 처리<span class="status-badge status-wait">대기</span></div>
+                <div class="menu-item" id="nav-sec-2-3-3" onclick="switchSection('sec-2-3-3')">2.3.3 감가율 및 가액 산출<span class="status-badge status-wait">대기</span></div>
+
+                <div style="padding-left: 10px; margin: 15px 0 5px 0; font-size: 13px; color:#888;">[추가 모듈 평가]</div>
+                <div class="menu-item disabled" id="nav-sec-2-4" onclick="switchSection('sec-2-4')"><i class="fa-solid fa-industry"></i> 2.4 BI 평가<span class="status-badge status-none">미평가</span></div>
                 <div class="menu-item disabled" id="nav-sec-2-4" onclick="switchSection('sec-2-4')"><i class="fa-solid fa-industry"></i> 2.4 BI 평가<span class="status-badge status-none">미평가</span></div>
             </div>
 
@@ -528,133 +534,138 @@
 <!-- ============================================================================ -->
 <!-- [SEC-5-X] 2.3 물가보정 평가 (고정자산명세서 정리 및 평가) -->
 <!-- ============================================================================ -->
-        <section id="sec-2-3" class="page-section">
-            <h2 class="page-title"><i class="fa-solid fa-arrow-trend-up"></i> 2.3 고정자산 기반 물가보정 평가</h2>
-            
-            <!-- [1단계] 고정자산명세서 정제 패널 -->
-            <div id="infStep1Panel" class="card" style="margin-bottom: 15px;">
-                <div class="card-header" style="background:#e9ecef; color:#333;">
-                    <span><i class="fa-solid fa-broom"></i> [1단계] 명세서 정제 및 열 매핑 마법사</span>
-                    <div style="font-size:12px; color:#e74c3c; font-weight:normal;">단축키 지원: 여러 행/열 선택 후 [Ctrl + -] 삭제 / [Ctrl + Z] 되돌리기</div>
-                </div>
-                <div class="card-body" style="padding: 15px 20px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <div style="display: flex; gap: 20px; align-items: center;">
-                            <span style="font-weight: bold; color: #1C5691;">(1) 평가 방식:</span>
-                            <label style="cursor: pointer;"><input type="radio" name="infMode" value="location" checked onchange="infInitTabs()"> 소재지별 평가</label>
-                            <label style="cursor: pointer;"><input type="radio" name="infMode" value="integrated" onchange="infInitTabs()"> 통합 평가</label>
-                        </div>
-                        <div>
-                            <input type="file" id="infExcelFile" accept=".xlsx, .xls, .csv" style="display: none;" onchange="infLoadExcel(event)">
-                            <button type="button" class="btn-dark" style="background:#28a745;" onclick="document.getElementById('infExcelFile').click()">
-                                <i class="fa-solid fa-file-excel"></i> (2) 고정자산명세서 원본 불러오기
-                            </button>
-                        </div>
-                    </div>
+        
+<!-- ============================================================================ -->
+<!-- 2.3.1 명세서 정제 및 매핑 -->
+<!-- ============================================================================ -->
+<section id="sec-2-3-1" class="page-section">
+    <h2 class="page-title"><i class="fa-solid fa-broom"></i> 2.3.1 명세서 정제 및 매핑 마법사</h2>
+    
+    <!-- 세부 스텝바 -->
+    <div style="display:flex; justify-content:space-between; background:#fff; border:1px solid #ddd; padding:15px 20px; border-radius:6px; margin-bottom:15px; font-size:13px; font-weight:bold;">
+        <div id="step-1-1" style="color:#1C5691;"><i class="fa-solid fa-circle-check"></i> 1-1. 평가 방식 및 엑셀 로드</div>
+        <div id="step-1-2" style="color:#999;"><i class="fa-solid fa-2"></i> 1-2. 열 매핑 및 행 삭제</div>
+        <div id="step-1-3" style="color:#999;"><i class="fa-solid fa-3"></i> 1-3. 데이터 정제 (소계/정렬)</div>
+    </div>
 
-                    <div id="infWizardArea" style="background:#f0fdf4; border:1px solid #bbf7d0; padding:15px; border-radius:4px; display:none; flex-direction:column; gap:12px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <span style="font-size:15px; font-weight:bold; color:#166534;" id="infWizardText">🎯 아래 버튼 중 하나를 선택하고, 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭해 매칭하세요!</span>
-                            <button type="button" class="btn-yellow" id="btnStartWizard" onclick="infStartWizard()">열 매핑 마법사 시작</button>
-                            <button type="button" class="btn-yellow" id="btnFinishMapping" onclick="infFinishMapping()" style="display:none; background:#1C5691; color:white; border:none;">열 매핑 완료 및 행 지우기로 전환 ▶</button>
-                        </div>
-                        <div id="infMappingButtons" style="display:none; gap:10px; flex-wrap:wrap; padding-top:10px; border-top:1px dashed #a7f3d0;">
-                        </div>
-                    </div>
+    <div id="infStep1Panel" class="card" style="margin-bottom: 15px;">
+        <div class="card-body" style="padding: 15px 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div style="display: flex; gap: 20px; align-items: center;">
+                    <span style="font-weight: bold; color: #1C5691;">(1) 평가 방식:</span>
+                    <label style="cursor: pointer;"><input type="radio" name="infMode" value="location" checked onchange="infInitTabs()"> 소재지별 평가</label>
+                    <label style="cursor: pointer;"><input type="radio" name="infMode" value="integrated" onchange="infInitTabs()"> 통합 평가</label>
+                </div>
+                <div>
+                    <input type="file" id="infExcelFile" accept=".xlsx, .xls, .csv" style="display: none;" onchange="infLoadExcel(event)">
+                    <button type="button" class="btn-dark" style="background:#28a745;" onclick="document.getElementById('infExcelFile').click()">
+                        <i class="fa-solid fa-file-excel"></i> (2) 고정자산명세서 원본 불러오기
+                    </button>
                 </div>
             </div>
 
-        <!-- [2단계] 자산 구분 패널 (마스터 데이터 관리 버튼 추가) -->
-            <div id="infStep2Panel" class="card" style="margin-bottom: 15px; display:none;">
-                <div class="card-header" style="background:#e9ecef; color:#333; display:flex; justify-content:space-between; align-items:center;">
-                    <span><i class="fa-solid fa-tags"></i> [2단계] 자산 구분 워크시트</span>
-                    <div style="display: flex; gap: 8px;">
-                        <input type="file" id="infPastExcelFile" accept=".xlsx, .xls, .csv" style="display: none;" onchange="infLoadPastData(event)">
-                        
-                        <!-- 신규: 매핑 마스터 데이터 관리 버튼 -->
-                        <button type="button" style="background:#2C2C2C; color:#FFCC00; border:1px solid #444; padding:4px 10px; border-radius:3px; font-weight:bold; font-size:12px; cursor:pointer;" onclick="window.openRuleManager()">
-                            <i class="fa-solid fa-sliders"></i> 기본 구분 / 평가제외 / 부보제외 항목 관리
-                        </button>
-                        
-                        <button type="button" style="background:#fff; color:#333; border:1px solid #ccc; padding:4px 10px; border-radius:3px; font-weight:bold; font-size:12px; cursor:pointer;" onclick="infBackToStep1()">
-                            ◀ 1단계로 돌아가기
-                        </button>
-                    </div>
+            <div id="infWizardArea" style="background:#f0fdf4; border:1px solid #bbf7d0; padding:15px; border-radius:4px; display:none; flex-direction:column; gap:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-size:15px; font-weight:bold; color:#166534;" id="infWizardText">🎯 아래 버튼 중 하나를 선택하고, 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭해 매칭하세요!</span>
+                    <button type="button" class="btn-yellow" id="btnStartWizard" onclick="infStartWizard()">열 매핑 마법사 시작</button>
+                    <button type="button" class="btn-yellow" id="btnFinishMapping" onclick="infFinishMapping()" style="display:none; background:#1C5691; color:white; border:none;">열 매핑 완료 및 행 지우기로 전환 ▶</button>
                 </div>
-                <div class="card-body" style="padding: 10px 20px;">
-                    <span style="font-size:13px; color:#333;">👉 표 헤더(제목) 위에 있는 <b>실행 단추(버튼)</b>들을 클릭하여 자산의 상태를 일괄 지정하거나 직접 입력해 주세요.</span>
-                </div>
+                <div id="infMappingButtons" style="display:none; gap:10px; flex-wrap:wrap; padding-top:10px; border-top:1px dashed #a7f3d0;"></div>
             </div>
+        </div>
+    </div>
+    
+    <div id="infTabs1" class="infTabsContainer" style="display: flex; border-bottom: 2px solid #1C5691;"></div>
+    <div class="data-table-wrapper infTableContainerWrapper" style="flex:1; border-top: none; overflow-x: auto; overflow-y: auto; background: #fff;">
+        <table class="data-table infTableGlobal" style="white-space: nowrap; user-select: none;">
+            <thead class="infTheadGlobal"><tr><td style="padding: 60px; text-align: center; color: #999;">고정자산명세서 엑셀 파일을 불러와주세요.</td></tr></thead>
+            <tbody class="infTbodyGlobal"></tbody>
+        </table>
+    </div>
 
-            <!-- ★ 매핑 룰 관리 팝업창 (3가지 카테고리 관리 기능 추가) -->
-            <div class="modal-overlay" id="ruleManagerModal" style="display:none; z-index: 1000; justify-content: center; align-items: center;">
-                <div class="modal-content" style="width: 600px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
-                    <div class="modal-header" style="background:#2C2C2C; color:#FFCC00; padding:15px; display: flex; justify-content: space-between; align-items: center;">
-                        <span style="font-weight:bold;"><i class="fa-solid fa-list-check"></i> 자동 매핑 정책 마스터 관리</span>
-                        <i class="fa-solid fa-xmark modal-close" style="cursor:pointer; font-size:18px; color:#fff;" onclick="document.getElementById('ruleManagerModal').style.display='none'"></i>
-                    </div>
-                    <div class="modal-body" style="padding: 20px; background:#f4f5f7;">
-                        <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
-                            <span style="font-size:14px; font-weight:bold; color:#333;">관리할 정책 항목 선택: </span>
-                            <select id="ruleTypeSelect" class="input-box" style="padding:6px; font-weight:bold;" onchange="window.renderRuleManagerRows()">
-                                <option value="basic">1. 기본 구분 규칙 (자산계정명 일치)</option>
-                                <option value="evalExclude">2. 평가 제외 규칙 (자산계정/자산명 포함)</option>
-                                <option value="covExclude">3. 부보 제외 규칙 (자산계정/자산명 포함)</option>
-                            </select>
-                        </div>
-                        <p style="font-size:12px; color:#555; margin-bottom:10px;">👉 데이터에서 키워드를 감지하여 우측의 구분 값을 자동으로 세팅합니다. (저장 시 브라우저에 영구 보존)</p>
-                        <div style="height: 350px; overflow-y: auto; background:#fff; border:1px solid #ddd; border-radius:4px; margin-bottom: 10px;">
-                            <table class="data-table" style="margin-bottom:0;">
-                                <thead style="position: sticky; top: 0; z-index: 1; background: #eee;">
-                                    <tr><th>감지할 키워드</th><th>자동 입력될 구분 값</th><th style="width:50px;">삭제</th></tr>
-                                </thead>
-                                <tbody id="ruleManagerTbody"></tbody>
-                            </table>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <button type="button" class="btn-yellow" onclick="window.addRuleRow()"><i class="fa-solid fa-plus"></i> 키워드 규칙 추가</button>
-                            <button type="button" class="btn-dark" style="background:#17A2B8; padding:8px 25px; border:none; font-size:14px;" onclick="window.saveRules()">💾 화면에 보이는 규칙 영구 저장</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <div style="text-align: right; margin-top: 20px;">
+        <button type="button" id="btnInfNextStep" class="btn-exec" style="background-color: #17A2B8; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; display:none;">
+            부분합 및 정렬 ➔ 2.3.2로 이동
+        </button>
+    </div>
+</section>
 
-            <!-- [3단계] 물가보정 평가 패널 (색상 톤 다운 통일) -->
-            <div id="infStep3Panel" class="card" style="margin-bottom: 15px; display:none;">
-                <div class="card-header" style="background:#e9ecef; color:#333; display:flex; justify-content:space-between; align-items:center;">
-                    <span><i class="fa-solid fa-calculator"></i> [3단계] 물가보정 가액평가 워크시트</span>
-                    <button type="button" style="background:#fff; color:#333; border:1px solid #ccc; padding:4px 10px; border-radius:3px; font-weight:bold; font-size:12px; cursor:pointer;" onclick="infBackToStep2()">◀ 2단계(자산구분)로 돌아가기</button>
-                </div>
-                <div class="card-body" style="padding: 10px 20px; display: flex; gap: 10px;">
-                    <button type="button" class="btn-dark" style="background:#28A745;" onclick="window.openDeprBatchModal()"><i class="fa-solid fa-bolt"></i> 감가율 일괄 적용</button>
-                </div>
-            </div>
+<!-- ============================================================================ -->
+<!-- 2.3.2 자산 구분 및 예외 처리 -->
+<!-- ============================================================================ -->
+<section id="sec-2-3-2" class="page-section">
+    <h2 class="page-title"><i class="fa-solid fa-tags"></i> 2.3.2 자산 구분 및 예외 처리</h2>
+    
+    <div style="display:flex; justify-content:space-between; background:#fff; border:1px solid #ddd; padding:15px 20px; border-radius:6px; margin-bottom:15px; font-size:13px; font-weight:bold;">
+        <div id="step-2-1" style="color:#1C5691;"><i class="fa-solid fa-circle-check"></i> 2-1. 과거 연동</div>
+        <div id="step-2-2" style="color:#999;"><i class="fa-solid fa-2"></i> 2-2. 기본 지정</div>
+        <div id="step-2-3" style="color:#999;"><i class="fa-solid fa-3"></i> 2-3. 평가 제외</div>
+        <div id="step-2-4" style="color:#999;"><i class="fa-solid fa-4"></i> 2-4. 부보 제외</div>
+        <div id="step-2-5" style="color:#999;"><i class="fa-solid fa-5"></i> 2-5. 최종 선택</div>
+    </div>
 
-            <!-- 공통 데이터 테이블 영역 -->
-            <div id="infTabs" style="display: flex; border-bottom: 2px solid #1C5691;"></div>
-            <div class="data-table-wrapper" style="flex:1; border-top: none; overflow-x: auto; overflow-y: auto; background: #fff;" id="infTableContainer">
-                <table class="data-table" id="infTable" style="white-space: nowrap; user-select: none;">
-                    <thead id="infThead">
-                        <tr><td style="padding: 60px; text-align: center; color: #999;">고정자산명세서 엑셀 파일을 불러와주세요.</td></tr>
-                    </thead>
-                    <tbody id="infTbody"></tbody>
-                </table>
-            </div>
-
-            <!-- 하단 전환 버튼들 -->
-            <div style="text-align: right; margin-top: 20px;">
-                <button type="button" id="btnInfNextStep" class="btn-exec" style="background-color: #17A2B8; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; display:none;">
-                    부분합(소계) 및 정렬 수행
-                </button>
-                <button type="button" id="btnInfToStep3" class="btn-exec" onclick="infProceedToStep3()" style="background-color: #6f42c1; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; display:none;">
-                    구분 완료 및 3단계(평가)로 전환 ▶
-                </button>
-                <button type="button" id="btnInfComplete" class="btn-exec" onclick="completeAndNext('sec-2-3')" style="background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; display:none;">
-                    물가보정 평가 완료 및 다음 단계로 <i class="fa-solid fa-arrow-right"></i>
+    <div class="card" style="margin-bottom: 15px;">
+        <div class="card-header" style="background:#e9ecef; color:#333; display:flex; justify-content:space-between; align-items:center;">
+            <span><i class="fa-solid fa-wand-magic-sparkles"></i> 표 헤더의 버튼을 눌러 순차적으로 진행하세요.</span>
+            <div style="display: flex; gap: 8px;">
+                <input type="file" id="infPastExcelFile" accept=".xlsx, .xls, .csv" style="display: none;" onchange="infLoadPastData(event)">
+                <button type="button" style="background:#2C2C2C; color:#FFCC00; border:1px solid #444; padding:4px 10px; border-radius:3px; font-weight:bold; font-size:12px; cursor:pointer;" onclick="window.openRuleManager()">
+                    <i class="fa-solid fa-sliders"></i> 예외 항목 마스터 데이터 관리
                 </button>
             </div>
-        </section>
+        </div>
+    </div>
 
+    <div id="infTabs2" class="infTabsContainer" style="display: flex; border-bottom: 2px solid #1C5691;"></div>
+    <div class="data-table-wrapper infTableContainerWrapper" style="flex:1; border-top: none; overflow-x: auto; overflow-y: auto; background: #fff;">
+        <table class="data-table infTableGlobal" style="white-space: nowrap; user-select: none;">
+            <thead class="infTheadGlobal"></thead><tbody class="infTbodyGlobal"></tbody>
+        </table>
+    </div>
+
+    <div style="text-align: right; margin-top: 20px;">
+        <button type="button" onclick="switchSection('sec-2-3-1')" style="background-color: #666; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; margin-right:10px;">◀ 2.3.1 단계로</button>
+        <button type="button" id="btnInfToStep3" class="btn-exec" onclick="infProceedToStep3()" style="background-color: #6f42c1; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px;">
+            구분 완료 ➔ 2.3.3으로 이동
+        </button>
+    </div>
+</section>
+
+<!-- ============================================================================ -->
+<!-- 2.3.3 감가율 및 가액 산출 -->
+<!-- ============================================================================ -->
+<section id="sec-2-3-3" class="page-section">
+    <h2 class="page-title"><i class="fa-solid fa-calculator"></i> 2.3.3 물가보정 가액평가 산출</h2>
+    
+    <div style="display:flex; justify-content:space-between; background:#fff; border:1px solid #ddd; padding:15px 20px; border-radius:6px; margin-bottom:15px; font-size:13px; font-weight:bold;">
+        <div id="step-3-1" style="color:#1C5691;"><i class="fa-solid fa-circle-check"></i> 3-1. 물가지수 처리</div>
+        <div id="step-3-2" style="color:#999;"><i class="fa-solid fa-2"></i> 3-2. 재조달가액 산출</div>
+        <div id="step-3-3" style="color:#999;"><i class="fa-solid fa-3"></i> 3-3. 감가율 지정</div>
+        <div id="step-3-4" style="color:#999;"><i class="fa-solid fa-4"></i> 3-4. 현재가액 산출</div>
+    </div>
+
+    <div class="card" style="margin-bottom: 15px;">
+        <div class="card-body" style="padding: 10px 20px; display: flex; gap: 10px;">
+            <button type="button" class="btn-dark" style="background:#007BFF;" onclick="window.applyInflationIndex()"><i class="fa-solid fa-bolt"></i> 지수/재조달 일괄 계산</button>
+            <button type="button" class="btn-dark" style="background:#28A745;" onclick="window.openDeprBatchModal()"><i class="fa-solid fa-bolt"></i> 감가율 일괄 지정 (팝업)</button>
+            <button type="button" class="btn-dark" style="background:#17A2B8;" onclick="window.applyCurrentValue()"><i class="fa-solid fa-bolt"></i> 잔가율/현재가액 일괄 계산</button>
+        </div>
+    </div>
+
+    <div id="infTabs3" class="infTabsContainer" style="display: flex; border-bottom: 2px solid #1C5691;"></div>
+    <div class="data-table-wrapper infTableContainerWrapper" style="flex:1; border-top: none; overflow-x: auto; overflow-y: auto; background: #fff;">
+        <table class="data-table infTableGlobal" style="white-space: nowrap; user-select: none;">
+            <thead class="infTheadGlobal"></thead><tbody class="infTbodyGlobal"></tbody>
+        </table>
+    </div>
+
+    <div style="text-align: right; margin-top: 20px;">
+        <button type="button" onclick="switchSection('sec-2-3-2')" style="background-color: #666; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; margin-right:10px;">◀ 2.3.2 단계로</button>
+        <button type="button" onclick="completeAndNext('sec-2-3-3')" style="background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px;">
+            물가보정 완료 및 다음 단계로 <i class="fa-solid fa-arrow-right"></i>
+        </button>
+    </div>
+</section>
 
         <!-- [SEC-5-8] 3.1 총괄표 작성 (기존 Slide8 이식) -->
         <section id="sec-3-1" class="page-section">

@@ -258,8 +258,110 @@ window.infBackToStep2 = function() {
 };
 
 // ============================================================================
-// [섹션 4] 테이블 렌더링 (헤더 지정 버튼 추가 및 방향키 이동)
+// [섹션 4] 상태 표시/스텝 전환 및 테이블 렌더링 엔진 (다중 화면 연동)
 // ============================================================================
+
+window.infUpdateStatusBadges = function() {
+    const step1 = document.getElementById('nav-sec-2-3-1');
+    const step2 = document.getElementById('nav-sec-2-3-2');
+    const step3 = document.getElementById('nav-sec-2-3-3');
+    
+    if(!step1 || !step2 || !step3) return;
+
+    if (window.infState.data && Object.keys(window.infState.data).length > 0) {
+        step1.querySelector('.status-badge').className = 'status-badge status-complete';
+        step1.querySelector('.status-badge').innerText = '완료';
+        
+        if (window.infState.step >= 2) {
+            step2.querySelector('.status-badge').className = window.infState.step === 3 ? 'status-badge status-complete' : 'status-badge status-ing';
+            step2.querySelector('.status-badge').innerText = window.infState.step === 3 ? '완료' : '진행';
+        } else {
+            step2.querySelector('.status-badge').className = 'status-badge status-wait';
+            step2.querySelector('.status-badge').innerText = '대기';
+        }
+
+        if (window.infState.step === 3) {
+            step3.querySelector('.status-badge').className = 'status-badge status-ing';
+            step3.querySelector('.status-badge').innerText = '진행';
+        } else {
+            step3.querySelector('.status-badge').className = 'status-badge status-wait';
+            step3.querySelector('.status-badge').innerText = '대기';
+        }
+    }
+};
+
+window.infUpdateStepper = function() {
+    const wiz = window.infState.wizard;
+    
+    // 1단계 스텝바 업데이트
+    if (window.infState.step === 1) {
+        const el1 = document.getElementById('step-1-1');
+        const el2 = document.getElementById('step-1-2');
+        const el3 = document.getElementById('step-1-3');
+        if(el1) el1.style.color = '#1C5691';
+        if(el2) el2.style.color = (wiz.phase === 'mapping' || wiz.phase === 'row-delete') ? '#1C5691' : '#999';
+        if(el3) el3.style.color = window.infState.data[window.infState.activeTab]?.hasSubtotal ? '#1C5691' : '#999';
+    }
+    // 2단계 스텝바 업데이트
+    else if (window.infState.step === 2) {
+        const el1 = document.getElementById('step-2-1');
+        const el2 = document.getElementById('step-2-2');
+        const el3 = document.getElementById('step-2-3');
+        const el4 = document.getElementById('step-2-4');
+        const el5 = document.getElementById('step-2-5');
+        
+        const mappedColCount = Object.keys(wiz.mapped).length;
+        const finalIdx = mappedColCount + 4;
+        
+        let hasFinal = false;
+        const tData = window.infState.data[window.infState.activeTab];
+        if (tData && tData.raw) {
+            hasFinal = tData.raw.some(r => String(r[finalIdx] || '').trim() !== '');
+        }
+
+        if(el1) el1.style.color = '#1C5691';
+        if(el2) el2.style.color = '#1C5691';
+        if(el3) el3.style.color = '#1C5691';
+        if(el4) el4.style.color = '#1C5691';
+        if(el5) el5.style.color = hasFinal ? '#1C5691' : '#999';
+    }
+    // 3단계 스텝바 업데이트
+    else if (window.infState.step === 3) {
+        const el1 = document.getElementById('step-3-1');
+        const el2 = document.getElementById('step-3-2');
+        const el3 = document.getElementById('step-3-3');
+        const el4 = document.getElementById('step-3-4');
+        
+        const mappedColCount = Object.keys(wiz.mapped).length;
+        const currentValIdx = mappedColCount + 9;
+        
+        let hasCurrentVal = false;
+        const tData = window.infState.data[window.infState.activeTab];
+        if (tData && tData.raw) {
+            hasCurrentVal = tData.raw.some(r => String(r[currentValIdx] || '').trim() !== '' && String(r[currentValIdx] || '').trim() !== '-');
+        }
+
+        if(el1) el1.style.color = '#1C5691';
+        if(el2) el2.style.color = '#1C5691';
+        if(el3) el3.style.color = '#1C5691';
+        if(el4) el4.style.color = hasCurrentVal ? '#1C5691' : '#999';
+    }
+};
+
+window.infProceedToStep2 = function() {
+    window.infState.step = 2;
+    window.infUpdateStatusBadges();
+    switchSection('sec-2-3-2');
+    infRenderTable();
+};
+
+window.infProceedToStep3 = function() {
+    window.infState.step = 3;
+    window.infUpdateStatusBadges();
+    switchSection('sec-2-3-3');
+    infRenderTable();
+};
+
 window.infSetFolding = function(level) {
     window.infState.foldingLevel = level;
     infRenderTable();
@@ -339,11 +441,27 @@ window.infRenderTable = function() {
     const tData = window.infState.data[window.infState.activeTab];
     if(!tData || !tData.raw || tData.raw.length === 0) return;
 
-    const data = tData.raw;
-    const thead = document.getElementById('infThead');
-    const tbody = document.getElementById('infTbody');
+    // 현재 화면(섹션)이 무엇인지 파악
+    let currentSection = 1;
+    if (document.getElementById('sec-2-3-2') && document.getElementById('sec-2-3-2').classList.contains('active')) currentSection = 2;
+    if (document.getElementById('sec-2-3-3') && document.getElementById('sec-2-3-3').classList.contains('active')) currentSection = 3;
+    window.infState.step = currentSection;
+
+    window.infUpdateStatusBadges();
+    window.infUpdateStepper();
+
+    // 3개 화면에 있는 표의 tbody, thead를 모두 찾아서 현재 보고있는 곳만 업데이트
+    const theads = document.querySelectorAll('.infTheadGlobal');
+    const tbodys = document.querySelectorAll('.infTbodyGlobal');
+    
+    const targetIdx = currentSection - 1;
+    const thead = theads[targetIdx];
+    const tbody = tbodys[targetIdx];
+    if (!thead || !tbody) return;
+
     thead.innerHTML = ''; tbody.innerHTML = '';
 
+    const data = tData.raw;
     const mappedKeys = Object.keys(wiz.mapped); 
     const colCount = (wiz.phase === 'mapping' || wiz.phase === 'idle') ? data[0].length : mappedKeys.length;
     
@@ -361,7 +479,7 @@ window.infRenderTable = function() {
     
     headerTr.innerHTML = `<th style="width:60px; background:#f8fafc; border:1px solid #ccc; text-align:center; padding:6px 2px;">행 번호${foldHtml}</th>`; 
     
-    const step2Cols = ['과거 구분', '기본 구분', '평가제외 구분', '부보제외 구분', '최종 구분'];
+    const step2Cols = ['과거 구분', '기본 지정', '평가 제외', '부보 제외', '최종 선택'];
     const step3Cols = ['물가지수', '재조달가액', '감가율', '잔가율', '현재가액', '비고'];
 
     for(let c = 0; c < colCount; c++) {
@@ -392,7 +510,7 @@ window.infRenderTable = function() {
                 wiz.mapped[wiz.activeTarget] = c;
                 const unmapped = wiz.columns.find(col => wiz.mapped[col] === undefined);
                 wiz.activeTarget = unmapped || ''; 
-                infUpdateWizardUI();
+                if(typeof window.infUpdateWizardUI === 'function') window.infUpdateWizardUI();
                 infRenderTable();
                 return;
             }
@@ -413,7 +531,7 @@ window.infRenderTable = function() {
     
     if(window.infState.step >= 2) {
         const evalYearEl = document.getElementById('evalYear');
-        const currentYear = evalYearEl ? evalYearEl.value : '2026';
+        const currentYear = evalYearEl ? evalYearEl.value : new Date().getFullYear();
 
         step2Cols.forEach((colName, idx) => {
             if (window.infState.step === 3 && idx < 4) return;
@@ -452,7 +570,7 @@ window.infRenderTable = function() {
         step3Cols.forEach(colName => {
             let topButtonHtml = `<div style="height:25px; margin-bottom:6px;"></div>`;
             
-            // ★ event.stopPropagation()이 추가되어 테이블 열 선택 이벤트와 충돌하지 않습니다!
+            // ★ 클릭 이벤트 충돌 방지: event.stopPropagation() 유지
             if (colName === '물가지수') {
                 topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#007BFF; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="event.stopPropagation(); window.applyInflationIndex()"><i class="fa-solid fa-bolt"></i> 지수/재조달 계산</button>`;
             } else if (colName === '감가율') {
