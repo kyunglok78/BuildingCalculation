@@ -1402,6 +1402,7 @@ window.openDeprBatchModal = function() {
     else alert("감가율 팝업창 HTML 코드가 index.html에 추가되지 않았습니다.");
 };
 
+// 3. 팝업에서 입력한 감가율 및 최종 잔가율 값을 데이터에 저장 (부보/평가제외 방어)
 window.applyDeprBatch = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
@@ -1409,7 +1410,8 @@ window.applyDeprBatch = function() {
     const yearIdx = wiz.mapped['취득년도'];
     
     const mappedColCount = Object.keys(wiz.mapped).length;
-    const deprIdx = mappedColCount + 7; 
+    const finalIdx = mappedColCount + 4; // ★ 최종 구분 열
+    const deprIdx = mappedColCount + 7;  // 감가율 열
 
     const inputMap = {};
     if (!window.infState.minResidualMap) window.infState.minResidualMap = {};
@@ -1432,9 +1434,16 @@ window.applyDeprBatch = function() {
         if (yearVal.includes('소계') || yearVal.includes('총계')) return;
 
         const acc = String(row[accIdx] || '').trim();
+        const finalVal = String(row[finalIdx] || '').trim(); // 최종 구분 확인
+
         if (inputMap[acc] !== undefined && inputMap[acc] !== "") {
             const inputVal = inputMap[acc];
-            if (inputVal === '-' || inputVal === '0' || inputVal === 0) {
+
+            // ★ 부보제외 또는 평가제외인 경우 감가율 강제 제외(-) 처리
+            if (finalVal.includes('부보제외') || finalVal.includes('평가제외')) {
+                row[deprIdx] = '-';
+            } 
+            else if (inputVal === '-' || inputVal === '0' || inputVal === 0) {
                 row[deprIdx] = '-';
             } else {
                 row[deprIdx] = Number(inputVal).toFixed(2);
@@ -1448,6 +1457,7 @@ window.applyDeprBatch = function() {
     alert(`✅ 총 ${applyCount}건의 감가율 및 최종 잔가율 기준이 저장되었습니다.\n표 상단의 [⚡ 감가/현재 계산] 버튼을 클릭해 가액을 산출해 주세요.`);
 };
 
+// 4. 감가율 기반 잔가율 및 현재가액 일괄 계산 (하한선 방어 및 예외항목 완벽 처리)
 window.applyCurrentValue = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
@@ -1456,6 +1466,7 @@ window.applyCurrentValue = function() {
     const mappedColCount = Object.keys(wiz.mapped).length;
     const accIdx = wiz.mapped['자산계정'];
     const yearIdx = wiz.mapped['취득년도'];
+    const finalIdx = mappedColCount + 4; // 최종 구분 열
     const replacementIdx = mappedColCount + 6; 
     const deprIdx = mappedColCount + 7;        
     const residualIdx = mappedColCount + 8;    
@@ -1481,17 +1492,34 @@ window.applyCurrentValue = function() {
         }
 
         const accVal = String(row[accIdx] || '').trim();
+        const finalVal = String(row[finalIdx] || '').trim(); // 최종 구분 확인
         const repCostStr = String(row[replacementIdx] || '').replace(/,/g, '');
         const deprStr = String(row[deprIdx] || '').replace(/,/g, ''); 
         
-        if (repCostStr === '-' || repCostStr === '') { 
-            row[residualIdx] = '-'; row[currentValIdx] = '-'; return;
+        // ★ 부보제외거나 재조달가액이 없는 경우 강제 제외
+        if (finalVal.includes('부보제외') || repCostStr === '-' || repCostStr === '') { 
+            row[deprIdx] = '-'; 
+            row[residualIdx] = '-'; 
+            row[currentValIdx] = '-'; 
+            return;
         }
 
         const repCost = Number(repCostStr);
         const acqYear = parseInt(yearVal);
         const deprRate = Number(deprStr);
+
+        // ★ 평가제외인 경우 강제 유지 (현재가액 = 재조달가액)
+        if (finalVal.includes('평가제외')) {
+            row[deprIdx] = '-';
+            row[residualIdx] = '-';
+            row[currentValIdx] = repCost; 
+            subCur += repCost;
+            totCur += repCost;
+            applyCount++;
+            return;
+        }
         
+        // 메모리에 저장해둔 최종 잔가율(하한선) 가져오기 (없으면 0)
         const minResRate = (window.infState.minResidualMap && window.infState.minResidualMap[accVal] !== undefined) 
                             ? window.infState.minResidualMap[accVal] : 0;
 
