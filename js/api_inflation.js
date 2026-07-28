@@ -144,7 +144,8 @@ window.infLoadExcel = function(event) {
             document.getElementById('btnFinishMapping').style.display = 'none';
             document.getElementById('infMappingButtons').style.display = 'none';
             document.getElementById('infWizardText').innerHTML = `🎯 원본 데이터를 불러왔습니다. 우측의 <b>'열 매핑 마법사 시작'</b>을 눌러주세요.`;
-            document.getElementById('btnInfNextStep').style.display = 'none';
+            const btnNext = document.getElementById('btnInfNextStep');
+            if(btnNext) btnNext.style.display = 'none';
             
             infRenderTable();
         } catch(err) { alert("엑셀 로드 오류: " + err); }
@@ -201,11 +202,11 @@ window.infFinishMapping = function() {
     if (mappedCols.length === 0) return alert("매칭된 열이 하나도 없습니다. 최소 1개 이상 항목을 엑셀 열과 매칭해주세요.");
     if (!confirm("매칭되지 않은 불필요한 열은 모두 자동으로 삭제됩니다.\n'행 지우기' 단계로 넘어가시겠습니까?")) return;
 
-    infSaveHistory();
+    if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
 
     const finalColumns = ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득일', '취득년도', '취득가액'];
 
-    tData.raw = tData.raw.map(oldRow => {
+    let mappedRaw = tData.raw.map(oldRow => {
         const newRow = [];
         finalColumns.forEach((colName, newIdx) => {
             if (colName === '취득년도') {
@@ -226,19 +227,49 @@ window.infFinishMapping = function() {
     
     wiz.mapped = {};
     finalColumns.forEach((colName, idx) => { wiz.mapped[colName] = idx; });
+
+    // ★ [핵심 복구] 소재지별 평가 모드일 경우 데이터를 각 탭으로 자동 분리(찢기)
+    if (window.infState.mode === 'location') {
+        const distributed = {};
+        window.infState.tabs.forEach(tab => distributed[tab] = []);
+        
+        mappedRaw.forEach(row => {
+            const rowLoc = String(row[0] || '').trim(); // 0번째 열이 '소재지'
+            if (!rowLoc) return; // 빈 행 무시
+            
+            let matchedTab = window.infState.tabs.find(tab => rowLoc.includes(tab) || tab.includes(rowLoc));
+            if (matchedTab) {
+                distributed[matchedTab].push(row);
+            } else {
+                distributed[window.infState.activeTab].push(row);
+            }
+        });
+        
+        window.infState.tabs.forEach(tab => {
+            if(window.infState.data[tab]) {
+                window.infState.data[tab].raw = distributed[tab];
+            }
+        });
+        tData.raw = distributed[window.infState.activeTab];
+        alert("✅ 소재지별 데이터 자동 분리 완료!");
+    } else {
+        tData.raw = mappedRaw;
+    }
     
     wiz.phase = 'row-delete';
     wiz.activeTarget = '';
     
-    document.getElementById('infWizardText').innerHTML = `🧹 1.5단계: 불필요한 행(빈 줄, 합계 등)을 <b>[Ctrl + -]</b> 단축키로 지우시고, <b>우측 하단의 '부분합 및 정렬' 버튼</b>을 눌러 명세서를 검증하세요.`;
+    document.getElementById('infWizardText').innerHTML = `🧹 1.5단계: 각 탭을 돌아다니며 불필요한 행(빈 줄, 합계 등)을 <b>[Ctrl + -]</b> 단축키로 지우시고, <b>우측 하단의 '부분합 및 정렬' 버튼</b>을 눌러 명세서를 검증하세요.`;
     document.getElementById('btnFinishMapping').style.display = 'none';
     document.getElementById('infMappingButtons').style.display = 'none';
     
     const btnNext = document.getElementById('btnInfNextStep');
-    btnNext.style.display = 'inline-block';
-    btnNext.innerHTML = '<i class="fa-solid fa-layer-group"></i> 부분합(소계) 및 정렬 수행';
-    btnNext.style.backgroundColor = '#6f42c1'; 
-    btnNext.onclick = () => window.infCalculateSubtotals(false); 
+    if (btnNext) {
+        btnNext.style.display = 'inline-block';
+        btnNext.innerHTML = '<i class="fa-solid fa-layer-group"></i> 부분합 및 정렬 ➔ 2.3.2로 이동';
+        btnNext.style.backgroundColor = '#6f42c1'; 
+        btnNext.onclick = () => window.infCalculateSubtotals(false); 
+    }
     
     tData.selectedCols.clear();
     tData.selectedRows.clear();
@@ -251,9 +282,12 @@ window.infProceedToStep2 = function() {
     document.getElementById('infStep2Panel').style.display = 'block';
     document.getElementById('infStep3Panel').style.display = 'none';
     
-    document.getElementById('btnInfNextStep').style.display = 'none';
-    document.getElementById('btnInfToStep3').style.display = 'inline-block';
-    document.getElementById('btnInfComplete').style.display = 'none';
+    const btnNext = document.getElementById('btnInfNextStep');
+    if(btnNext) btnNext.style.display = 'none';
+    const btnToStep3 = document.getElementById('btnInfToStep3');
+    if(btnToStep3) btnToStep3.style.display = 'inline-block';
+    const btnComplete = document.getElementById('btnInfComplete');
+    if(btnComplete) btnComplete.style.display = 'none';
     infRenderTable();
 };
 
@@ -263,9 +297,12 @@ window.infProceedToStep3 = function() {
     document.getElementById('infStep2Panel').style.display = 'none';
     document.getElementById('infStep3Panel').style.display = 'block';
     
-    document.getElementById('btnInfNextStep').style.display = 'none';
-    document.getElementById('btnInfToStep3').style.display = 'none';
-    document.getElementById('btnInfComplete').style.display = 'inline-block';
+    const btnNext = document.getElementById('btnInfNextStep');
+    if(btnNext) btnNext.style.display = 'none';
+    const btnToStep3 = document.getElementById('btnInfToStep3');
+    if(btnToStep3) btnToStep3.style.display = 'none';
+    const btnComplete = document.getElementById('btnInfComplete');
+    if(btnComplete) btnComplete.style.display = 'inline-block';
     infRenderTable();
 };
 
@@ -275,9 +312,12 @@ window.infBackToStep1 = function() {
     document.getElementById('infStep2Panel').style.display = 'none';
     document.getElementById('infStep3Panel').style.display = 'none';
     
-    document.getElementById('btnInfNextStep').style.display = 'inline-block';
-    document.getElementById('btnInfToStep3').style.display = 'none';
-    document.getElementById('btnInfComplete').style.display = 'none';
+    const btnNext = document.getElementById('btnInfNextStep');
+    if(btnNext) btnNext.style.display = 'inline-block';
+    const btnToStep3 = document.getElementById('btnInfToStep3');
+    if(btnToStep3) btnToStep3.style.display = 'none';
+    const btnComplete = document.getElementById('btnInfComplete');
+    if(btnComplete) btnComplete.style.display = 'none';
     infRenderTable(); 
 };
 
@@ -287,9 +327,12 @@ window.infBackToStep2 = function() {
     document.getElementById('infStep2Panel').style.display = 'block';
     document.getElementById('infStep3Panel').style.display = 'none';
     
-    document.getElementById('btnInfNextStep').style.display = 'none';
-    document.getElementById('btnInfToStep3').style.display = 'inline-block';
-    document.getElementById('btnInfComplete').style.display = 'none';
+    const btnNext = document.getElementById('btnInfNextStep');
+    if(btnNext) btnNext.style.display = 'none';
+    const btnToStep3 = document.getElementById('btnInfToStep3');
+    if(btnToStep3) btnToStep3.style.display = 'inline-block';
+    const btnComplete = document.getElementById('btnInfComplete');
+    if(btnComplete) btnComplete.style.display = 'none';
     infRenderTable(); 
 };
 
@@ -913,9 +956,11 @@ window.infCalculateSubtotals = function(isSilent) {
     window.infState.foldingLevel = 3; 
 
     const btnNext = document.getElementById('btnInfNextStep');
-    btnNext.innerHTML = '명세서 검증 완료 및 2단계(자산구분)로 전환 ▶';
-    btnNext.style.backgroundColor = '#17A2B8';
-    btnNext.onclick = infProceedToStep2;
+    if (btnNext) {
+        btnNext.innerHTML = '명세서 검증 완료 및 2.3.2(자산구분)로 전환 ▶';
+        btnNext.style.backgroundColor = '#17A2B8';
+        btnNext.onclick = window.infProceedToStep2;
+    }
     
     tData.selectedRows.clear();
     tData.selectedCols.clear();
@@ -930,8 +975,15 @@ window.infSaveHistory = function() {
 };
 
 document.addEventListener('keydown', function(e) {
-    const sec = document.getElementById('sec-2-3');
-    if (!sec || !sec.classList.contains('active')) return;
+    // ★ 3분할된 물가보정 화면 ID를 모두 감지하여 단축키가 작동하게 함
+    const sec1 = document.getElementById('sec-2-3-1');
+    const sec2 = document.getElementById('sec-2-3-2');
+    const sec3 = document.getElementById('sec-2-3-3');
+    const isActive = (sec1 && sec1.classList.contains('active')) || 
+                     (sec2 && sec2.classList.contains('active')) || 
+                     (sec3 && sec3.classList.contains('active'));
+                     
+    if (!isActive) return;
     const tData = window.infState.data[window.infState.activeTab];
     if(!tData) return;
 
@@ -945,18 +997,20 @@ document.addEventListener('keydown', function(e) {
         tData.hasSubtotal = yearColIdx !== undefined && tData.raw.some(r => String(r[yearColIdx] || '').includes('소계'));
         if(!tData.hasSubtotal && window.infState.step === 1 && window.infState.wizard.phase === 'row-delete') {
             const btnNext = document.getElementById('btnInfNextStep');
-            btnNext.innerHTML = '<i class="fa-solid fa-layer-group"></i> 부분합(소계) 및 정렬 수행';
-            btnNext.style.backgroundColor = '#6f42c1';
-            btnNext.onclick = () => window.infCalculateSubtotals(false);
+            if (btnNext) {
+                btnNext.innerHTML = '<i class="fa-solid fa-layer-group"></i> 부분합 및 정렬 ➔ 2.3.2로 이동';
+                btnNext.style.backgroundColor = '#6f42c1';
+                btnNext.onclick = () => window.infCalculateSubtotals(false);
+            }
         }
         infRenderTable();
     }
     
-    // ★ 행/열 삭제 로직 (동적 재계산 지원)
+    // 행/열 삭제 로직 (동적 재계산 지원)
     if ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_')) {
         e.preventDefault();
         if (tData.selectedRows.size === 0 && tData.selectedCols.size === 0) return;
-        infSaveHistory();
+        if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
         
         if (tData.selectedRows.size > 0) {
             Array.from(tData.selectedRows).sort((a,b) => b - a).forEach(rIdx => tData.raw.splice(rIdx, 1));
@@ -967,7 +1021,7 @@ document.addEventListener('keydown', function(e) {
             tData.selectedCols.clear();
         }
         
-        if (tData.hasSubtotal) {
+        if (tData.hasSubtotal && typeof window.infCalculateSubtotals === 'function') {
             window.infCalculateSubtotals(true); 
         }
         infRenderTable();
