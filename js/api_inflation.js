@@ -43,10 +43,14 @@ window.infState = {
         .fold-btn { padding: 2px 8px; border: 1px solid #94a3b8; background: #fff; cursor: pointer; font-weight: bold; font-size: 11px; border-radius: 3px; color: #64748b; }
         .fold-btn:hover { background: #e2e8f0; }
         .fold-btn.active { background: #1C5691; color: #fff; border-color: #1C5691; }
+        
+        /* ★ 화면 분리 후 이전 단계 숨김 로직에 의해 패널이 사라지는 현상 완벽 방어 */
+        #infStep1Panel { display: block !important; }
     `;
     document.head.appendChild(style);
 })();
 
+// 화면 분리에 맞춰 다중 탭 컨테이너 지원하도록 업데이트됨
 window.infInitTabs = function() {
     const modeObj = document.querySelector('input[name="infMode"]:checked');
     if(!modeObj) return;
@@ -56,32 +60,64 @@ window.infInitTabs = function() {
     
     if(window.infState.tabs.length === 0) window.infState.tabs = ['기본 사업장'];
 
-    const tabContainer = document.getElementById('infTabs');
-    if(!tabContainer) return;
-    tabContainer.innerHTML = '';
+    // 분리된 3개 화면의 탭 컨테이너 모두 선택
+    const tabContainers = document.querySelectorAll('.infTabsContainer');
+    if(tabContainers.length === 0) return;
     
-    window.infState.tabs.forEach((tabName, idx) => {
-        if(!window.infState.data[tabName]) window.infState.data[tabName] = { raw: [], history: [], selectedRows: new Set(), selectedCols: new Set(), hasSubtotal: false };
+    tabContainers.forEach(container => {
+        container.innerHTML = '';
         
-        const tabBtn = document.createElement('div');
-        tabBtn.innerText = tabName;
-        tabBtn.className = 'inf-tab-btn';
-        tabBtn.style.cssText = `padding:10px 20px; cursor:pointer; font-weight:normal; border:1px solid #e2e8f0; border-bottom:none; border-radius:4px 4px 0 0; margin-right:5px; background:#f1f5f9; color:#94a3b8;`;
-        
-        tabBtn.onclick = () => {
-            document.querySelectorAll('.inf-tab-btn').forEach(c => { c.style.background = '#f1f5f9'; c.style.color = '#94a3b8'; c.style.fontWeight = 'normal'; c.style.borderColor = '#e2e8f0'; });
-            tabBtn.style.background = '#1C5691'; tabBtn.style.color = '#ffffff'; tabBtn.style.fontWeight = 'bold'; tabBtn.style.borderColor = '#1C5691';
-            window.infState.activeTab = tabName;
-            infRenderTable();
-        };
-        tabContainer.appendChild(tabBtn);
-        if(idx === 0) tabBtn.click();
+        window.infState.tabs.forEach((tabName, idx) => {
+            if(!window.infState.data[tabName]) {
+                window.infState.data[tabName] = { raw: [], history: [], selectedRows: new Set(), selectedCols: new Set(), hasSubtotal: false };
+            }
+            
+            const tabBtn = document.createElement('div');
+            tabBtn.innerText = tabName;
+            tabBtn.className = 'inf-tab-btn';
+            tabBtn.style.cssText = `padding:10px 20px; cursor:pointer; font-weight:normal; border:1px solid #e2e8f0; border-bottom:none; border-radius:4px 4px 0 0; margin-right:5px; background:#f1f5f9; color:#94a3b8;`;
+            
+            tabBtn.onclick = () => {
+                // 클릭 시 모든 화면의 탭 UI 동기화
+                document.querySelectorAll('.inf-tab-btn').forEach(c => { 
+                    c.style.background = '#f1f5f9'; c.style.color = '#94a3b8'; c.style.fontWeight = 'normal'; c.style.borderColor = '#e2e8f0'; 
+                });
+                
+                document.querySelectorAll('.infTabsContainer').forEach(tc => {
+                    const matchingTab = Array.from(tc.children).find(child => child.innerText === tabName);
+                    if(matchingTab) {
+                        matchingTab.style.background = '#1C5691'; matchingTab.style.color = '#ffffff'; matchingTab.style.fontWeight = 'bold'; matchingTab.style.borderColor = '#1C5691';
+                    }
+                });
+
+                window.infState.activeTab = tabName;
+                if(typeof window.infRenderTable === 'function') window.infRenderTable();
+            };
+            container.appendChild(tabBtn);
+            
+            // 첫 번째 탭 초기화 활성화
+            if(idx === 0) {
+                tabBtn.style.background = '#1C5691'; tabBtn.style.color = '#ffffff'; tabBtn.style.fontWeight = 'bold'; tabBtn.style.borderColor = '#1C5691';
+            }
+        });
     });
+    
+    if(window.infState.tabs.length > 0) {
+        window.infState.activeTab = window.infState.tabs[0];
+    }
 };
 
 document.addEventListener("DOMContentLoaded", () => {
-    const infMenu = document.getElementById('nav-sec-2-3');
-    if(infMenu) infMenu.addEventListener('click', () => { if(window.infState.tabs.length === 0) infInitTabs(); });
+    // 3개로 분리된 사이드바 메뉴 각각에 이벤트 리스너 부착
+    const infMenu1 = document.getElementById('nav-sec-2-3-1');
+    const infMenu2 = document.getElementById('nav-sec-2-3-2');
+    const infMenu3 = document.getElementById('nav-sec-2-3-3');
+    
+    const initFn = () => { if(window.infState.tabs.length === 0) window.infInitTabs(); };
+    
+    if(infMenu1) infMenu1.addEventListener('click', initFn);
+    if(infMenu2) infMenu2.addEventListener('click', initFn);
+    if(infMenu3) infMenu3.addEventListener('click', initFn);
 });
 
 // ============================================================================
