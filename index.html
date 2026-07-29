@@ -191,22 +191,22 @@
     </div>
 </div>
 
-<!-- 3-5. 감가율 일괄 지정 팝업창 (엑셀 원본 100% 연동 & 검색 기능 버전) -->
+<!-- 3-5. 감가율 일괄 지정 팝업창 (엑셀 원본 100% 연동 & 검색 기능 & 화면 최대 확장 버전) -->
 <div class="modal-overlay" id="deprBatchModal" style="display:none; z-index: 1000; justify-content: center; align-items: center;">
-    <div class="modal-content" style="width: 1400px; max-width: 95vw; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2); display: flex; flex-direction: column;">
+    <div class="modal-content" style="width: 95vw; max-width: 1600px; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2); display: flex; flex-direction: column;">
         <div class="modal-header" style="background:#28A745; color:white; padding:15px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
             <span style="font-weight:bold;"><i class="fa-solid fa-wand-magic-sparkles"></i> 자산계정별 감가율 및 최종 잔가율 일괄 지정</span>
             <i class="fa-solid fa-xmark modal-close" style="cursor:pointer; font-size:18px;" onclick="document.getElementById('deprBatchModal').style.display='none'"></i>
         </div>
-        <div class="modal-body" style="padding: 0; display: flex; flex-direction: row; height: 600px; background: #f4f5f7;">
+        <div class="modal-body" style="padding: 0; display: flex; flex-direction: row; height: 85vh; min-height: 600px; background: #f4f5f7;">
 
-            <!-- 왼쪽: 감가율 및 잔가율 입력 폼 영역 -->
-            <div style="flex: 0.8; padding: 20px; display: flex; flex-direction: column; border-right: 1px solid #ccc;">
+            <!-- 왼쪽: 감가율 및 잔가율 입력 폼 영역 (가로 길이 고정으로 짤림 완벽 방지) -->
+            <div style="flex: 0 0 450px; padding: 20px; display: flex; flex-direction: column; border-right: 1px solid #ccc;">
                 <p style="font-size:13px; color:#555; margin-bottom:10px; line-height:1.4;">👉 <b>감가율(%)</b>과 하한선이 되는 <b>최종 잔가율(%)</b>을 기입해 주세요. 우측의 엑셀 표준 감가율 기준표를 참고하시면 편리합니다.</p>
                 <div style="flex: 1; overflow-y: auto; background:#fff; border:1px solid #ddd; border-radius:4px; margin-bottom: 15px;">
-                    <table class="data-table" style="margin-bottom:0;">
+                    <table class="data-table" style="margin-bottom:0; width: 100%;">
                         <thead style="position: sticky; top: 0; z-index: 1; background: #eee;">
-                            <tr><th>자산계정 항목</th><th>감가율 입력 (%)</th><th>최종 잔가율 (하한선 %)</th></tr>
+                            <tr><th>자산계정 항목</th><th>감가율 입력 (%)</th><th>최종 잔가율(%)</th></tr>
                         </thead>
                         <tbody id="deprBatchTbody"></tbody>
                     </table>
@@ -217,7 +217,7 @@
             </div>
 
             <!-- 오른쪽: 엑셀 데이터 시트 뷰어 영역 (검색창 포함) -->
-            <div style="flex: 2.2; padding: 20px; display: flex; flex-direction: column; background: #fff;">
+            <div style="flex: 1; padding: 20px; display: flex; flex-direction: column; background: #fff; min-width: 0;">
                 <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px; border-bottom: 2px solid #28A745; padding-bottom: 5px;">
                     <span style="font-size:15px; font-weight:bold; color:#166534;"><i class="fa-solid fa-file-excel" style="color:#28A745;"></i> [참고용] 표준 감가율 기준표 (원본 100%)</span>
                     
@@ -235,7 +235,7 @@
                     <button type="button" class="ref-tab-btn" onclick="window.switchDeprRefTab(4)">4. 공기구 감가율</button>
                 </div>
                 <!-- 테이블 영역 -->
-                <div style="flex: 1; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; background: #fafafa;">
+                <div style="flex: 1; overflow-y: auto; overflow-x: auto; border: 1px solid #ddd; border-radius: 4px; background: #fafafa;">
                     <table class="data-table" style="margin-bottom:0; font-size: 13px; white-space: nowrap;">
                         <thead id="deprRefThead" style="position: sticky; top: 0; z-index: 1; background: #e9ecef; color: #333;">
                             <!-- 헤더 JS 렌더링 -->
