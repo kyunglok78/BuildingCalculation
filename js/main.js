@@ -807,26 +807,6 @@ window.quickLoadProject = function(event) {
             if (projectData.targetKfpaSite) window.targetKfpaSite = projectData.targetKfpaSite;
             if (projectData.targetKfpaAddress) window.targetKfpaAddress = projectData.targetKfpaAddress;
 
-            // ★ 1.5 대장 데이터 강제 렌더링 및 탭 강제 클릭 (해결의 핵심!)
-            setTimeout(() => {
-                if (window.kbState && window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
-                    const emptyMsg = document.getElementById('emptyStateMsg');
-                    const dataCont = document.getElementById('fetchedDataContainer');
-                    if (emptyMsg) emptyMsg.style.display = 'none';
-                    if (dataCont) {
-                        dataCont.style.display = 'block';
-                    }
-                    if (typeof window.renderSlide3Tabs === 'function') {
-                        window.renderSlide3Tabs();
-                        // 탭이 생성된 직후 첫 번째 탭을 강제로 클릭하여 대장 표를 화면에 뿌림
-                        setTimeout(() => {
-                            const firstTab = document.querySelector('#slide3Tabs div');
-                            if (firstTab) firstTab.click();
-                        }, 100);
-                    }
-                }
-            }, 300); 
-
             if (projectData.contractor) document.querySelectorAll('.contractor-sync').forEach(el => el.value = projectData.contractor);
             if (projectData.evalYear) { const y = document.getElementById('evalYear'); if(y) y.value = projectData.evalYear; }
             if (projectData.unitCostPath) { const u = document.getElementById('unitCostPath'); if(u) u.value = projectData.unitCostPath; }
@@ -854,6 +834,125 @@ window.quickLoadProject = function(event) {
                     if(locCountInput) locCountInput.value = projectData.locations.length;
                     window.locationCounter = projectData.locations.length;
                 } 
+            }
+
+            // ★ 대장 데이터 완벽 렌더링 로직 (과거 파일에서 통째로 이식 완료)
+            if (window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
+                const dataContainer = document.getElementById('fetchedDataContainer');
+                const tabsContainer = document.getElementById('slide3Tabs');
+                const emptyMsg = document.getElementById('emptyStateMsg');
+                
+                if (emptyMsg) emptyMsg.style.display = 'none';
+                if (dataContainer && tabsContainer) {
+                    dataContainer.style.display = 'block';
+                    dataContainer.innerHTML = ''; 
+                    tabsContainer.innerHTML = '';
+
+                    const korMap = {
+                        "platPlc": "대지위치", "bldNm": "건물명", "mainPurpsCdNm": "주용도",
+                        "mainBldCnt": "주건축물수", "subBldCnt": "부속건축물수", "totArea": "연면적(㎡)",
+                        "pmsDay": "허가일", "stcnsDay": "착공일", "useAprDay": "사용승인일",
+                        "dongNm": "동명칭", "grndFlrCnt": "지상층수", "ugrndFlrCnt": "지하층수",
+                        "heit": "높이(m)", "strctCdNm": "구조명", "roofCdNm": "지붕코드명",
+                        "flrGbCdNm": "층구분", "flrNoNm": "층번호", "area": "면적(㎡)", "etcPurps": "기타용도"
+                    };
+
+                    let isFirst = true;
+                    for (const [siteName, siteData] of Object.entries(window.kbState.fetchedData)) {
+                        const tabBtn = document.createElement('div');
+                        tabBtn.innerText = siteName;
+                        tabBtn.style.cssText = `padding:10px 20px; cursor:pointer; font-weight:${isFirst ? 'bold' : 'normal'}; border:1px solid ${isFirst ? '#1C5691' : '#e2e8f0'}; border-bottom:none; border-radius:4px 4px 0 0; margin-right:5px; background:${isFirst ? '#1C5691' : '#f1f5f9'}; color:${isFirst ? '#ffffff' : '#94a3b8'};`;
+                        
+                        const contentDiv = document.createElement('div');
+                        contentDiv.style.display = isFirst ? 'block' : 'none';
+                        
+                        tabBtn.onclick = () => { 
+                            Array.from(tabsContainer.children).forEach(c => { c.style.background = '#f1f5f9'; c.style.color = '#94a3b8'; c.style.fontWeight = 'normal'; c.style.borderColor = '#e2e8f0'; });
+                            Array.from(dataContainer.children).forEach(c => c.style.display = 'none');
+                            tabBtn.style.background = '#1C5691'; tabBtn.style.color = '#ffffff'; tabBtn.style.fontWeight = 'bold'; tabBtn.style.borderColor = '#1C5691';
+                            contentDiv.style.display = 'block';
+                        };
+                        tabsContainer.appendChild(tabBtn);
+
+                        for (const [title, rows] of Object.entries(siteData)) {
+                            if (title === 'address' || title === 'errors' || !Array.isArray(rows) || rows.length === 0) continue;
+                            
+                            const sectionTitle = document.createElement('h3');
+                            let korTitle = title === 'recap' ? '총괄표제부 정보' : (title === 'title' ? '표제부 상세' : (title === 'floor' ? '층별 개요' : title));
+                            sectionTitle.innerText = `■ ${korTitle}`; 
+                            sectionTitle.style.cssText = 'font-size:15px; margin: 20px 0 10px 0; color:#1C5691;';
+                            contentDiv.appendChild(sectionTitle);
+
+                            const tableWrapper = document.createElement('div');
+                            tableWrapper.style.cssText = 'overflow-x:auto; margin-bottom:20px; border:1px solid #ddd; max-height: 300px; overflow-y: auto;';
+                            
+                            const table = document.createElement('table');
+                            table.className = 'data-table'; 
+                            table.style.margin = '0';
+                            
+                            const thead = document.createElement('thead');
+                            const headerRow = document.createElement('tr');
+                            thead.style.position = 'sticky';
+                            thead.style.top = '0';
+                            thead.style.zIndex = '1';
+                            
+                            const cols = Object.keys(rows[0]);
+                            cols.forEach(col => {
+                                const th = document.createElement('th');
+                                const korName = korMap[col] || col;
+                                th.innerHTML = `${korName} <span style="font-size:10px; color:#ccc;">▲▼</span>`;
+                                th.style.cursor = 'pointer';
+                                
+                                th.dataset.sortOrder = 'asc';
+                                th.onclick = () => {
+                                    const isAsc = th.dataset.sortOrder === 'asc';
+                                    th.dataset.sortOrder = isAsc ? 'desc' : 'asc';
+                                    
+                                    const tbody = table.querySelector('tbody');
+                                    const rowArray = Array.from(tbody.querySelectorAll('tr'));
+                                    const colIndex = Array.from(headerRow.children).indexOf(th);
+                                    
+                                    rowArray.sort((a, b) => {
+                                        const cellA = a.children[colIndex].innerText.replace(/,/g, '');
+                                        const cellB = b.children[colIndex].innerText.replace(/,/g, '');
+                                        const valA = isNaN(cellA) ? cellA : parseFloat(cellA);
+                                        const valB = isNaN(cellB) ? cellB : parseFloat(cellB);
+                                        
+                                        if(valA > valB) return isAsc ? 1 : -1;
+                                        if(valA < valB) return isAsc ? -1 : 1;
+                                        return 0;
+                                    });
+                                    rowArray.forEach(tr => tbody.appendChild(tr)); 
+                                };
+                                headerRow.appendChild(th);
+                            });
+                            thead.appendChild(headerRow);
+                            table.appendChild(thead);
+                            
+                            const tbody = document.createElement('tbody');
+                            rows.forEach((row, rIdx) => {
+                                const tr = document.createElement('tr');
+                                tr.style.background = rIdx % 2 === 0 ? '#fff' : '#f9f9fa';
+                                cols.forEach(col => {
+                                    const td = document.createElement('td');
+                                    let cellValue = row[col];
+                                    if (cellValue === null || String(cellValue).toLowerCase() === "null" || String(cellValue).toLowerCase() === "nan" || cellValue === "") {
+                                        cellValue = '-';
+                                    }
+                                    td.innerText = cellValue;
+                                    td.style.textAlign = 'center';
+                                    tr.appendChild(td);
+                                });
+                                tbody.appendChild(tr);
+                            });
+                            table.appendChild(tbody);
+                            tableWrapper.appendChild(table);
+                            contentDiv.appendChild(tableWrapper);
+                        }
+                        dataContainer.appendChild(contentDiv);
+                        isFirst = false;
+                    }
+                }
             }
 
             if (projectData.infState) {
@@ -906,6 +1005,7 @@ window.quickLoadProject = function(event) {
 
             if (typeof runGroupedRenderTest === 'function') runGroupedRenderTest();
 
+            // ★ 화면 겹침 완벽 방지: 시선을 깔끔하게 1.1 화면으로 고정
             setTimeout(() => {
                 if (typeof switchSection === 'function') switchSection('sec-1-1');
             }, 600);
