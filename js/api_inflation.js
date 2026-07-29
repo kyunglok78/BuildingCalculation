@@ -1576,7 +1576,7 @@ window.applyInflationIndex = function() {
     } catch (err) { alert("계산 중 오류가 발생했습니다.\n" + err.message); }
 };
 
-// ★ 엑셀 데이터 압축 내장 (4개 시트 - 업종감가율 100% 원본 포함 및 넓이 조정)
+// ★ 엑셀 데이터 압축 내장 (4개 시트 - 업종감가율 100% 원본 포함)
 window.DEPR_REF_DATA = {
     sheet1: {
         head: `<tr><th rowspan="2" style="background:#e9ecef;">건물 구조별</th><th colspan="2" style="background:#d1e7dd;">우기 이외 (일반건물)</th><th colspan="2" style="background:#ffe69c;">창고, 공장</th><th colspan="2" style="background:#f8d7da;">특수건물 (냉장, 화학 등)</th></tr>
@@ -1602,14 +1602,7 @@ window.DEPR_REF_DATA = {
         ]
     },
     sheet3: {
-        // ★ 3번째 탭에 각 열의 % 폭(width)을 강제 지정하여 밀리지 않도록 고정
-        head: `<tr>
-            <th style="background:#e9ecef; width:22%;">대분류</th>
-            <th style="background:#e9ecef; width:22%;">중분류</th>
-            <th style="background:#e9ecef; width:36%;">소분류</th>
-            <th style="background:#d1e7dd; width:10%;">내용연수(년)</th>
-            <th style="background:#ffe69c; width:10%;">감가율(%)</th>
-        </tr>`,
+        head: `<tr><th style="background:#e9ecef;">대분류</th><th style="background:#e9ecef;">중분류</th><th style="background:#e9ecef;">소분류</th><th style="background:#d1e7dd; width:100px;">내용연수(년)</th><th style="background:#ffe69c; width:100px;">감가율(%)</th></tr>`,
         body: [
             ["농업, 임업 및 어업", "농업", "작물 재배업", "8", "10.0"],
             ["", "", "축산업", "8", "10.0"],
@@ -1855,7 +1848,7 @@ window.DEPR_REF_DATA = {
     }
 };
 
-// ★ 엑셀 데이터 뷰어 탭 전환 기능 (가로 폭 및 글씨 꺾임 처리)
+// ★ 엑셀 데이터 뷰어 탭 전환 기능
 window.switchDeprRefTab = function(tabIndex) {
     document.querySelectorAll('.ref-tab-btn').forEach((btn, idx) => {
         btn.className = (idx === tabIndex - 1) ? 'ref-tab-btn active' : 'ref-tab-btn';
@@ -1874,24 +1867,18 @@ window.switchDeprRefTab = function(tabIndex) {
     
     data.body.forEach((row, rIdx) => {
         const tr = document.createElement('tr');
-        tr.id = `deprRefRow_${rIdx}`; 
+        tr.id = `deprRefRow_${rIdx}`; // 검색 기능을 위해 ID 부여
         
+        // 데이터 행 안의 텍스트들을 모두 합쳐서 숨김 속성으로 저장 (검색용)
         tr.dataset.searchContent = row.join(" ").toLowerCase();
         
         row.forEach((cell, cellIdx) => {
             const td = document.createElement('td');
             td.innerText = cell;
             
-            // ★ 3. 업종 감가율 탭일 경우 (가로 폭이 넓어서 찌그러지지 않도록 특수 처리)
+            // 표 스타일에 맞게 정렬 처리
             if(tabIndex === 3) {
-                if(cellIdx > 2) {
-                    td.style.textAlign = 'center';
-                    td.style.fontWeight = 'bold';
-                } else {
-                    // ★ 글자가 길어도 표를 밀어내지 않고 아래로 예쁘게 줄바꿈(word-break) 되도록 처리
-                    td.style.whiteSpace = 'normal';
-                    td.style.wordBreak = 'keep-all';
-                }
+                if(cellIdx > 2) td.style.textAlign = 'center';
             } else {
                 if(cellIdx > 0) td.style.textAlign = 'center'; 
             }
@@ -2130,4 +2117,4 @@ window.applyCurrentValue = function() {
 
     if(typeof window.infRenderTable === 'function') window.infRenderTable();
     alert(`✅ 잔가율 및 현재가액 산출 완료!\n- 총 ${applyCount}건의 현재가액이 계산되었습니다.`);
-};};
+};
