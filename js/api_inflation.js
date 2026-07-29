@@ -7,7 +7,6 @@
 // ============================================================================
 window.infState = {
     mode: 'location',
-    progressionMode: 'global', // ★ 진행 방식 저장 (global: 일괄 진행, independent: 개별 진행)
     tabs: [],
     activeTab: '',
     step: 1, // 1: 정제, 2: 구분, 3: 평가
@@ -24,7 +23,7 @@ window.infState = {
     foldingLevel: 3, 
     lastClickedRow: -1,
     lastClickedCol: -1,
-    pastYear: null // 과거 데이터 연도 저장
+    pastYear: null
 };
 
 // CSS 동적 추가
@@ -49,24 +48,6 @@ window.infState = {
     document.head.appendChild(style);
 })();
 
-// ★ 진행 방식(스위치) 변경 함수
-window.setProgressionMode = function(mode) {
-    window.infState.progressionMode = mode;
-    
-    // UI에 있는 모든 라디오 버튼 동기화
-    document.querySelectorAll('input[type="radio"][value="'+mode+'"]').forEach(r => {
-        if(r.name.startsWith('progMode_')) r.checked = true;
-    });
-
-    if (mode === 'global') {
-        const currentStep = window.infState.step || 1;
-        for (let t in window.infState.data) window.infState.data[t].step = currentStep;
-        alert("✅ [전체 일괄 진행] 모드 적용\n- 단계를 이동하면 모든 사업장 탭이 같은 화면으로 함께 이동합니다.");
-    } else {
-        alert("✅ [사업장별 개별 진행] 모드 적용\n- 각 탭별로 작업 중인 단계가 독립적으로 저장됩니다.\n- 탭을 전환하면 해당 사업장이 머물러있던 단계 화면으로 자동 전환됩니다.");
-    }
-};
-
 window.infInitTabs = function() {
     const modeObj = document.querySelector('input[name="infMode"]:checked');
     if(!modeObj) return;
@@ -80,34 +61,16 @@ window.infInitTabs = function() {
     if(tabContainers.length === 0) return;
     
     tabContainers.forEach((container, cIdx) => {
-        // ★ 탭 바로 위에 '진행 방식 스위치' 동적 주입
+        // 혹시 남아있을 수 있는 스위치 UI 찌꺼기 제거
         const parentId = container.parentElement.id || ('sec_' + cIdx);
-        if (!document.getElementById('progModeContainer_' + parentId)) {
-            const progDiv = document.createElement('div');
-            progDiv.id = 'progModeContainer_' + parentId;
-            progDiv.style.cssText = 'margin-bottom: 12px; padding: 10px 15px; background: #e8f0fe; border: 1px solid #c2dbfe; border-radius: 6px; display: flex; justify-content: flex-start; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);';
-            
-            const isGlobal = window.infState.progressionMode !== 'independent';
-            
-            progDiv.innerHTML = `
-                <strong style="color:#0056b3; margin-right:25px; font-size:14px;"><i class="fa-solid fa-shuffle"></i> 탭 진행 방식 선택 :</strong>
-                <label style="margin-right: 25px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size:14px;">
-                    <input type="radio" name="progMode_${parentId}" value="global" ${isGlobal ? 'checked' : ''} onchange="window.setProgressionMode(this.value)"> 
-                    <span><b>전체 일괄 진행</b> (모든 탭 동시 이동)</span>
-                </label>
-                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size:14px;">
-                    <input type="radio" name="progMode_${parentId}" value="independent" ${!isGlobal ? 'checked' : ''} onchange="window.setProgressionMode(this.value)"> 
-                    <span><b>사업장별 개별 진행</b> (독립 작업)</span>
-                </label>
-            `;
-            container.parentElement.insertBefore(progDiv, container);
-        }
+        const oldProgDiv = document.getElementById('progModeContainer_' + parentId);
+        if(oldProgDiv) oldProgDiv.remove();
 
         container.innerHTML = '';
         
         window.infState.tabs.forEach((tabName, idx) => {
-            // 각 탭별로 현재 step을 저장할 공간 할당
             if(!window.infState.data[tabName]) {
+                // ★ 각 탭마다 현재 단계를 기억할 변수(step) 추가
                 window.infState.data[tabName] = { raw: [], history: [], selectedRows: new Set(), selectedCols: new Set(), hasSubtotal: false, step: 1 };
             }
             
@@ -130,13 +93,11 @@ window.infInitTabs = function() {
 
                 window.infState.activeTab = tabName;
                 
-                // ★ 독립 진행 모드일 경우: 해당 탭이 기억하는 단계로 화면 강제 점프!
-                if (window.infState.progressionMode === 'independent') {
-                    const targetStep = window.infState.data[tabName].step || 1;
-                    if (window.infState.step !== targetStep) {
-                        if (typeof switchSection === 'function') switchSection('sec-2-3-' + targetStep);
-                        window.infState.step = targetStep;
-                    }
+                // ★ 탭을 누르면, 해당 탭이 저장해둔 단계로 화면 강제 이동 (완벽 독립 진행)
+                const targetStep = window.infState.data[tabName].step || 1;
+                if (window.infState.step !== targetStep) {
+                    if (typeof switchSection === 'function') switchSection('sec-2-3-' + targetStep);
+                    window.infState.step = targetStep;
                 }
 
                 if(typeof window.infRenderTable === 'function') window.infRenderTable();
@@ -250,7 +211,7 @@ window.infFinishMapping = function() {
     const mappedCols = wiz.columns.map(name => ({ name, oldIdx: wiz.mapped[name] })).filter(mc => mc.oldIdx !== undefined);
     
     if (mappedCols.length === 0) return alert("매칭된 열이 하나도 없습니다. 최소 1개 이상 항목을 엑셀 열과 매칭해주세요.");
-    if (!confirm(`[${window.infState.activeTab}] 탭의 열 매칭을 완료하시겠습니까?\n매칭되지 않은 불필요한 열은 자동으로 삭제됩니다.`)) return;
+    if (!confirm(`[${window.infState.activeTab}] 탭의 열 매칭을 완료하시겠습니까?\n매칭되지 않은 불필요한 열은 모두 자동으로 삭제됩니다.`)) return;
 
     if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
 
@@ -278,36 +239,10 @@ window.infFinishMapping = function() {
     wiz.mapped = {};
     finalColumns.forEach((colName, idx) => { wiz.mapped[colName] = idx; });
 
-    // ★ [핵심 수정] 진행 방식이 '전체 일괄 진행(global)'일 때만 데이터를 다른 탭으로 자동 찢어줍니다.
-    // '사업장별 개별 진행(independent)' 모드라면 오직 현재 탭에만 데이터를 저장합니다.
-    if (window.infState.mode === 'location' && window.infState.progressionMode === 'global') {
-        const distributed = {};
-        window.infState.tabs.forEach(tab => distributed[tab] = []);
-        
-        mappedRaw.forEach(row => {
-            const rowLoc = String(row[0] || '').trim(); // 0번째 열이 '소재지'
-            if (!rowLoc) return; // 빈 행 무시
-            
-            let matchedTab = window.infState.tabs.find(tab => rowLoc.includes(tab) || tab.includes(rowLoc));
-            if (matchedTab) {
-                distributed[matchedTab].push(row);
-            } else {
-                distributed[window.infState.activeTab].push(row);
-            }
-        });
-        
-        window.infState.tabs.forEach(tab => {
-            if(window.infState.data[tab]) {
-                window.infState.data[tab].raw = distributed[tab];
-            }
-        });
-        tData.raw = distributed[window.infState.activeTab];
-        alert("✅ 소재지별 데이터 자동 분리 완료!");
-    } else {
-        // 개별 진행 모드인 경우 현재 작업 중인 탭에만 매핑 결과를 저장합니다.
-        tData.raw = mappedRaw;
-        alert(`✅ [${window.infState.activeTab}] 데이터 개별 매핑 완료!`);
-    }
+    // ★ [핵심] 다른 탭으로 자동 찢어주는 로직 완전 삭제. 
+    // 오직 사용자가 현재 작업 중인 탭에만 데이터를 독점 저장합니다.
+    tData.raw = mappedRaw;
+    alert(`✅ [${window.infState.activeTab}] 엑셀 데이터 매핑 완료!`);
     
     wiz.phase = 'row-delete';
     wiz.activeTarget = '';
@@ -340,12 +275,11 @@ window.infUpdateStatusBadges = function() {
     
     if(!step1 || !step2 || !step3) return;
 
-    // ★ 뱃지가 이미 '완료' 상태였는지 메모리(파일 불러오기 시 초기화 완벽 방어)
+    // ★ 파일 불러오기 시 '완료' 뱃지 상태 강제 초기화 방어
     const isS1Complete = step1.querySelector('.status-badge') && step1.querySelector('.status-badge').innerText === '완료';
     const isS2Complete = step2.querySelector('.status-badge') && step2.querySelector('.status-badge').innerText === '완료';
     const isS3Complete = step3.querySelector('.status-badge') && step3.querySelector('.status-badge').innerText === '완료';
 
-    // 뱃지 일괄 초기화
     [step1, step2, step3].forEach(el => {
         const badge = el.querySelector('.status-badge');
         if(badge) { badge.className = 'status-badge status-wait'; badge.innerText = '대기'; }
@@ -508,16 +442,9 @@ window.infRenderTable = function() {
     
     window.infState.step = currentSection;
 
-    // ★ 현재 머물고 있는 단계를 활성 탭에 영구 저장 (독립 진행 모드를 위한 핵심)
+    // ★ 활성 탭에 현재 단계를 영구 저장 (독립 진행을 위한 핵심 기능)
     if (window.infState.activeTab && window.infState.data[window.infState.activeTab]) {
         window.infState.data[window.infState.activeTab].step = currentSection;
-        
-        // 일괄 진행 모드라면 다른 모든 탭의 단계도 강제로 동기화
-        if (window.infState.progressionMode === 'global') {
-            for (let t in window.infState.data) {
-                window.infState.data[t].step = currentSection;
-            }
-        }
     }
 
     window.infUpdateStatusBadges();
@@ -1000,11 +927,11 @@ document.addEventListener('keydown', function(e) {
         if(typeof window.infRenderTable === 'function') window.infRenderTable();
     }
     
-    // ★ [핵심 수정] 행/열 삭제 로직 (Delete, Backspace 키 연동 및 인풋박스 방어)
+    // ★ [핵심] 행/열 삭제 로직 (Delete 키, Backspace 키 연동 및 인풋박스 삭제 시 행 날아감 방어)
     const isDeleteKey = e.key === 'Delete' || e.key === 'Backspace' || ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_'));
     
     if (isDeleteKey) {
-        // 인풋 박스(텍스트 입력칸) 안에서 글씨를 지우는 중이라면 행 삭제 무시
+        // 인풋 박스(텍스트 입력칸) 안에서 글씨를 지우는 중이라면 행 전체 삭제 방지
         const activeTag = document.activeElement.tagName.toUpperCase();
         if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
 
