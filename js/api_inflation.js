@@ -526,9 +526,12 @@ window.infRenderTable = function() {
     const tData = window.infState.data[window.infState.activeTab];
     if(!tData || !tData.raw || tData.raw.length === 0) return;
 
-    let currentSection = 1;
+    // ★ 수정: 현재 화면이 물가보정 화면이 아니더라도, 저장된 스텝(infState.step)을 유지하도록 방어
+    let currentSection = window.infState.step || 1; 
+    if (document.getElementById('sec-2-3-1') && document.getElementById('sec-2-3-1').classList.contains('active')) currentSection = 1;
     if (document.getElementById('sec-2-3-2') && document.getElementById('sec-2-3-2').classList.contains('active')) currentSection = 2;
     if (document.getElementById('sec-2-3-3') && document.getElementById('sec-2-3-3').classList.contains('active')) currentSection = 3;
+    
     window.infState.step = currentSection;
 
     window.infUpdateStatusBadges();
@@ -653,7 +656,6 @@ window.infRenderTable = function() {
         step3Cols.forEach(colName => {
             let topButtonHtml = `<div style="height:25px; margin-bottom:6px;"></div>`;
             
-            // ★ 수정완료: [물가지수], [감가율], [잔가율] 헤더 위에 각각 버튼 부활 및 배치 완료
             if (colName === '물가지수') {
                 topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#007BFF; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="event.stopPropagation(); window.applyInflationIndex()"><i class="fa-solid fa-bolt"></i> 지수/재조달 계산</button>`;
             } else if (colName === '감가율') {
