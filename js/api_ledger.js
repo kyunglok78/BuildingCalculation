@@ -114,6 +114,7 @@ async function simulateApiFetch() {
     const dataContainer = document.getElementById('fetchedDataContainer');
     const tabsContainer = document.getElementById('slide3Tabs');
     
+    // 현재 UI 요소에 맞게 행을 가져옵니다.
     const tbody = document.getElementById('locationTbody');
     const rows = tbody ? tbody.querySelectorAll('tr') : [];
     
@@ -144,24 +145,22 @@ async function simulateApiFetch() {
             const kakaoJson = await kakaoRes.json();
             if(!kakaoJson.documents || kakaoJson.documents.length === 0) throw new Error("조회할 수 없는 주소 형식입니다.");
             
-            const addressDoc = kakaoJson.documents[0].address;
-            if (!addressDoc || !addressDoc.b_code) {
-                throw new Error("정확한 지번(법정동) 정보를 찾을 수 없는 주소입니다.");
-            }
-            
-            const bCode = addressDoc.b_code; 
+            // ★ 과거 파일의 매우 안정적이었던 카카오 주소 파싱 로직 100% 복원
+            const doc = kakaoJson.documents[0].address || kakaoJson.documents[0].road_address;
+            const sigunguCd = doc.h_code ? doc.h_code.substring(0, 5) : "00000";
+            const bjdongCd = doc.b_code ? doc.b_code.substring(5) : "00000";
             const codes = {
-                sigunguCd: bCode.substring(0, 5), 
-                bjdongCd: bCode.substring(5, 10), 
-                // [핵심 수정] 산지/대지 구분 코드 명확화 (0:대지, 1:산)
-                platGbCd: addressDoc.mountain_yn === 'Y' ? '1' : '0',  
-                bun: (addressDoc.main_address_no || '').padStart(4, '0'), 
-                ji: (addressDoc.sub_address_no || '').padStart(4, '0') 
+                sigunguCd: sigunguCd, 
+                bjdongCd: bjdongCd, 
+                platGbCd: doc.mountain_yn === 'Y' ? '2' : '0',  
+                bun: (doc.main_address_no || '').padStart(4, '0'), 
+                ji: doc.sub_address_no ? doc.sub_address_no.padStart(4, '0') : '0000' 
             };
             
             const fetchEndpoint = async (endpoint, colMap) => {
                 const res = await fetch(`${baseUrl}/api/datago?endpoint=${endpoint}&sigunguCd=${codes.sigunguCd}&bjdongCd=${codes.bjdongCd}&platGbCd=${codes.platGbCd}&bun=${codes.bun}&ji=${codes.ji}`);
-                if(!res.ok) throw new Error(`[500 에러] Vercel 프록시 또는 정부 서버 통신 오류`);
+                // 예전처럼 정부 서버 통신 오류 메시지를 부드럽게 표시합니다.
+                if(!res.ok) throw new Error(`서버 통신 실패 (HTTP ${res.status}) - 정부 서버 지연 중`);
                 return parseXMLToJSON(await res.text(), colMap);
             };
             
