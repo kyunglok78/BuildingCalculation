@@ -653,8 +653,10 @@ window.infRenderTable = function() {
         step3Cols.forEach(colName => {
             let topButtonHtml = `<div style="height:25px; margin-bottom:6px;"></div>`;
             
-            // ★ 수정사항: 감가율과 잔가율 위에 버튼을 정확히 배치하고 명칭 변경 적용 완료
-            if (colName === '감가율') {
+            // ★ 수정완료: [물가지수], [감가율], [잔가율] 헤더 위에 각각 버튼 부활 및 배치 완료
+            if (colName === '물가지수') {
+                topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#007BFF; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="event.stopPropagation(); window.applyInflationIndex()"><i class="fa-solid fa-bolt"></i> 지수/재조달 계산</button>`;
+            } else if (colName === '감가율') {
                 topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#28A745; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="event.stopPropagation(); window.openDeprBatchModal()"><i class="fa-solid fa-bolt"></i> 감가율 일괄지정(팝업)</button>`;
             } else if (colName === '잔가율') {
                 topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#17A2B8; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="event.stopPropagation(); window.applyCurrentValue()"><i class="fa-solid fa-bolt"></i> 잔가/현재 계산</button>`;
