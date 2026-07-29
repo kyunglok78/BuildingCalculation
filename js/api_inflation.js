@@ -7,6 +7,7 @@
 // ============================================================================
 window.infState = {
     mode: 'location',
+    progressionMode: 'global', // ★ 진행 방식 저장 (global: 일괄 진행, independent: 개별 진행)
     tabs: [],
     activeTab: '',
     step: 1, // 1: 정제, 2: 구분, 3: 평가
@@ -43,14 +44,29 @@ window.infState = {
         .fold-btn { padding: 2px 8px; border: 1px solid #94a3b8; background: #fff; cursor: pointer; font-weight: bold; font-size: 11px; border-radius: 3px; color: #64748b; }
         .fold-btn:hover { background: #e2e8f0; }
         .fold-btn.active { background: #1C5691; color: #fff; border-color: #1C5691; }
-        
-        /* ★ 화면 분리 후 이전 단계 숨김 로직에 의해 패널이 사라지는 현상 완벽 방어 */
         #infStep1Panel { display: block !important; }
     `;
     document.head.appendChild(style);
 })();
 
-// 화면 분리에 맞춰 다중 탭 컨테이너 지원하도록 업데이트됨
+// ★ 진행 방식(스위치) 변경 함수
+window.setProgressionMode = function(mode) {
+    window.infState.progressionMode = mode;
+    
+    // UI에 있는 모든 라디오 버튼 동기화
+    document.querySelectorAll('input[type="radio"][value="'+mode+'"]').forEach(r => {
+        if(r.name.startsWith('progMode_')) r.checked = true;
+    });
+
+    if (mode === 'global') {
+        const currentStep = window.infState.step || 1;
+        for (let t in window.infState.data) window.infState.data[t].step = currentStep;
+        alert("✅ [전체 일괄 진행] 모드 적용\n- 단계를 이동하면 모든 사업장 탭이 같은 화면으로 함께 이동합니다.");
+    } else {
+        alert("✅ [사업장별 개별 진행] 모드 적용\n- 각 탭별로 작업 중인 단계가 독립적으로 저장됩니다.\n- 탭을 전환하면 해당 사업장이 머물러있던 단계 화면으로 자동 전환됩니다.");
+    }
+};
+
 window.infInitTabs = function() {
     const modeObj = document.querySelector('input[name="infMode"]:checked');
     if(!modeObj) return;
@@ -60,25 +76,47 @@ window.infInitTabs = function() {
     
     if(window.infState.tabs.length === 0) window.infState.tabs = ['기본 사업장'];
 
-    // 분리된 3개 화면의 탭 컨테이너 모두 선택
     const tabContainers = document.querySelectorAll('.infTabsContainer');
     if(tabContainers.length === 0) return;
     
-    tabContainers.forEach(container => {
+    tabContainers.forEach((container, cIdx) => {
+        // ★ 탭 바로 위에 '진행 방식 스위치' 동적 주입
+        const parentId = container.parentElement.id || ('sec_' + cIdx);
+        if (!document.getElementById('progModeContainer_' + parentId)) {
+            const progDiv = document.createElement('div');
+            progDiv.id = 'progModeContainer_' + parentId;
+            progDiv.style.cssText = 'margin-bottom: 12px; padding: 10px 15px; background: #e8f0fe; border: 1px solid #c2dbfe; border-radius: 6px; display: flex; justify-content: flex-start; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);';
+            
+            const isGlobal = window.infState.progressionMode !== 'independent';
+            
+            progDiv.innerHTML = `
+                <strong style="color:#0056b3; margin-right:25px; font-size:14px;"><i class="fa-solid fa-shuffle"></i> 탭 진행 방식 선택 :</strong>
+                <label style="margin-right: 25px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size:14px;">
+                    <input type="radio" name="progMode_${parentId}" value="global" ${isGlobal ? 'checked' : ''} onchange="window.setProgressionMode(this.value)"> 
+                    <span><b>전체 일괄 진행</b> (모든 탭 동시 이동)</span>
+                </label>
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size:14px;">
+                    <input type="radio" name="progMode_${parentId}" value="independent" ${!isGlobal ? 'checked' : ''} onchange="window.setProgressionMode(this.value)"> 
+                    <span><b>사업장별 개별 진행</b> (독립 작업)</span>
+                </label>
+            `;
+            container.parentElement.insertBefore(progDiv, container);
+        }
+
         container.innerHTML = '';
         
         window.infState.tabs.forEach((tabName, idx) => {
+            // 각 탭별로 현재 step을 저장할 공간 할당
             if(!window.infState.data[tabName]) {
-                window.infState.data[tabName] = { raw: [], history: [], selectedRows: new Set(), selectedCols: new Set(), hasSubtotal: false };
+                window.infState.data[tabName] = { raw: [], history: [], selectedRows: new Set(), selectedCols: new Set(), hasSubtotal: false, step: 1 };
             }
             
             const tabBtn = document.createElement('div');
             tabBtn.innerText = tabName;
             tabBtn.className = 'inf-tab-btn';
-            tabBtn.style.cssText = `padding:10px 20px; cursor:pointer; font-weight:normal; border:1px solid #e2e8f0; border-bottom:none; border-radius:4px 4px 0 0; margin-right:5px; background:#f1f5f9; color:#94a3b8;`;
+            tabBtn.style.cssText = `padding:10px 20px; cursor:pointer; font-weight:normal; border:1px solid #e2e8f0; border-bottom:none; border-radius:4px 4px 0 0; margin-right:5px; background:#f1f5f9; color:#94a3b8; transition:0.2s;`;
             
             tabBtn.onclick = () => {
-                // 클릭 시 모든 화면의 탭 UI 동기화
                 document.querySelectorAll('.inf-tab-btn').forEach(c => { 
                     c.style.background = '#f1f5f9'; c.style.color = '#94a3b8'; c.style.fontWeight = 'normal'; c.style.borderColor = '#e2e8f0'; 
                 });
@@ -91,24 +129,31 @@ window.infInitTabs = function() {
                 });
 
                 window.infState.activeTab = tabName;
+                
+                // ★ 독립 진행 모드일 경우: 해당 탭이 기억하는 단계로 화면 강제 점프!
+                if (window.infState.progressionMode === 'independent') {
+                    const targetStep = window.infState.data[tabName].step || 1;
+                    if (window.infState.step !== targetStep) {
+                        if (typeof switchSection === 'function') switchSection('sec-2-3-' + targetStep);
+                        window.infState.step = targetStep;
+                    }
+                }
+
                 if(typeof window.infRenderTable === 'function') window.infRenderTable();
             };
             container.appendChild(tabBtn);
             
-            // 첫 번째 탭 초기화 활성화
-            if(idx === 0) {
+            if(idx === 0 && window.infState.activeTab === '') {
+                tabBtn.style.background = '#1C5691'; tabBtn.style.color = '#ffffff'; tabBtn.style.fontWeight = 'bold'; tabBtn.style.borderColor = '#1C5691';
+                window.infState.activeTab = tabName;
+            } else if (window.infState.activeTab === tabName) {
                 tabBtn.style.background = '#1C5691'; tabBtn.style.color = '#ffffff'; tabBtn.style.fontWeight = 'bold'; tabBtn.style.borderColor = '#1C5691';
             }
         });
     });
-    
-    if(window.infState.tabs.length > 0) {
-        window.infState.activeTab = window.infState.tabs[0];
-    }
 };
 
 document.addEventListener("DOMContentLoaded", () => {
-    // ★ 3개로 분리된 사이드바 메뉴 클릭 시 백지 현상 방지 (다시 그리기)
     const infMenu1 = document.getElementById('nav-sec-2-3-1');
     const infMenu2 = document.getElementById('nav-sec-2-3-2');
     const infMenu3 = document.getElementById('nav-sec-2-3-3');
