@@ -193,11 +193,11 @@ window.infLoadExcel = function(event) {
             document.getElementById('btnStartWizard').style.display = 'inline-block';
             document.getElementById('btnFinishMapping').style.display = 'none';
             document.getElementById('infMappingButtons').style.display = 'none';
-            document.getElementById('infWizardText').innerHTML = `🎯 원본 데이터를 불러왔습니다. 우측의 <b>'열 매핑 마법사 시작'</b>을 눌러주세요.`;
+            document.getElementById('infWizardText').innerHTML = `🎯 [${tabName}] 원본 데이터를 불러왔습니다. 우측의 <b>'열 매핑 마법사 시작'</b>을 눌러주세요.`;
             const btnNext = document.getElementById('btnInfNextStep');
             if(btnNext) btnNext.style.display = 'none';
             
-            infRenderTable();
+            if(typeof infRenderTable === 'function') infRenderTable();
         } catch(err) { alert("엑셀 로드 오류: " + err); }
     };
     reader.readAsArrayBuffer(file);
@@ -216,13 +216,13 @@ window.infStartWizard = function() {
     document.getElementById('infMappingButtons').style.display = 'flex';
     document.getElementById('infWizardText').innerHTML = `🎯 아래 버튼 중 하나를 선택하고, 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭하세요. (없는 항목은 무시하세요)`;
     
-    infUpdateWizardUI();
-    infRenderTable();
+    if(typeof infUpdateWizardUI === 'function') infUpdateWizardUI();
+    if(typeof infRenderTable === 'function') infRenderTable();
 };
 
 window.infSetMappingTarget = function(colName) {
     window.infState.wizard.activeTarget = colName;
-    infUpdateWizardUI();
+    if(typeof infUpdateWizardUI === 'function') infUpdateWizardUI();
 };
 
 window.infUpdateWizardUI = function() {
@@ -238,7 +238,7 @@ window.infUpdateWizardUI = function() {
         const btn = document.createElement('button');
         btn.innerText = colName + (isMapped ? ' ✓' : '');
         btn.className = `wiz-btn ${isActive ? 'active' : (isMapped ? 'mapped' : 'default')}`;
-        btn.onclick = () => infSetMappingTarget(colName);
+        btn.onclick = () => window.infSetMappingTarget(colName);
         btnContainer.appendChild(btn);
     });
 };
@@ -250,7 +250,7 @@ window.infFinishMapping = function() {
     const mappedCols = wiz.columns.map(name => ({ name, oldIdx: wiz.mapped[name] })).filter(mc => mc.oldIdx !== undefined);
     
     if (mappedCols.length === 0) return alert("매칭된 열이 하나도 없습니다. 최소 1개 이상 항목을 엑셀 열과 매칭해주세요.");
-    if (!confirm("매칭되지 않은 불필요한 열은 모두 자동으로 삭제됩니다.\n'행 지우기' 단계로 넘어가시겠습니까?")) return;
+    if (!confirm(`[${window.infState.activeTab}] 탭의 열 매칭을 완료하시겠습니까?\n매칭되지 않은 불필요한 열은 자동으로 삭제됩니다.`)) return;
 
     if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
 
@@ -278,8 +278,9 @@ window.infFinishMapping = function() {
     wiz.mapped = {};
     finalColumns.forEach((colName, idx) => { wiz.mapped[colName] = idx; });
 
-    // ★ [핵심 복구] 소재지별 평가 모드일 경우 데이터를 각 탭으로 자동 분리(찢기)
-    if (window.infState.mode === 'location') {
+    // ★ [핵심 수정] 진행 방식이 '전체 일괄 진행(global)'일 때만 데이터를 다른 탭으로 자동 찢어줍니다.
+    // '사업장별 개별 진행(independent)' 모드라면 오직 현재 탭에만 데이터를 저장합니다.
+    if (window.infState.mode === 'location' && window.infState.progressionMode === 'global') {
         const distributed = {};
         window.infState.tabs.forEach(tab => distributed[tab] = []);
         
@@ -303,13 +304,15 @@ window.infFinishMapping = function() {
         tData.raw = distributed[window.infState.activeTab];
         alert("✅ 소재지별 데이터 자동 분리 완료!");
     } else {
+        // 개별 진행 모드인 경우 현재 작업 중인 탭에만 매핑 결과를 저장합니다.
         tData.raw = mappedRaw;
+        alert(`✅ [${window.infState.activeTab}] 데이터 개별 매핑 완료!`);
     }
     
     wiz.phase = 'row-delete';
     wiz.activeTarget = '';
     
-    document.getElementById('infWizardText').innerHTML = `🧹 1.5단계: 각 탭을 돌아다니며 불필요한 행(빈 줄, 합계 등)을 <b>[Ctrl + -]</b> 단축키로 지우시고, <b>우측 하단의 '부분합 및 정렬' 버튼</b>을 눌러 명세서를 검증하세요.`;
+    document.getElementById('infWizardText').innerHTML = `🧹 1.5단계: 불필요한 행(빈 줄, 합계 등)을 선택 후 <b>[Delete]</b> 키로 지우시고, <b>우측 하단의 '부분합 및 정렬' 버튼</b>을 눌러주세요.`;
     document.getElementById('btnFinishMapping').style.display = 'none';
     document.getElementById('infMappingButtons').style.display = 'none';
     
@@ -323,69 +326,8 @@ window.infFinishMapping = function() {
     
     tData.selectedCols.clear();
     tData.selectedRows.clear();
-    infRenderTable();
+    if(typeof infRenderTable === 'function') infRenderTable();
 };
-
-window.infProceedToStep2 = function() {
-    window.infState.step = 2;
-    document.getElementById('infStep1Panel').style.display = 'none';
-    document.getElementById('infStep2Panel').style.display = 'block';
-    document.getElementById('infStep3Panel').style.display = 'none';
-    
-    const btnNext = document.getElementById('btnInfNextStep');
-    if(btnNext) btnNext.style.display = 'none';
-    const btnToStep3 = document.getElementById('btnInfToStep3');
-    if(btnToStep3) btnToStep3.style.display = 'inline-block';
-    const btnComplete = document.getElementById('btnInfComplete');
-    if(btnComplete) btnComplete.style.display = 'none';
-    infRenderTable();
-};
-
-window.infProceedToStep3 = function() {
-    window.infState.step = 3;
-    document.getElementById('infStep1Panel').style.display = 'none';
-    document.getElementById('infStep2Panel').style.display = 'none';
-    document.getElementById('infStep3Panel').style.display = 'block';
-    
-    const btnNext = document.getElementById('btnInfNextStep');
-    if(btnNext) btnNext.style.display = 'none';
-    const btnToStep3 = document.getElementById('btnInfToStep3');
-    if(btnToStep3) btnToStep3.style.display = 'none';
-    const btnComplete = document.getElementById('btnInfComplete');
-    if(btnComplete) btnComplete.style.display = 'inline-block';
-    infRenderTable();
-};
-
-window.infBackToStep1 = function() {
-    window.infState.step = 1;
-    document.getElementById('infStep1Panel').style.display = 'block';
-    document.getElementById('infStep2Panel').style.display = 'none';
-    document.getElementById('infStep3Panel').style.display = 'none';
-    
-    const btnNext = document.getElementById('btnInfNextStep');
-    if(btnNext) btnNext.style.display = 'inline-block';
-    const btnToStep3 = document.getElementById('btnInfToStep3');
-    if(btnToStep3) btnToStep3.style.display = 'none';
-    const btnComplete = document.getElementById('btnInfComplete');
-    if(btnComplete) btnComplete.style.display = 'none';
-    infRenderTable(); 
-};
-
-window.infBackToStep2 = function() {
-    window.infState.step = 2;
-    document.getElementById('infStep1Panel').style.display = 'none';
-    document.getElementById('infStep2Panel').style.display = 'block';
-    document.getElementById('infStep3Panel').style.display = 'none';
-    
-    const btnNext = document.getElementById('btnInfNextStep');
-    if(btnNext) btnNext.style.display = 'none';
-    const btnToStep3 = document.getElementById('btnInfToStep3');
-    if(btnToStep3) btnToStep3.style.display = 'inline-block';
-    const btnComplete = document.getElementById('btnInfComplete');
-    if(btnComplete) btnComplete.style.display = 'none';
-    infRenderTable(); 
-};
-
 
 // ============================================================================
 // [섹션 4] 상태 표시/스텝 전환 및 테이블 렌더링 엔진 (다중 화면 연동)
@@ -398,12 +340,12 @@ window.infUpdateStatusBadges = function() {
     
     if(!step1 || !step2 || !step3) return;
 
-    // ★ 기존에 '완료' 상태였는지 기억해둡니다. (파일 불러오기 시 강제 초기화 방어)
+    // ★ 뱃지가 이미 '완료' 상태였는지 메모리(파일 불러오기 시 초기화 완벽 방어)
     const isS1Complete = step1.querySelector('.status-badge') && step1.querySelector('.status-badge').innerText === '완료';
     const isS2Complete = step2.querySelector('.status-badge') && step2.querySelector('.status-badge').innerText === '완료';
     const isS3Complete = step3.querySelector('.status-badge') && step3.querySelector('.status-badge').innerText === '완료';
 
-    // 초기화
+    // 뱃지 일괄 초기화
     [step1, step2, step3].forEach(el => {
         const badge = el.querySelector('.status-badge');
         if(badge) { badge.className = 'status-badge status-wait'; badge.innerText = '대기'; }
@@ -433,7 +375,6 @@ window.infUpdateStatusBadges = function() {
 window.infUpdateStepper = function() {
     const wiz = window.infState.wizard;
     
-    // 1단계 스텝바 업데이트
     if (window.infState.step === 1) {
         const el1 = document.getElementById('step-1-1');
         const el2 = document.getElementById('step-1-2');
@@ -441,46 +382,36 @@ window.infUpdateStepper = function() {
         if(el1) el1.style.color = '#1C5691';
         if(el2) el2.style.color = (wiz.phase === 'mapping' || wiz.phase === 'row-delete') ? '#1C5691' : '#999';
         if(el3) el3.style.color = window.infState.data[window.infState.activeTab]?.hasSubtotal ? '#1C5691' : '#999';
-    }
-    // 2단계 스텝바 업데이트
-    else if (window.infState.step === 2) {
+    } else if (window.infState.step === 2) {
         const el1 = document.getElementById('step-2-1');
         const el2 = document.getElementById('step-2-2');
         const el3 = document.getElementById('step-2-3');
         const el4 = document.getElementById('step-2-4');
         const el5 = document.getElementById('step-2-5');
-        
         const mappedColCount = Object.keys(wiz.mapped).length;
         const finalIdx = mappedColCount + 4;
-        
         let hasFinal = false;
         const tData = window.infState.data[window.infState.activeTab];
         if (tData && tData.raw) {
             hasFinal = tData.raw.some(r => String(r[finalIdx] || '').replace(/null/gi, '').trim() !== '');
         }
-
         if(el1) el1.style.color = '#1C5691';
         if(el2) el2.style.color = '#1C5691';
         if(el3) el3.style.color = '#1C5691';
         if(el4) el4.style.color = '#1C5691';
         if(el5) el5.style.color = hasFinal ? '#1C5691' : '#999';
-    }
-    // 3단계 스텝바 업데이트
-    else if (window.infState.step === 3) {
+    } else if (window.infState.step === 3) {
         const el1 = document.getElementById('step-3-1');
         const el2 = document.getElementById('step-3-2');
         const el3 = document.getElementById('step-3-3');
         const el4 = document.getElementById('step-3-4');
-        
         const mappedColCount = Object.keys(wiz.mapped).length;
         const currentValIdx = mappedColCount + 9;
-        
         let hasCurrentVal = false;
         const tData = window.infState.data[window.infState.activeTab];
         if (tData && tData.raw) {
             hasCurrentVal = tData.raw.some(r => String(r[currentValIdx] || '').replace(/null/gi, '').trim() !== '' && String(r[currentValIdx] || '').trim() !== '-');
         }
-
         if(el1) el1.style.color = '#1C5691';
         if(el2) el2.style.color = '#1C5691';
         if(el3) el3.style.color = '#1C5691';
@@ -516,17 +447,14 @@ window.infUpdateCellData = function(rIdx, cIdx, val) {
 
 window.syncToFinal = function(rIdx, finalCIdx, val, currentCIdx) {
     if (!val) return; 
-    
     const tData = window.infState.data[window.infState.activeTab];
     if(tData && tData.raw[rIdx]) {
         tData.raw[rIdx][finalCIdx] = val; 
-        
         const finalInput = document.getElementById(`infInput_${rIdx}_${finalCIdx}`);
         if (finalInput) {
             finalInput.value = val; 
             finalInput.parentElement.style.backgroundColor = '#ffe5e5'; 
         }
-        
         if (currentCIdx !== undefined) {
             const startIdx = finalCIdx - 4;
             for (let i = 0; i < 4; i++) {
@@ -542,20 +470,16 @@ window.syncToFinal = function(rIdx, finalCIdx, val, currentCIdx) {
 
 window.infHandleInputKey = function(e, rIdx, cIdx) {
     const tData = window.infState.data[window.infState.activeTab];
-    let nextR = rIdx;
-    let nextC = cIdx;
-    let shouldMove = false;
+    let nextR = rIdx, nextC = cIdx, shouldMove = false;
 
     if (e.key === 'Enter' || e.key === 'ArrowDown') {
-        shouldMove = true;
-        nextR++;
+        shouldMove = true; nextR++;
         while (nextR < tData.raw.length) {
             if (document.getElementById(`infInput_${nextR}_${nextC}`)) break;
             nextR++;
         }
     } else if (e.key === 'ArrowUp') {
-        shouldMove = true;
-        nextR--;
+        shouldMove = true; nextR--;
         while (nextR >= 0) {
             if (document.getElementById(`infInput_${nextR}_${nextC}`)) break;
             nextR--;
@@ -568,11 +492,7 @@ window.infHandleInputKey = function(e, rIdx, cIdx) {
 
     if (shouldMove) {
         let nextEl = document.getElementById(`infInput_${nextR}_${nextC}`);
-        if (nextEl) {
-            e.preventDefault();
-            nextEl.focus();
-            nextEl.select(); 
-        }
+        if (nextEl) { e.preventDefault(); nextEl.focus(); nextEl.select(); }
     }
 };
 
@@ -587,6 +507,18 @@ window.infRenderTable = function() {
     if (document.getElementById('sec-2-3-3') && document.getElementById('sec-2-3-3').classList.contains('active')) currentSection = 3;
     
     window.infState.step = currentSection;
+
+    // ★ 현재 머물고 있는 단계를 활성 탭에 영구 저장 (독립 진행 모드를 위한 핵심)
+    if (window.infState.activeTab && window.infState.data[window.infState.activeTab]) {
+        window.infState.data[window.infState.activeTab].step = currentSection;
+        
+        // 일괄 진행 모드라면 다른 모든 탭의 단계도 강제로 동기화
+        if (window.infState.progressionMode === 'global') {
+            for (let t in window.infState.data) {
+                window.infState.data[t].step = currentSection;
+            }
+        }
+    }
 
     window.infUpdateStatusBadges();
     window.infUpdateStepper();
@@ -754,7 +686,6 @@ window.infRenderTable = function() {
 
         for(let c = 0; c < colCount; c++) {
             const isColSel = tData.selectedCols.has(c) ? 'inf-sel-col' : '';
-            // ★ "null" 텍스트 완벽하게 빈칸 처리
             let cellVal = (row[c] !== undefined && row[c] !== null && String(row[c]).toLowerCase() !== "null") ? row[c] : '';
             let align = 'left';
             
@@ -880,7 +811,6 @@ window.infRenderTable = function() {
     });
 };
 
-
 // ============================================================================
 // [섹션 5] 정렬/부분합, 히스토리, 단축키 로직 및 행 추가 로직
 // ============================================================================
@@ -888,7 +818,7 @@ window.infAddEmptyRow = function() {
     const tData = window.infState.data[window.infState.activeTab];
     if(!tData || !tData.raw || tData.raw.length === 0) return;
 
-    infSaveHistory();
+    if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
 
     const wiz = window.infState.wizard;
     const mappedKeys = Object.keys(wiz.mapped);
@@ -913,7 +843,7 @@ window.infAddEmptyRow = function() {
     tData.selectedRows.clear();
     tData.selectedRows.add(insertIdx);
     
-    infRenderTable();
+    if(typeof window.infRenderTable === 'function') window.infRenderTable();
 };
 
 window.infCalculateSubtotals = function(isSilent) {
@@ -933,14 +863,14 @@ window.infCalculateSubtotals = function(isSilent) {
         return;
     }
 
-    if (!silent) infSaveHistory();
+    if (!silent && typeof window.infSaveHistory === 'function') window.infSaveHistory();
 
     const cleanRaw = tData.raw.filter(row => !String(row[yearIdx] || '').includes('소계') && !String(row[yearIdx] || '').includes('총계'));
 
     if (cleanRaw.length === 0) {
         tData.raw = [];
         tData.hasSubtotal = false;
-        if (!silent) infRenderTable();
+        if (!silent && typeof window.infRenderTable === 'function') window.infRenderTable();
         return;
     }
 
@@ -1023,13 +953,13 @@ window.infCalculateSubtotals = function(isSilent) {
     if (btnNext) {
         btnNext.innerHTML = '명세서 검증 완료 및 2.3.2(자산구분)로 전환 ▶';
         btnNext.style.backgroundColor = '#17A2B8';
-        btnNext.onclick = window.infProceedToStep2;
+        if(typeof window.infProceedToStep2 === 'function') btnNext.onclick = window.infProceedToStep2;
     }
     
     tData.selectedRows.clear();
     tData.selectedCols.clear();
     
-    if (!silent) infRenderTable();
+    if (!silent && typeof window.infRenderTable === 'function') window.infRenderTable();
 };
 
 window.infSaveHistory = function() {
@@ -1039,7 +969,6 @@ window.infSaveHistory = function() {
 };
 
 document.addEventListener('keydown', function(e) {
-    // ★ 3분할된 물가보정 화면 ID를 모두 감지하여 단축키가 작동하게 함
     const sec1 = document.getElementById('sec-2-3-1');
     const sec2 = document.getElementById('sec-2-3-2');
     const sec3 = document.getElementById('sec-2-3-3');
@@ -1051,6 +980,7 @@ document.addEventListener('keydown', function(e) {
     const tData = window.infState.data[window.infState.activeTab];
     if(!tData) return;
 
+    // 되돌리기(Undo) 로직
     if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
         if(tData.history.length === 0) return alert("더 이상 되돌릴 작업이 없습니다.");
@@ -1067,13 +997,20 @@ document.addEventListener('keydown', function(e) {
                 btnNext.onclick = () => window.infCalculateSubtotals(false);
             }
         }
-        infRenderTable();
+        if(typeof window.infRenderTable === 'function') window.infRenderTable();
     }
     
-    // 행/열 삭제 로직 (동적 재계산 지원)
-    if ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_')) {
-        e.preventDefault();
+    // ★ [핵심 수정] 행/열 삭제 로직 (Delete, Backspace 키 연동 및 인풋박스 방어)
+    const isDeleteKey = e.key === 'Delete' || e.key === 'Backspace' || ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_'));
+    
+    if (isDeleteKey) {
+        // 인풋 박스(텍스트 입력칸) 안에서 글씨를 지우는 중이라면 행 삭제 무시
+        const activeTag = document.activeElement.tagName.toUpperCase();
+        if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
+
         if (tData.selectedRows.size === 0 && tData.selectedCols.size === 0) return;
+        
+        e.preventDefault();
         if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
         
         if (tData.selectedRows.size > 0) {
@@ -1088,9 +1025,10 @@ document.addEventListener('keydown', function(e) {
         if (tData.hasSubtotal && typeof window.infCalculateSubtotals === 'function') {
             window.infCalculateSubtotals(true); 
         }
-        infRenderTable();
+        if(typeof window.infRenderTable === 'function') window.infRenderTable();
     }
 });
+
 
 // ============================================================================
 // [섹션 6] 과거 데이터 연동 매칭 알고리즘
