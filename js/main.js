@@ -733,6 +733,7 @@ window.quickSaveProject = function() {
             };
         });
 
+        // ★ 수정: kbState 내의 평가지수(inflationSheets)와 단가표(indexData)를 명시적으로 저장
         const projectData = {
             version: "2.1", 
             contractor: contractorName,
@@ -745,6 +746,8 @@ window.quickSaveProject = function() {
             targetKfpaSite: window.targetKfpaSite || "",
             targetKfpaAddress: window.targetKfpaAddress || "",
             kbState: window.kbState,
+            inflationSheets: window.kbState.inflationSheets || null,
+            indexData: window.kbState.indexData || null,
             infState: window.infState || null 
         };
 
@@ -774,14 +777,17 @@ window.quickLoadProject = function(event) {
         try {
             const projectData = JSON.parse(e.target.result);
             
-            // 1. 기존 건물평가 데이터 복구
+            // 1. 기존 건물평가 데이터 및 평가지수(물가지수) 완벽 복구
             if (projectData.kbState) window.kbState = projectData.kbState;
+            if (projectData.inflationSheets) window.kbState.inflationSheets = projectData.inflationSheets;
+            if (projectData.indexData) window.kbState.indexData = projectData.indexData;
+            
             if (projectData.tempKfpaDataStore) window.tempKfpaDataStore = projectData.tempKfpaDataStore;
             else window.tempKfpaDataStore = {};
             if (projectData.targetKfpaSite) window.targetKfpaSite = projectData.targetKfpaSite;
             if (projectData.targetKfpaAddress) window.targetKfpaAddress = projectData.targetKfpaAddress;
 
-            // ★ 1.5 대장 불러오기 화면 데이터 렌더링 강제 실행 수정 (HTML을 완전히 초기화하고 다시 그리도록 지시)
+            // 1.5 대장 불러오기 화면 데이터 렌더링 강제 실행
             setTimeout(() => {
                 if (window.kbState && window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
                     const emptyMsg = document.getElementById('emptyStateMsg');
@@ -789,7 +795,7 @@ window.quickLoadProject = function(event) {
                     if (emptyMsg) emptyMsg.style.display = 'none';
                     if (dataCont) {
                         dataCont.style.display = 'block';
-                        dataCont.innerHTML = ''; // 강제로 비우고 새로 그림
+                        dataCont.innerHTML = ''; 
                     }
                     if (typeof window.renderSlide3Tabs === 'function') window.renderSlide3Tabs();
                 }

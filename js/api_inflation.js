@@ -348,25 +348,30 @@ window.infUpdateStatusBadges = function() {
     
     if(!step1 || !step2 || !step3) return;
 
-    if (window.infState.data && Object.keys(window.infState.data).length > 0) {
+    // 초기화
+    [step1, step2, step3].forEach(el => {
+        const badge = el.querySelector('.status-badge');
+        if(badge) { badge.className = 'status-badge status-wait'; badge.innerText = '대기'; }
+    });
+
+    if (window.infState.step === 1) {
+        const tData = window.infState.data[window.infState.activeTab];
+        if (tData && tData.raw && tData.raw.length > 0) {
+            step1.querySelector('.status-badge').className = 'status-badge status-ing';
+            step1.querySelector('.status-badge').innerText = '진행';
+        }
+    } else if (window.infState.step === 2) {
         step1.querySelector('.status-badge').className = 'status-badge status-complete';
         step1.querySelector('.status-badge').innerText = '완료';
-        
-        if (window.infState.step >= 2) {
-            step2.querySelector('.status-badge').className = window.infState.step === 3 ? 'status-badge status-complete' : 'status-badge status-ing';
-            step2.querySelector('.status-badge').innerText = window.infState.step === 3 ? '완료' : '진행';
-        } else {
-            step2.querySelector('.status-badge').className = 'status-badge status-wait';
-            step2.querySelector('.status-badge').innerText = '대기';
-        }
-
-        if (window.infState.step === 3) {
-            step3.querySelector('.status-badge').className = 'status-badge status-ing';
-            step3.querySelector('.status-badge').innerText = '진행';
-        } else {
-            step3.querySelector('.status-badge').className = 'status-badge status-wait';
-            step3.querySelector('.status-badge').innerText = '대기';
-        }
+        step2.querySelector('.status-badge').className = 'status-badge status-ing';
+        step2.querySelector('.status-badge').innerText = '진행';
+    } else if (window.infState.step === 3) {
+        step1.querySelector('.status-badge').className = 'status-badge status-complete';
+        step1.querySelector('.status-badge').innerText = '완료';
+        step2.querySelector('.status-badge').className = 'status-badge status-complete';
+        step2.querySelector('.status-badge').innerText = '완료';
+        step3.querySelector('.status-badge').className = 'status-badge status-ing';
+        step3.querySelector('.status-badge').innerText = '진행';
     }
 };
 
@@ -521,7 +526,6 @@ window.infRenderTable = function() {
     const tData = window.infState.data[window.infState.activeTab];
     if(!tData || !tData.raw || tData.raw.length === 0) return;
 
-    // 현재 화면(섹션)이 무엇인지 파악
     let currentSection = 1;
     if (document.getElementById('sec-2-3-2') && document.getElementById('sec-2-3-2').classList.contains('active')) currentSection = 2;
     if (document.getElementById('sec-2-3-3') && document.getElementById('sec-2-3-3').classList.contains('active')) currentSection = 3;
@@ -530,7 +534,6 @@ window.infRenderTable = function() {
     window.infUpdateStatusBadges();
     window.infUpdateStepper();
 
-    // 3개 화면에 있는 표의 tbody, thead를 모두 찾아서 현재 보고있는 곳만 업데이트
     const theads = document.querySelectorAll('.infTheadGlobal');
     const tbodys = document.querySelectorAll('.infTbodyGlobal');
     
@@ -650,11 +653,11 @@ window.infRenderTable = function() {
         step3Cols.forEach(colName => {
             let topButtonHtml = `<div style="height:25px; margin-bottom:6px;"></div>`;
             
-            // ★ 클릭 이벤트 충돌 방지: event.stopPropagation() 유지
-            if (colName === '물가지수') {
-                topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#007BFF; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="event.stopPropagation(); window.applyInflationIndex()"><i class="fa-solid fa-bolt"></i> 지수/재조달 계산</button>`;
-            } else if (colName === '감가율') {
-                topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#28A745; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="event.stopPropagation(); window.applyCurrentValue()"><i class="fa-solid fa-bolt"></i> 감가/현재 계산</button>`;
+            // ★ 수정사항: 감가율과 잔가율 위에 버튼을 정확히 배치하고 명칭 변경 적용 완료
+            if (colName === '감가율') {
+                topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#28A745; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="event.stopPropagation(); window.openDeprBatchModal()"><i class="fa-solid fa-bolt"></i> 감가율 일괄지정(팝업)</button>`;
+            } else if (colName === '잔가율') {
+                topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#17A2B8; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="event.stopPropagation(); window.applyCurrentValue()"><i class="fa-solid fa-bolt"></i> 잔가/현재 계산</button>`;
             }
 
             headerTr.innerHTML += `<th style="background:#e9ecef; color:#1C5691; border:1px solid #ccc; padding:8px 4px; text-align:center; vertical-align:bottom; min-width:90px;">
