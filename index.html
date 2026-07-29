@@ -204,14 +204,25 @@
             <!-- 왼쪽: 감가율 및 잔가율 입력 폼 영역 (가로 길이 고정으로 짤림 완벽 방지) -->
             <div style="flex: 0 0 450px; padding: 20px; display: flex; flex-direction: column; border-right: 1px solid #ccc;">
                 <p style="font-size:13px; color:#555; margin-bottom:10px; line-height:1.4;">👉 <b>감가율(%)</b>과 하한선이 되는 <b>최종 잔가율(%)</b>을 기입해 주세요. 우측의 엑셀 표준 감가율 기준표를 참고하시면 편리합니다.</p>
+                
                 <div style="flex: 1; overflow-y: auto; background:#fff; border:1px solid #ddd; border-radius:4px; margin-bottom: 15px;">
-                    <table class="data-table" style="margin-bottom:0; width: 100%;">
+                    <table class="data-table" style="margin-bottom:0; width: 100%; table-layout: fixed;">
+                        <colgroup>
+                            <col style="width: 46%;"> <!-- 자산계정 항목 폭 150% 수준으로 확장 -->
+                            <col style="width: 27%;"> <!-- 감가율 입력 폭 축소 -->
+                            <col style="width: 27%;"> <!-- 최종 잔가율 폭 축소 -->
+                        </colgroup>
                         <thead style="position: sticky; top: 0; z-index: 1; background: #eee;">
-                            <tr><th>자산계정 항목</th><th>감가율 입력 (%)</th><th>최종 잔가율(%)</th></tr>
+                            <tr>
+                                <th style="padding: 8px 4px; font-size: 13px;">자산계정 항목</th>
+                                <th style="padding: 8px 4px; font-size: 13px;">감가율 입력(%)</th>
+                                <th style="padding: 8px 4px; font-size: 13px;">최종 잔가율(%)</th>
+                            </tr>
                         </thead>
                         <tbody id="deprBatchTbody"></tbody>
                     </table>
                 </div>
+
                 <div style="text-align: right; flex-shrink: 0;">
                     <button type="button" class="btn-dark" style="background:#17A2B8; padding:10px 25px; border:none; font-size:14px; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.2);" onclick="window.applyDeprBatch()">⚡ 일괄 적용하기</button>
                 </div>
