@@ -1439,7 +1439,7 @@ window.saveRules = function() {
 };
 
 // ============================================================================
-// [섹션 9] 3단계 가액평가 일괄 계산 및 감가율 모달 로직
+// [섹션 9] 3단계 가액평가 일괄 계산 및 감가율 엑셀 참고 모달 로직
 // ============================================================================
 
 window.loadIndexExcel = function(event) {
@@ -1571,6 +1571,88 @@ window.applyInflationIndex = function() {
     } catch (err) { alert("계산 중 오류가 발생했습니다.\n" + err.message); }
 };
 
+// ★ 엑셀 데이터 압축 내장 (4개 시트)
+window.DEPR_REF_DATA = {
+    sheet1: {
+        head: `<tr><th rowspan="2" style="background:#e9ecef;">건물 구조별</th><th colspan="2" style="background:#d1e7dd;">우기 이외 (일반건물)</th><th colspan="2" style="background:#ffe69c;">창고, 공장</th><th colspan="2" style="background:#f8d7da;">특수건물 (냉장, 화학 등)</th></tr>
+               <tr><th style="background:#d1e7dd;">내용연수</th><th style="background:#d1e7dd;">감가율(%)</th><th style="background:#ffe69c;">내용연수</th><th style="background:#ffe69c;">감가율(%)</th><th style="background:#f8d7da;">내용연수</th><th style="background:#f8d7da;">감가율(%)</th></tr>`,
+        body: [
+            ["철골·철근콘크리트조, 철근콘크리트조", "75", "1.07", "57", "1.40", "38", "2.11"],
+            ["철골조, 석조, 연와석조", "60", "1.33", "45", "1.78", "30", "2.67"],
+            ["콘크리트, 연와, 벽돌, 보강블럭, 목조(한식)", "50", "1.60", "38", "2.11", "25", "3.20"],
+            ["블럭조, 경량철골, 단열판넬, 목조(절충식)", "40", "2.00", "30", "2.67", "20", "4.00"],
+            ["토조, 토벽조, 목골몰탈조", "30", "2.67", "23", "3.48", "15", "5.33"],
+            ["간이목조, 간이철재 파이프, 컨테이너", "10", "8.00", "7", "11.43", "7", "11.43"]
+        ]
+    },
+    sheet2: {
+        head: `<tr><th rowspan="2" style="background:#e9ecef;">구축물 구조별</th><th colspan="2" style="background:#d1e7dd;">일반 구축물</th><th colspan="2" style="background:#f8d7da;">가혹한 구축물 (하수도, 굴뚝 등)</th></tr>
+               <tr><th style="background:#d1e7dd;">내용연수</th><th style="background:#d1e7dd;">감가율(%)</th><th style="background:#f8d7da;">내용연수</th><th style="background:#f8d7da;">감가율(%)</th></tr>`,
+        body: [
+            ["철골·철근콘크리트조, 철근콘크리트조", "75", "1.07", "38", "2.11"],
+            ["철골조, 석조, 연와석조", "60", "1.33", "30", "2.67"],
+            ["콘크리트, 연와, 벽돌, 보강블럭조", "45", "1.78", "23", "3.48"],
+            ["블록조, 경량철골, 단열판넬, 목조", "38", "2.11", "18", "4.45"],
+            ["토조, 토벽조, 목골몰탈조", "30", "2.67", "15", "5.33"]
+        ]
+    },
+    sheet3: {
+        head: `<tr><th style="background:#e9ecef;">업종 대분류</th><th style="background:#e9ecef;">주요 포함 업종</th><th style="background:#d1e7dd;">추정 내용연수</th><th style="background:#ffe69c;">경년 감가율(%)</th></tr>`,
+        body: [
+            ["농업, 임업 및 어업", "작물재배, 축산, 조경 등", "8년 ~ 30년", "10.0 ~ 2.67"],
+            ["광업", "석탄, 원유, 비금속 광업 등", "8년 ~ 15년", "10.0 ~ 5.33"],
+            ["제조업 (식음료/담배)", "식료품, 음료, 담배 제조", "12년 ~ 15년", "6.67 ~ 5.33"],
+            ["제조업 (섬유/의복/가죽)", "방적, 봉제, 신발 가죽 제조", "10년 ~ 12년", "8.00 ~ 6.67"],
+            ["제조업 (목재/종이/인쇄)", "목재가공, 펄프, 종이, 인쇄", "10년 ~ 15년", "8.00 ~ 5.33"],
+            ["제조업 (화학/의약/고무)", "화학물질, 의약품, 플라스틱", "6년 ~ 12년", "13.33 ~ 6.67"],
+            ["제조업 (금속/기계장비)", "1차금속, 금속가공, 일반기계", "12년 ~ 15년", "6.67 ~ 5.33"],
+            ["제조업 (전자/통신/의료)", "반도체, 전자부품, 통신장비", "6년 ~ 12년", "13.33 ~ 6.67"],
+            ["제조업 (운송/가구/기타)", "자동차, 선박, 철도, 가구", "10년 ~ 12년", "8.00 ~ 6.67"],
+            ["전기, 가스, 증기, 수도", "전기, 가스, 난방, 수도사업", "30년", "2.67"],
+            ["건설, 폐기물, 환경복원", "건물/토목 건설, 하수/폐기물", "10년 ~ 12년", "8.00 ~ 6.67"],
+            ["도소매, 운수, 창고업", "자동차판매, 소매, 육/해상운송", "8년 ~ 24년", "10.0 ~ 3.33"],
+            ["숙박, 음식점, 정보통신", "호텔, 음식점, 출판, 방송, IT", "10년", "8.00"],
+            ["금융, 부동산, 임대업", "은행, 부동산, 임대, 법무 등", "6년 ~ 10년", "13.33 ~ 8.00"],
+            ["교육, 보건, 공공행정", "학교, 병원, 복지시설, 공공기관", "8년 ~ 10년", "10.0 ~ 8.00"],
+            ["예술, 스포츠, 수리업", "도서관, 유원지, 단체, 기계수리", "8년 ~ 10년", "10.0 ~ 8.00"]
+        ]
+    },
+    sheet4: {
+        head: `<tr><th style="background:#e9ecef;">세목 (공기구 종류)</th><th style="background:#d1e7dd;">내용연수(년)</th><th style="background:#ffe69c;">경년 감가율(%)</th></tr>`,
+        body: [
+            ["유압, 전동, 수동 공기구와 금속제의 공기구 등", "8", "10.0"],
+            ["금형, 주형 및 금속제모형의 틀 및 기타 이와 유사한 것", "5", "16.0"],
+            ["목형, 지형 및 비금속제모형, 틀, 필름, 활자 등", "4", "20.0"]
+        ]
+    }
+};
+
+// ★ 엑셀 데이터 뷰어 탭 전환 스크립트
+window.switchDeprRefTab = function(tabIndex) {
+    document.querySelectorAll('.ref-tab-btn').forEach((btn, idx) => {
+        btn.className = (idx === tabIndex - 1) ? 'ref-tab-btn active' : 'ref-tab-btn';
+    });
+
+    const thead = document.getElementById('deprRefThead');
+    const tbody = document.getElementById('deprRefTbody');
+    const data = window.DEPR_REF_DATA['sheet' + tabIndex];
+    
+    thead.innerHTML = data.head;
+    tbody.innerHTML = '';
+    
+    data.body.forEach(row => {
+        const tr = document.createElement('tr');
+        row.forEach((cell, cellIdx) => {
+            const td = document.createElement('td');
+            td.innerText = cell;
+            if(cellIdx > 0 && tabIndex !== 3) td.style.textAlign = 'center'; 
+            else if (tabIndex === 3 && cellIdx > 1) td.style.textAlign = 'center';
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+};
+
 window.openDeprBatchModal = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
@@ -1619,12 +1701,16 @@ window.openDeprBatchModal = function() {
         `;
     });
 
+    // ★ 팝업이 열릴 때 우측 엑셀 뷰어의 '1. 건물' 탭을 기본으로 띄워줌
+    if(typeof window.switchDeprRefTab === 'function') {
+        window.switchDeprRefTab(1);
+    }
+
     const modal = document.getElementById('deprBatchModal');
     if(modal) modal.style.display = 'flex';
     else alert("감가율 팝업창 HTML 코드가 index.html에 추가되지 않았습니다.");
 };
 
-// 3. 팝업에서 입력한 감가율 및 최종 잔가율 값을 데이터에 저장 (부보/평가제외 방어)
 window.applyDeprBatch = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
@@ -1632,7 +1718,7 @@ window.applyDeprBatch = function() {
     const yearIdx = wiz.mapped['취득년도'];
     
     const mappedColCount = Object.keys(wiz.mapped).length;
-    const finalIdx = mappedColCount + 4; // ★ 최종 구분 열
+    const finalIdx = mappedColCount + 4; // 최종 구분 열
     const deprIdx = mappedColCount + 7;  // 감가율 열
 
     const inputMap = {};
@@ -1661,7 +1747,7 @@ window.applyDeprBatch = function() {
         if (inputMap[acc] !== undefined && inputMap[acc] !== "") {
             const inputVal = inputMap[acc];
 
-            // ★ 부보제외 또는 평가제외인 경우 감가율 강제 제외(-) 처리
+            // 부보제외 또는 평가제외인 경우 감가율 강제 제외(-) 처리
             if (finalVal.includes('부보제외') || finalVal.includes('평가제외')) {
                 row[deprIdx] = '-';
             } 
@@ -1676,10 +1762,9 @@ window.applyDeprBatch = function() {
 
     document.getElementById('deprBatchModal').style.display = 'none';
     if(typeof window.infRenderTable === 'function') window.infRenderTable(); 
-    alert(`✅ 총 ${applyCount}건의 감가율 및 최종 잔가율 기준이 저장되었습니다.\n표 상단의 [⚡ 감가/현재 계산] 버튼을 클릭해 가액을 산출해 주세요.`);
+    alert(`✅ 총 ${applyCount}건의 감가율 및 최종 잔가율 기준이 저장되었습니다.\n표 상단의 [⚡ 잔가/현재 계산] 버튼을 클릭해 가액을 산출해 주세요.`);
 };
 
-// 4. 감가율 기반 잔가율 및 현재가액 일괄 계산 (하한선 방어 및 예외항목 완벽 처리)
 window.applyCurrentValue = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
@@ -1718,7 +1803,7 @@ window.applyCurrentValue = function() {
         const repCostStr = String(row[replacementIdx] || '').replace(/,/g, '');
         const deprStr = String(row[deprIdx] || '').replace(/,/g, ''); 
         
-        // ★ 부보제외거나 재조달가액이 없는 경우 강제 제외
+        // 부보제외거나 재조달가액이 없는 경우 강제 제외
         if (finalVal.includes('부보제외') || repCostStr === '-' || repCostStr === '') { 
             row[deprIdx] = '-'; 
             row[residualIdx] = '-'; 
@@ -1730,7 +1815,7 @@ window.applyCurrentValue = function() {
         const acqYear = parseInt(yearVal);
         const deprRate = Number(deprStr);
 
-        // ★ 평가제외인 경우 강제 유지 (현재가액 = 재조달가액)
+        // 평가제외인 경우 강제 유지 (현재가액 = 재조달가액)
         if (finalVal.includes('평가제외')) {
             row[deprIdx] = '-';
             row[residualIdx] = '-';

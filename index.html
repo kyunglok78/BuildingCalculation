@@ -191,29 +191,68 @@
     </div>
 </div>
 
-<!-- 3-5. 감가율 일괄 지정 팝업창 -->
+<!-- 3-5. 감가율 일괄 지정 팝업창 (엑셀 참고 데이터 연동 버전) -->
 <div class="modal-overlay" id="deprBatchModal" style="display:none; z-index: 1000; justify-content: center; align-items: center;">
-    <div class="modal-content" style="width: 700px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
-        <div class="modal-header" style="background:#28A745; color:white; padding:15px; display: flex; justify-content: space-between; align-items: center;">
+    <div class="modal-content" style="width: 1100px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2); display: flex; flex-direction: column;">
+        <div class="modal-header" style="background:#28A745; color:white; padding:15px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
             <span style="font-weight:bold;"><i class="fa-solid fa-wand-magic-sparkles"></i> 자산계정별 감가율 및 최종 잔가율 일괄 지정</span>
             <i class="fa-solid fa-xmark modal-close" style="cursor:pointer; font-size:18px;" onclick="document.getElementById('deprBatchModal').style.display='none'"></i>
         </div>
-        <div class="modal-body" style="padding: 20px; background:#f4f5f7;">
-            <p style="font-size:13px; color:#555; margin-bottom:10px;">👉 <b>감가율(%)</b>과 하한선이 되는 <b>최종 잔가율(%)</b>을 확인하고 기입해 주세요. 산출된 잔가율은 최종 잔가율 밑으로 내려가지 않습니다.</p>
-            <div style="max-height: 350px; overflow-y: auto; background:#fff; border:1px solid #ddd; border-radius:4px; margin-bottom: 15px;">
-                <table class="data-table" style="margin-bottom:0;">
-                    <thead style="position: sticky; top: 0; z-index: 1; background: #eee;">
-                        <tr><th>자산계정 항목</th><th>감가율 입력 (%)</th><th>최종 잔가율 (하한선 %)</th></tr>
-                    </thead>
-                    <tbody id="deprBatchTbody"></tbody>
-                </table>
+        <div class="modal-body" style="padding: 0; display: flex; flex-direction: row; height: 500px; background: #f4f5f7;">
+
+            <!-- 왼쪽: 감가율 및 잔가율 입력 폼 영역 -->
+            <div style="flex: 1.2; padding: 20px; display: flex; flex-direction: column; border-right: 1px solid #ccc;">
+                <p style="font-size:13px; color:#555; margin-bottom:10px; line-height:1.4;">👉 <b>감가율(%)</b>과 하한선이 되는 <b>최종 잔가율(%)</b>을 기입해 주세요. 우측의 엑셀 표준 감가율 기준표를 참고하시면 편리합니다.</p>
+                <div style="flex: 1; overflow-y: auto; background:#fff; border:1px solid #ddd; border-radius:4px; margin-bottom: 15px;">
+                    <table class="data-table" style="margin-bottom:0;">
+                        <thead style="position: sticky; top: 0; z-index: 1; background: #eee;">
+                            <tr><th>자산계정 항목</th><th>감가율 입력 (%)</th><th>최종 잔가율 (하한선 %)</th></tr>
+                        </thead>
+                        <tbody id="deprBatchTbody"></tbody>
+                    </table>
+                </div>
+                <div style="text-align: right; flex-shrink: 0;">
+                    <button type="button" class="btn-dark" style="background:#17A2B8; padding:10px 25px; border:none; font-size:14px; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.2);" onclick="window.applyDeprBatch()">⚡ 일괄 적용하기</button>
+                </div>
             </div>
-            <div style="text-align: right;">
-                <button type="button" class="btn-dark" style="background:#17A2B8; padding:8px 25px; border:none; font-size:14px;" onclick="window.applyDeprBatch()">⚡ 일괄 적용하기</button>
+
+            <!-- 오른쪽: 엑셀 데이터 시트 뷰어 영역 -->
+            <div style="flex: 1.8; padding: 20px; display: flex; flex-direction: column; background: #fff;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px; border-bottom: 2px solid #28A745; padding-bottom: 5px;">
+                    <span style="font-size:14px; font-weight:bold; color:#166534;"><i class="fa-solid fa-file-excel" style="color:#28A745;"></i> [참고용] 표준 감가율 기준표</span>
+                </div>
+                <!-- 4개 시트 탭 메뉴 -->
+                <div style="display:flex; gap: 5px; margin-bottom: 10px;" id="deprRefTabs">
+                    <button type="button" class="ref-tab-btn active" onclick="switchDeprRefTab(1)">1. 건물</button>
+                    <button type="button" class="ref-tab-btn" onclick="switchDeprRefTab(2)">2. 구축물</button>
+                    <button type="button" class="ref-tab-btn" onclick="switchDeprRefTab(3)">3. 업종별 요약(기계/비품)</button>
+                    <button type="button" class="ref-tab-btn" onclick="switchDeprRefTab(4)">4. 공기구</button>
+                </div>
+                <!-- 테이블 영역 -->
+                <div style="flex: 1; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; background: #fafafa;">
+                    <table class="data-table" style="margin-bottom:0; font-size: 12px; white-space: nowrap;">
+                        <thead id="deprRefThead" style="position: sticky; top: 0; z-index: 1; background: #e9ecef; color: #333;">
+                            <!-- 헤더 JS 렌더링 -->
+                        </thead>
+                        <tbody id="deprRefTbody" style="background: #fff;">
+                            <!-- 바디 JS 렌더링 -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
+
         </div>
     </div>
 </div>
+
+<style>
+    .ref-tab-btn { flex: 1; padding: 8px 0; border: 1px solid #ccc; background: #f8f9fa; color: #555; font-weight: bold; font-size: 12px; cursor: pointer; border-radius: 4px; transition: 0.2s; }
+    .ref-tab-btn:hover { background: #e2e8f0; }
+    .ref-tab-btn.active { background: #28A745; color: #fff; border-color: #28A745; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); }
+    #deprRefThead th { text-align: center; border: 1px solid #ccc; padding: 6px; font-weight: bold; background: #e9ecef; }
+    #deprRefTbody td { border: 1px solid #eee; padding: 6px 8px; }
+</style>
+
 
 <!-- 3-6. 예외 항목 마스터 데이터 관리 모달 -->
 <div class="modal-overlay" id="ruleManagerModal" style="display:none; z-index: 1000; justify-content: center; align-items: center;">
