@@ -733,7 +733,6 @@ window.quickSaveProject = function() {
             };
         });
 
-        // ★ 수정: kbState 내의 평가지수(inflationSheets)와 단가표(indexData)를 명시적으로 저장
         const projectData = {
             version: "2.1", 
             contractor: contractorName,
@@ -760,7 +759,7 @@ window.quickSaveProject = function() {
         a.href = url;
         
         const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, "");
-        a.download = `${contractorName || '통합가액평가'}_임시저장_${dateStr}.kbproj`;
+        a.download = `${contractorName || '통합가액평가'}_저장파일_${dateStr}.kbproj`;
         a.click();
         URL.revokeObjectURL(url);
     } catch (e) {
@@ -775,9 +774,15 @@ window.quickLoadProject = function(event) {
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
-            const projectData = JSON.parse(e.target.result);
+            // ★ 모든 null 과 "null" 텍스트를 빈칸("")으로 완벽하게 자동 청소하며 로드
+            const projectData = JSON.parse(e.target.result, function(key, value) {
+                if (value === null || String(value).toLowerCase() === "null" || String(value) === "nan") {
+                    return "";
+                }
+                return value;
+            });
             
-            // 1. 기존 건물평가 데이터 및 평가지수(물가지수) 완벽 복구
+            // 1. 기존 건물평가 데이터 및 평가지수 복구
             if (projectData.kbState) window.kbState = projectData.kbState;
             if (projectData.inflationSheets) window.kbState.inflationSheets = projectData.inflationSheets;
             if (projectData.indexData) window.kbState.indexData = projectData.indexData;
@@ -787,7 +792,7 @@ window.quickLoadProject = function(event) {
             if (projectData.targetKfpaSite) window.targetKfpaSite = projectData.targetKfpaSite;
             if (projectData.targetKfpaAddress) window.targetKfpaAddress = projectData.targetKfpaAddress;
 
-            // 1.5 대장 불러오기 화면 데이터 렌더링 강제 실행
+            // 1.5 대장 데이터 강제 렌더링 (화면이 숨겨져 있어도 무조건 그리도록 지시)
             setTimeout(() => {
                 if (window.kbState && window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
                     const emptyMsg = document.getElementById('emptyStateMsg');
@@ -807,7 +812,7 @@ window.quickLoadProject = function(event) {
             if (projectData.unitCostPath) { const u = document.getElementById('unitCostPath'); if(u) u.value = projectData.unitCostPath; }
             if (projectData.priceIndexPath) { const p = document.getElementById('priceIndexPath'); if(p) p.value = projectData.priceIndexPath; }
 
-            // 3. 1.1 소재지 등록 테이블 복구 (탭 생성을 위해 가장 먼저 복구되어야 함)
+            // 3. 1.1 소재지 등록 테이블 복구
             const tbody = document.getElementById('locationTbody');
             if (tbody) {
                 tbody.innerHTML = ''; 
@@ -836,7 +841,6 @@ window.quickLoadProject = function(event) {
             if (projectData.infState) {
                 window.infState = projectData.infState;
                 
-                // JSON 변환 시 소실된 Set 객체(선택 영역) 재생성
                 if (window.infState.data) {
                     for (const tab in window.infState.data) {
                         window.infState.data[tab].selectedRows = new Set();
@@ -844,7 +848,6 @@ window.quickLoadProject = function(event) {
                     }
                 }
 
-                // UI 라디오 버튼 복구
                 const modeRadios = document.querySelectorAll('input[name="infMode"]');
                 if(modeRadios.length > 0) {
                     modeRadios.forEach(r => r.checked = (r.value === window.infState.mode));
@@ -856,20 +859,16 @@ window.quickLoadProject = function(event) {
                 
                 if (typeof window.infInitTabs === 'function' && window.infState.tabs && window.infState.tabs.length > 0) {
                     setTimeout(() => {
+                        ['sec-2-3-1', 'sec-2-3-2', 'sec-2-3-3'].forEach(id => {
+                            const el = document.getElementById(id);
+                            if(el) el.classList.remove('active');
+                        });
+                        const activeSec = document.getElementById('sec-2-3-' + window.infState.step);
+                        if(activeSec) activeSec.classList.add('active');
+
                         window.infInitTabs();
-                        
-                        if (window.infState.step === 2) {
-                            if (document.getElementById('sec-2-3-1')) document.getElementById('sec-2-3-1').classList.remove('active');
-                            if (document.getElementById('sec-2-3-3')) document.getElementById('sec-2-3-3').classList.remove('active');
-                            if (document.getElementById('sec-2-3-2')) document.getElementById('sec-2-3-2').classList.add('active');
-                        } else if (window.infState.step === 3) {
-                            if (document.getElementById('sec-2-3-1')) document.getElementById('sec-2-3-1').classList.remove('active');
-                            if (document.getElementById('sec-2-3-2')) document.getElementById('sec-2-3-2').classList.remove('active');
-                            if (document.getElementById('sec-2-3-3')) document.getElementById('sec-2-3-3').classList.add('active');
-                        }
-                        
                         if (typeof window.infRenderTable === 'function') window.infRenderTable();
-                    }, 500);
+                    }, 900); 
                 }
             } else {
                 window.infState = { mode: 'location', tabs: [], activeTab: '', step: 1, data: {}, wizard: { active: false, phase: 'idle', columns: ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득일', '취득가액'], activeTarget: '', mapped: {} }, foldingLevel: 3, lastClickedRow: -1, lastClickedCol: -1, pastYear: null };
@@ -894,7 +893,7 @@ window.quickLoadProject = function(event) {
 
             if (typeof runGroupedRenderTest === 'function') runGroupedRenderTest();
 
-            alert("✅ 모든 가액평가 데이터(물가보정 포함)가 완벽하게 복구되었습니다!");
+            alert("✅ 모든 데이터가 완벽하게 복구되었습니다!");
         } catch (err) {
             alert("⚠️ 파일 형식이 잘못되었거나 손상된 파일입니다.\n(에러: " + err.message + ")");
         }

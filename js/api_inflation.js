@@ -108,17 +108,22 @@ window.infInitTabs = function() {
 };
 
 document.addEventListener("DOMContentLoaded", () => {
-    // 3개로 분리된 사이드바 메뉴 각각에 이벤트 리스너 부착
+    // ★ 3개로 분리된 사이드바 메뉴 클릭 시 백지 현상 방지 (다시 그리기)
     const infMenu1 = document.getElementById('nav-sec-2-3-1');
     const infMenu2 = document.getElementById('nav-sec-2-3-2');
     const infMenu3 = document.getElementById('nav-sec-2-3-3');
     
-    const initFn = () => { if(window.infState.tabs.length === 0) window.infInitTabs(); };
+    const initFn = (step) => { 
+        if(window.infState.tabs.length === 0) window.infInitTabs(); 
+        window.infState.step = step;
+        setTimeout(() => { if(typeof window.infRenderTable === 'function') window.infRenderTable(); }, 150);
+    };
     
-    if(infMenu1) infMenu1.addEventListener('click', initFn);
-    if(infMenu2) infMenu2.addEventListener('click', initFn);
-    if(infMenu3) infMenu3.addEventListener('click', initFn);
+    if(infMenu1) infMenu1.addEventListener('click', () => initFn(1));
+    if(infMenu2) infMenu2.addEventListener('click', () => initFn(2));
+    if(infMenu3) infMenu3.addEventListener('click', () => initFn(3));
 });
+
 
 // ============================================================================
 // [섹션 3] 엑셀 로드 및 1단계 매핑 마법사 로직
@@ -401,7 +406,7 @@ window.infUpdateStepper = function() {
         let hasFinal = false;
         const tData = window.infState.data[window.infState.activeTab];
         if (tData && tData.raw) {
-            hasFinal = tData.raw.some(r => String(r[finalIdx] || '').trim() !== '');
+            hasFinal = tData.raw.some(r => String(r[finalIdx] || '').replace(/null/gi, '').trim() !== '');
         }
 
         if(el1) el1.style.color = '#1C5691';
@@ -423,7 +428,7 @@ window.infUpdateStepper = function() {
         let hasCurrentVal = false;
         const tData = window.infState.data[window.infState.activeTab];
         if (tData && tData.raw) {
-            hasCurrentVal = tData.raw.some(r => String(r[currentValIdx] || '').trim() !== '' && String(r[currentValIdx] || '').trim() !== '-');
+            hasCurrentVal = tData.raw.some(r => String(r[currentValIdx] || '').replace(/null/gi, '').trim() !== '' && String(r[currentValIdx] || '').trim() !== '-');
         }
 
         if(el1) el1.style.color = '#1C5691';
@@ -526,7 +531,6 @@ window.infRenderTable = function() {
     const tData = window.infState.data[window.infState.activeTab];
     if(!tData || !tData.raw || tData.raw.length === 0) return;
 
-    // ★ 수정: 현재 화면이 물가보정 화면이 아니더라도, 저장된 스텝(infState.step)을 유지하도록 방어
     let currentSection = window.infState.step || 1; 
     if (document.getElementById('sec-2-3-1') && document.getElementById('sec-2-3-1').classList.contains('active')) currentSection = 1;
     if (document.getElementById('sec-2-3-2') && document.getElementById('sec-2-3-2').classList.contains('active')) currentSection = 2;
@@ -675,7 +679,7 @@ window.infRenderTable = function() {
     const yearColIdx = wiz.mapped['취득년도']; 
     
     data.forEach((row, rIdx) => {
-        const yearVal = String(row[yearColIdx] || '');
+        const yearVal = String(row[yearColIdx] || '').replace(/null/gi, '');
         const isSubtotalRow = yearColIdx !== undefined && yearVal.includes('소계');
         const isGrandTotalRow = yearColIdx !== undefined && yearVal.includes('총계');
         const isDetailRow = !isSubtotalRow && !isGrandTotalRow;
@@ -700,7 +704,8 @@ window.infRenderTable = function() {
 
         for(let c = 0; c < colCount; c++) {
             const isColSel = tData.selectedCols.has(c) ? 'inf-sel-col' : '';
-            let cellVal = row[c] !== undefined ? row[c] : '';
+            // ★ 모든 셀 데이터에서 "null" 텍스트 완벽 차단
+            let cellVal = (row[c] !== undefined && row[c] !== null && String(row[c]).toLowerCase() !== "null") ? row[c] : '';
             let align = 'left';
             
             if (wiz.phase !== 'mapping' && wiz.phase !== 'idle') {
@@ -723,14 +728,15 @@ window.infRenderTable = function() {
         
         if(window.infState.step >= 2) {
             const finalDataIdx = colCount + 4;
-            const finalVal = String(row[finalDataIdx] || '').trim();
+            // ★ 최종구분, 과거구분 등에서도 "null" 완벽 방어
+            const finalVal = String(row[finalDataIdx] || '').replace(/null/gi, '').trim();
             
             let sourceMatchIdx = -1;
             if (finalVal !== '') {
-                const pastV = String(row[colCount + 0] || '').trim();
-                const basicV = String(row[colCount + 1] || '').trim();
-                const evalExV = String(row[colCount + 2] || '').trim();
-                const covExV = String(row[colCount + 3] || '').trim();
+                const pastV = String(row[colCount + 0] || '').replace(/null/gi, '').trim();
+                const basicV = String(row[colCount + 1] || '').replace(/null/gi, '').trim();
+                const evalExV = String(row[colCount + 2] || '').replace(/null/gi, '').trim();
+                const covExV = String(row[colCount + 3] || '').replace(/null/gi, '').trim();
                 
                 if (pastV === finalVal) sourceMatchIdx = colCount + 0;
                 else if (evalExV === finalVal) sourceMatchIdx = colCount + 2;
@@ -742,7 +748,7 @@ window.infRenderTable = function() {
                 if (window.infState.step === 3 && idx < 4) return;
                 
                 const dataIdx = colCount + idx;
-                const savedVal = row[dataIdx] || '';
+                const savedVal = (row[dataIdx] !== undefined && row[dataIdx] !== null && String(row[dataIdx]).toLowerCase() !== "null") ? row[dataIdx] : '';
                 
                 if (isSubtotalRow || isGrandTotalRow) {
                     rowHtml += `<td style="border:1px solid #eee; ${bgStyle}"></td>`;
@@ -775,7 +781,7 @@ window.infRenderTable = function() {
         if(window.infState.step === 3) {
             step3Cols.forEach((cName, idx) => { 
                 const dataIdx = colCount + 5 + idx; 
-                const savedVal = row[dataIdx] !== undefined ? row[dataIdx] : '';
+                const savedVal = (row[dataIdx] !== undefined && row[dataIdx] !== null && String(row[dataIdx]).toLowerCase() !== "null") ? row[dataIdx] : '';
                 
                 if (isSubtotalRow || isGrandTotalRow) {
                     let displayVal = savedVal;
