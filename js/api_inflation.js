@@ -704,7 +704,7 @@ window.infRenderTable = function() {
 
         for(let c = 0; c < colCount; c++) {
             const isColSel = tData.selectedCols.has(c) ? 'inf-sel-col' : '';
-            // ★ 모든 셀 데이터에서 "null" 텍스트 완벽 차단
+            // ★ "null" 텍스트 완벽하게 빈칸 처리
             let cellVal = (row[c] !== undefined && row[c] !== null && String(row[c]).toLowerCase() !== "null") ? row[c] : '';
             let align = 'left';
             
@@ -728,7 +728,6 @@ window.infRenderTable = function() {
         
         if(window.infState.step >= 2) {
             const finalDataIdx = colCount + 4;
-            // ★ 최종구분, 과거구분 등에서도 "null" 완벽 방어
             const finalVal = String(row[finalDataIdx] || '').replace(/null/gi, '').trim();
             
             let sourceMatchIdx = -1;
@@ -830,6 +829,7 @@ window.infRenderTable = function() {
         tbody.appendChild(tr);
     });
 };
+
 
 // ============================================================================
 // [섹션 5] 정렬/부분합, 히스토리, 단축키 로직 및 행 추가 로직

@@ -44,6 +44,23 @@ window.onload = function() {
             };
         }
     });
+
+    // ★ 2.1.1 대장 불러오기 메뉴 클릭 시 백지 현상 방지 (강제 다시 그리기)
+    const ledgerMenu = document.getElementById('nav-sec-2-1-1');
+    if (ledgerMenu) {
+        ledgerMenu.addEventListener('click', () => {
+            setTimeout(() => {
+                if (window.kbState && window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
+                    const emptyMsg = document.getElementById('emptyStateMsg');
+                    const dataCont = document.getElementById('fetchedDataContainer');
+                    if (emptyMsg) emptyMsg.style.display = 'none';
+                    if (dataCont) dataCont.style.display = 'block';
+                    if (typeof window.renderSlide3Tabs === 'function') window.renderSlide3Tabs();
+                }
+            }, 100);
+        });
+    }
+
     runGroupedRenderTest(); 
 };
 
@@ -689,7 +706,7 @@ window.batchApplyRatio = function(mode, siteName) {
 };
 
 // ============================================================================
-// [10] ★ 프로젝트 임시 저장 및 불러오기 (건물평가 + 물가보정 통합 저장 완벽 지원)
+// [10] ★ 프로젝트 저장 및 불러오기 (건물평가 + 물가보정 통합 저장 완벽 지원)
 // ============================================================================
 
 window.quickSaveProject = function() {
@@ -776,7 +793,7 @@ window.quickLoadProject = function(event) {
         try {
             // ★ 모든 null 과 "null" 텍스트를 빈칸("")으로 완벽하게 자동 청소하며 로드
             const projectData = JSON.parse(e.target.result, function(key, value) {
-                if (value === null || String(value).toLowerCase() === "null" || String(value) === "nan") {
+                if (value === null || String(value).toLowerCase() === "null" || String(value).toLowerCase() === "nan") {
                     return "";
                 }
                 return value;
@@ -792,7 +809,7 @@ window.quickLoadProject = function(event) {
             if (projectData.targetKfpaSite) window.targetKfpaSite = projectData.targetKfpaSite;
             if (projectData.targetKfpaAddress) window.targetKfpaAddress = projectData.targetKfpaAddress;
 
-            // 1.5 대장 데이터 강제 렌더링 (화면이 숨겨져 있어도 무조건 그리도록 지시)
+            // 1.5 대장 데이터 강제 렌더링 (보이지 않는 곳에서 표를 미리 그려둠)
             setTimeout(() => {
                 if (window.kbState && window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
                     const emptyMsg = document.getElementById('emptyStateMsg');
@@ -804,7 +821,7 @@ window.quickLoadProject = function(event) {
                     }
                     if (typeof window.renderSlide3Tabs === 'function') window.renderSlide3Tabs();
                 }
-            }, 800); 
+            }, 300); 
 
             // 2. UI 텍스트 박스 정보 복구
             if (projectData.contractor) document.querySelectorAll('.contractor-sync').forEach(el => el.value = projectData.contractor);
@@ -859,16 +876,9 @@ window.quickLoadProject = function(event) {
                 
                 if (typeof window.infInitTabs === 'function' && window.infState.tabs && window.infState.tabs.length > 0) {
                     setTimeout(() => {
-                        ['sec-2-3-1', 'sec-2-3-2', 'sec-2-3-3'].forEach(id => {
-                            const el = document.getElementById(id);
-                            if(el) el.classList.remove('active');
-                        });
-                        const activeSec = document.getElementById('sec-2-3-' + window.infState.step);
-                        if(activeSec) activeSec.classList.add('active');
-
                         window.infInitTabs();
                         if (typeof window.infRenderTable === 'function') window.infRenderTable();
-                    }, 900); 
+                    }, 400); 
                 }
             } else {
                 window.infState = { mode: 'location', tabs: [], activeTab: '', step: 1, data: {}, wizard: { active: false, phase: 'idle', columns: ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득일', '취득가액'], activeTarget: '', mapped: {} }, foldingLevel: 3, lastClickedRow: -1, lastClickedCol: -1, pastYear: null };
@@ -892,6 +902,13 @@ window.quickLoadProject = function(event) {
             }
 
             if (typeof runGroupedRenderTest === 'function') runGroupedRenderTest();
+
+            // ★ 화면 겹침 완벽 방지: 모든 렌더링이 끝난 후 강제로 1.1 화면만 띄움
+            setTimeout(() => {
+                if (typeof switchSection === 'function') {
+                    switchSection('sec-1-1');
+                }
+            }, 600);
 
             alert("✅ 모든 데이터가 완벽하게 복구되었습니다!");
         } catch (err) {
