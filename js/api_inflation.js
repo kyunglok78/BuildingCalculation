@@ -1578,6 +1578,7 @@ window.applyInflationIndex = function() {
 
 // ★ 엑셀 데이터 압축 내장 (4개 시트 - 업종감가율 100% 원본 포함)
 window.DEPR_REF_DATA = {
+    // ... sheet1, sheet2 유지 ...
     sheet1: {
         head: `<tr><th rowspan="2" style="background:#e9ecef;">건물 구조별</th><th colspan="2" style="background:#d1e7dd;">우기 이외 (일반건물)</th><th colspan="2" style="background:#ffe69c;">창고, 공장</th><th colspan="2" style="background:#f8d7da;">특수건물 (냉장, 화학 등)</th></tr>
                <tr><th style="background:#d1e7dd;">내용연수</th><th style="background:#d1e7dd;">감가율(%)</th><th style="background:#ffe69c;">내용연수</th><th style="background:#ffe69c;">감가율(%)</th><th style="background:#f8d7da;">내용연수</th><th style="background:#f8d7da;">감가율(%)</th></tr>`,
@@ -1602,7 +1603,14 @@ window.DEPR_REF_DATA = {
         ]
     },
     sheet3: {
-        head: `<tr><th style="background:#e9ecef;">대분류</th><th style="background:#e9ecef;">중분류</th><th style="background:#e9ecef;">소분류</th><th style="background:#d1e7dd; width:100px;">내용연수(년)</th><th style="background:#ffe69c; width:100px;">감가율(%)</th></tr>`,
+        // ★ 열 너비(폭)를 조정하여 우측 숫자가 잘리지 않도록 강제 배분
+        head: `<tr>
+            <th style="background:#e9ecef; width:22%;">대분류</th>
+            <th style="background:#e9ecef; width:22%;">중분류</th>
+            <th style="background:#e9ecef; width:36%;">소분류</th>
+            <th style="background:#d1e7dd; width:10%;">내용연수(년)</th>
+            <th style="background:#ffe69c; width:10%;">감가율(%)</th>
+        </tr>`,
         body: [
             ["농업, 임업 및 어업", "농업", "작물 재배업", "8", "10.0"],
             ["", "", "축산업", "8", "10.0"],
@@ -1848,7 +1856,7 @@ window.DEPR_REF_DATA = {
     }
 };
 
-// ★ 엑셀 데이터 뷰어 탭 전환 기능
+// ★ 엑셀 데이터 뷰어 탭 전환 기능 (가로 폭 및 글씨 꺾임 처리 적용)
 window.switchDeprRefTab = function(tabIndex) {
     document.querySelectorAll('.ref-tab-btn').forEach((btn, idx) => {
         btn.className = (idx === tabIndex - 1) ? 'ref-tab-btn active' : 'ref-tab-btn';
@@ -1867,18 +1875,23 @@ window.switchDeprRefTab = function(tabIndex) {
     
     data.body.forEach((row, rIdx) => {
         const tr = document.createElement('tr');
-        tr.id = `deprRefRow_${rIdx}`; // 검색 기능을 위해 ID 부여
+        tr.id = `deprRefRow_${rIdx}`; 
         
-        // 데이터 행 안의 텍스트들을 모두 합쳐서 숨김 속성으로 저장 (검색용)
         tr.dataset.searchContent = row.join(" ").toLowerCase();
         
         row.forEach((cell, cellIdx) => {
             const td = document.createElement('td');
             td.innerText = cell;
             
-            // 표 스타일에 맞게 정렬 처리
+            // ★ 3. 업종 감가율 탭일 경우 (글씨가 밀리지 않도록 자동 줄바꿈)
             if(tabIndex === 3) {
-                if(cellIdx > 2) td.style.textAlign = 'center';
+                if(cellIdx > 2) {
+                    td.style.textAlign = 'center';
+                    td.style.fontWeight = 'bold';
+                } else {
+                    td.style.whiteSpace = 'normal';
+                    td.style.wordBreak = 'keep-all';
+                }
             } else {
                 if(cellIdx > 0) td.style.textAlign = 'center'; 
             }
