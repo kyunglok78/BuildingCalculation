@@ -215,6 +215,37 @@
     </div>
 </div>
 
+<!-- 3-6. 예외 항목 마스터 데이터 관리 모달 -->
+<div class="modal-overlay" id="ruleManagerModal" style="display:none; z-index: 1000; justify-content: center; align-items: center;">
+    <div class="modal-content" style="width: 700px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+        <div class="modal-header" style="background:#2C2C2C; color:#FFCC00; padding:15px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight:bold;"><i class="fa-solid fa-sliders"></i> 예외 항목 마스터 데이터 관리</span>
+            <i class="fa-solid fa-xmark modal-close" style="cursor:pointer; font-size:18px; color:#fff;" onclick="document.getElementById('ruleManagerModal').style.display='none'"></i>
+        </div>
+        <div class="modal-body" style="padding: 20px; background:#f4f5f7;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                <select id="ruleTypeSelect" class="input-box" style="width:200px; padding:6px; font-weight:bold;" onchange="window.renderRuleManagerRows()">
+                    <option value="basic">기본 지정 마스터</option>
+                    <option value="evalExclude">평가 제외 마스터</option>
+                    <option value="covExclude">부보 제외 마스터</option>
+                </select>
+                <button type="button" class="btn-yellow" onclick="window.addRuleRow()"><i class="fa-solid fa-plus"></i> 항목 추가</button>
+            </div>
+            <div style="height: 350px; overflow-y: auto; background:#fff; border:1px solid #ddd; border-radius:4px; margin-bottom: 15px;">
+                <table class="data-table" style="margin-bottom:0;">
+                    <thead style="position: sticky; top: 0; z-index: 1; background: #eee;">
+                        <tr><th>포함/일치 키워드</th><th>자동 지정될 구분 값</th><th style="width:60px;">삭제</th></tr>
+                    </thead>
+                    <tbody id="ruleManagerTbody"></tbody>
+                </table>
+            </div>
+            <div style="text-align: right;">
+                <button type="button" class="btn-dark" style="background:#17A2B8; padding:8px 25px; border:none; font-size:14px;" onclick="window.saveRules()">💾 변경사항 저장</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- ============================================================================ -->
 <!-- [SEC-4] ★ 좌측 네비게이션 사이드바 (One-Stop 통합본) -->
 <!-- ============================================================================ -->

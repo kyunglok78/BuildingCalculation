@@ -781,16 +781,19 @@ window.quickLoadProject = function(event) {
             if (projectData.targetKfpaSite) window.targetKfpaSite = projectData.targetKfpaSite;
             if (projectData.targetKfpaAddress) window.targetKfpaAddress = projectData.targetKfpaAddress;
 
-            // ★ 1.5 대장 불러오기 화면 데이터 렌더링 강제 실행 (UI가 완전히 로드된 후 대장 데이터를 강제로 그리도록 0.5초 대기)
+            // ★ 1.5 대장 불러오기 화면 데이터 렌더링 강제 실행 수정 (HTML을 완전히 초기화하고 다시 그리도록 지시)
             setTimeout(() => {
                 if (window.kbState && window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
                     const emptyMsg = document.getElementById('emptyStateMsg');
                     const dataCont = document.getElementById('fetchedDataContainer');
                     if (emptyMsg) emptyMsg.style.display = 'none';
-                    if (dataCont) dataCont.style.display = 'block';
+                    if (dataCont) {
+                        dataCont.style.display = 'block';
+                        dataCont.innerHTML = ''; // 강제로 비우고 새로 그림
+                    }
                     if (typeof window.renderSlide3Tabs === 'function') window.renderSlide3Tabs();
                 }
-            }, 500); 
+            }, 800); 
 
             // 2. UI 텍스트 박스 정보 복구
             if (projectData.contractor) document.querySelectorAll('.contractor-sync').forEach(el => el.value = projectData.contractor);
