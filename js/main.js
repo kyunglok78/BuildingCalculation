@@ -791,7 +791,6 @@ window.quickLoadProject = function(event) {
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
-            // ★ 모든 null 과 "null" 텍스트를 빈칸("")으로 완벽하게 자동 청소하며 로드
             const projectData = JSON.parse(e.target.result, function(key, value) {
                 if (value === null || String(value).toLowerCase() === "null" || String(value).toLowerCase() === "nan") {
                     return "";
@@ -799,7 +798,6 @@ window.quickLoadProject = function(event) {
                 return value;
             });
             
-            // 1. 기존 건물평가 데이터 및 평가지수 복구
             if (projectData.kbState) window.kbState = projectData.kbState;
             if (projectData.inflationSheets) window.kbState.inflationSheets = projectData.inflationSheets;
             if (projectData.indexData) window.kbState.indexData = projectData.indexData;
@@ -809,7 +807,7 @@ window.quickLoadProject = function(event) {
             if (projectData.targetKfpaSite) window.targetKfpaSite = projectData.targetKfpaSite;
             if (projectData.targetKfpaAddress) window.targetKfpaAddress = projectData.targetKfpaAddress;
 
-            // 1.5 대장 데이터 강제 렌더링 (보이지 않는 곳에서 표를 미리 그려둠)
+            // ★ 1.5 대장 데이터 강제 렌더링 및 탭 강제 클릭 (해결의 핵심!)
             setTimeout(() => {
                 if (window.kbState && window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
                     const emptyMsg = document.getElementById('emptyStateMsg');
@@ -817,19 +815,23 @@ window.quickLoadProject = function(event) {
                     if (emptyMsg) emptyMsg.style.display = 'none';
                     if (dataCont) {
                         dataCont.style.display = 'block';
-                        dataCont.innerHTML = ''; 
                     }
-                    if (typeof window.renderSlide3Tabs === 'function') window.renderSlide3Tabs();
+                    if (typeof window.renderSlide3Tabs === 'function') {
+                        window.renderSlide3Tabs();
+                        // 탭이 생성된 직후 첫 번째 탭을 강제로 클릭하여 대장 표를 화면에 뿌림
+                        setTimeout(() => {
+                            const firstTab = document.querySelector('#slide3Tabs div');
+                            if (firstTab) firstTab.click();
+                        }, 100);
+                    }
                 }
             }, 300); 
 
-            // 2. UI 텍스트 박스 정보 복구
             if (projectData.contractor) document.querySelectorAll('.contractor-sync').forEach(el => el.value = projectData.contractor);
             if (projectData.evalYear) { const y = document.getElementById('evalYear'); if(y) y.value = projectData.evalYear; }
             if (projectData.unitCostPath) { const u = document.getElementById('unitCostPath'); if(u) u.value = projectData.unitCostPath; }
             if (projectData.priceIndexPath) { const p = document.getElementById('priceIndexPath'); if(p) p.value = projectData.priceIndexPath; }
 
-            // 3. 1.1 소재지 등록 테이블 복구
             const tbody = document.getElementById('locationTbody');
             if (tbody) {
                 tbody.innerHTML = ''; 
@@ -854,28 +856,30 @@ window.quickLoadProject = function(event) {
                 } 
             }
 
-            // 4. 물가보정 데이터 복구 및 화면 세팅
             if (projectData.infState) {
                 window.infState = projectData.infState;
-                
                 if (window.infState.data) {
                     for (const tab in window.infState.data) {
                         window.infState.data[tab].selectedRows = new Set();
                         window.infState.data[tab].selectedCols = new Set();
                     }
                 }
-
                 const modeRadios = document.querySelectorAll('input[name="infMode"]');
                 if(modeRadios.length > 0) {
                     modeRadios.forEach(r => r.checked = (r.value === window.infState.mode));
                 }
-
                 if (!window.infState.mappingRules) {
                     window.infState.mappingRules = JSON.parse(localStorage.getItem('kb_mapping_rules_v3')) || window.initialRules;
                 }
-                
                 if (typeof window.infInitTabs === 'function' && window.infState.tabs && window.infState.tabs.length > 0) {
                     setTimeout(() => {
+                        ['sec-2-3-1', 'sec-2-3-2', 'sec-2-3-3'].forEach(id => {
+                            const el = document.getElementById(id);
+                            if(el) el.classList.remove('active');
+                        });
+                        const activeSec = document.getElementById('sec-2-3-' + window.infState.step);
+                        if(activeSec) activeSec.classList.add('active');
+
                         window.infInitTabs();
                         if (typeof window.infRenderTable === 'function') window.infRenderTable();
                     }, 400); 
@@ -884,7 +888,6 @@ window.quickLoadProject = function(event) {
                 window.infState = { mode: 'location', tabs: [], activeTab: '', step: 1, data: {}, wizard: { active: false, phase: 'idle', columns: ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득일', '취득가액'], activeTarget: '', mapped: {} }, foldingLevel: 3, lastClickedRow: -1, lastClickedCol: -1, pastYear: null };
             }
 
-            // 5. 사이드바 메뉴 뱃지 상태 복구
             if (projectData.sidebarStates) {
                 for (const [menuId, state] of Object.entries(projectData.sidebarStates)) {
                     const menu = document.getElementById(menuId);
@@ -903,11 +906,8 @@ window.quickLoadProject = function(event) {
 
             if (typeof runGroupedRenderTest === 'function') runGroupedRenderTest();
 
-            // ★ 화면 겹침 완벽 방지: 모든 렌더링이 끝난 후 강제로 1.1 화면만 띄움
             setTimeout(() => {
-                if (typeof switchSection === 'function') {
-                    switchSection('sec-1-1');
-                }
+                if (typeof switchSection === 'function') switchSection('sec-1-1');
             }, 600);
 
             alert("✅ 모든 데이터가 완벽하게 복구되었습니다!");
