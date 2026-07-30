@@ -322,7 +322,8 @@ window.infUpdateStepper = function() {
         const el3 = document.getElementById('step-2-3');
         const el4 = document.getElementById('step-2-4');
         const el5 = document.getElementById('step-2-5');
-        const mappedColCount = Object.keys(wiz.mapped).length;
+        // 글로벌 wiz 대신, 고정된 매핑 컬럼수(8) 활용
+        const mappedColCount = 8;
         const finalIdx = mappedColCount + 4;
         let hasFinal = false;
         const tData = window.infState.data[window.infState.activeTab];
@@ -339,7 +340,7 @@ window.infUpdateStepper = function() {
         const el2 = document.getElementById('step-3-2');
         const el3 = document.getElementById('step-3-3');
         const el4 = document.getElementById('step-3-4');
-        const mappedColCount = Object.keys(wiz.mapped).length;
+        const mappedColCount = 8;
         const currentValIdx = mappedColCount + 9;
         let hasCurrentVal = false;
         const tData = window.infState.data[window.infState.activeTab];
@@ -433,7 +434,6 @@ window.infHandleInputKey = function(e, rIdx, cIdx) {
 window.infRenderTable = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
-    if(!tData || !tData.raw || tData.raw.length === 0) return;
 
     let currentSection = window.infState.step || 1; 
     if (document.getElementById('sec-2-3-1') && document.getElementById('sec-2-3-1').classList.contains('active')) currentSection = 1;
@@ -442,7 +442,7 @@ window.infRenderTable = function() {
     
     window.infState.step = currentSection;
 
-    // ★ 활성 탭에 현재 단계를 영구 저장 (독립 진행을 위한 핵심 기능)
+    // 활성 탭에 현재 단계를 영구 저장
     if (window.infState.activeTab && window.infState.data[window.infState.activeTab]) {
         window.infState.data[window.infState.activeTab].step = currentSection;
     }
@@ -458,16 +458,88 @@ window.infRenderTable = function() {
     const tbody = tbodys[targetIdx];
     if (!thead || !tbody) return;
 
-    thead.innerHTML = ''; tbody.innerHTML = '';
+    // ★ 1. 칠판 지우개 (이전 탭의 잔상을 테이블에서 완벽하게 제거)
+    thead.innerHTML = ''; 
+    tbody.innerHTML = '';
 
+    const wizText = document.getElementById('infWizardText');
+    const btnStart = document.getElementById('btnStartWizard');
+    const btnFinish = document.getElementById('btnFinishMapping');
+    const mapBtns = document.getElementById('infMappingButtons');
+    const btnNext = document.getElementById('btnInfNextStep');
+
+    // ★ 2. 해당 탭에 엑셀 데이터가 없다면 UI를 빈 깡통 상태로 리셋하고 즉시 종료!
+    if(!tData || !tData.raw || tData.raw.length === 0) {
+        if (currentSection === 1) {
+            if (wizText) wizText.innerHTML = `🎯 [<b>${window.infState.activeTab}</b>] 우측 상단의 초록색 버튼을 눌러 이 사업장의 엑셀 원본 파일을 불러와 주세요.`;
+            if (btnStart) btnStart.style.display = 'none';
+            if (btnFinish) btnFinish.style.display = 'none';
+            if (mapBtns) mapBtns.style.display = 'none';
+            if (btnNext) btnNext.style.display = 'none';
+            
+            // 글로벌 마법사 변수도 리셋하여 꼬임 방지
+            wiz.phase = 'idle';
+            wiz.active = false;
+        }
+        return; 
+    }
+
+    // ★ 3. 데이터가 존재할 경우 테이블 그리기 및 UI 스마트 복원 시작
     const data = tData.raw;
-    const mappedKeys = Object.keys(wiz.mapped); 
-    const colCount = (wiz.phase === 'mapping' || wiz.phase === 'idle') ? data[0].length : mappedKeys.length;
+    const finalColumns = ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득일', '취득년도', '취득가액'];
     
+    // 데이터의 열 갯수가 딱 8개면 '매핑이 완료된 탭'으로 인식
+    const isMappedPhase = (data[0] && data[0].length === finalColumns.length); 
+
+    if (currentSection === 1) {
+        if (tData.hasSubtotal) {
+            // 부분합까지 모두 끝난 완벽한 탭일 경우
+            if(wizText) wizText.innerHTML = `✅ [<b>${window.infState.activeTab}</b>] 명세서 정제 및 부분합 처리가 완료되었습니다. 다음 단계로 이동해 주세요.`;
+            if(btnStart) btnStart.style.display = 'none';
+            if(btnFinish) btnFinish.style.display = 'none';
+            if(mapBtns) mapBtns.style.display = 'none';
+            if(btnNext) {
+                btnNext.style.display = 'inline-block';
+                btnNext.innerHTML = '명세서 검증 완료 및 2.3.2(자산구분)로 전환 ▶';
+                btnNext.style.backgroundColor = '#17A2B8';
+                if(typeof window.infProceedToStep2 === 'function') btnNext.onclick = window.infProceedToStep2;
+            }
+        } else if (isMappedPhase) {
+            // 매핑은 끝났고 행을 지우고 있는 탭일 경우
+            if(wizText) wizText.innerHTML = `🧹 1.5단계: 불필요한 행(빈 줄, 합계 등)을 선택 후 <b>[Delete]</b> 키로 지우시고, <b>'부분합 및 정렬'</b> 버튼을 눌러주세요.`;
+            if(btnStart) btnStart.style.display = 'none';
+            if(btnFinish) btnFinish.style.display = 'none';
+            if(mapBtns) mapBtns.style.display = 'none';
+            if(btnNext) {
+                btnNext.style.display = 'inline-block';
+                btnNext.innerHTML = '<i class="fa-solid fa-layer-group"></i> 부분합 및 정렬 ➔ 2.3.2로 이동';
+                btnNext.style.backgroundColor = '#6f42c1'; 
+                btnNext.onclick = () => window.infCalculateSubtotals(false); 
+            }
+            wiz.phase = 'row-delete'; 
+        } else {
+            // 엑셀만 불러왔거나 열심히 매핑을 하고 있는 탭일 경우
+            if (wiz.phase === 'mapping') {
+                if(wizText) wizText.innerHTML = `🎯 아래 버튼 중 하나를 선택하고, 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭하세요. (없는 항목은 무시하세요)`;
+                if(btnStart) btnStart.style.display = 'none';
+                if(btnFinish) btnFinish.style.display = 'inline-block';
+                if(mapBtns) mapBtns.style.display = 'flex';
+                if(btnNext) btnNext.style.display = 'none';
+            } else {
+                if(wizText) wizText.innerHTML = `🎯 [<b>${window.infState.activeTab}</b>] 원본 데이터를 불러왔습니다. 우측의 <b>'열 매핑 마법사 시작'</b>을 눌러주세요.`;
+                if(btnStart) btnStart.style.display = 'inline-block';
+                if(btnFinish) btnFinish.style.display = 'none';
+                if(mapBtns) mapBtns.style.display = 'none';
+                if(btnNext) btnNext.style.display = 'none';
+            }
+        }
+    }
+
+    const colCount = (!isMappedPhase) ? data[0].length : finalColumns.length;
     const headerTr = document.createElement('tr');
     
     let foldHtml = '';
-    if (tData.hasSubtotal && wiz.phase !== 'mapping' && wiz.phase !== 'idle') {
+    if (tData.hasSubtotal && isMappedPhase) {
         foldHtml = `
             <div style="display:flex; gap:2px; justify-content:center; margin-top:4px;">
                 <button class="fold-btn ${window.infState.foldingLevel === 1 ? 'active' : ''}" onclick="event.stopPropagation(); infSetFolding(1)" title="총계만 보기">1</button>
@@ -487,9 +559,9 @@ window.infRenderTable = function() {
         th.className = `inf-header ${isSelected}`;
         th.style.cssText = `background:#f8fafc; border:1px solid #ccc; padding:8px; text-align:center; font-weight:bold; min-width:80px; vertical-align:bottom;`;
         
-        const emptySpaceForBtn = (window.infState.step >= 2 && wiz.phase !== 'mapping' && wiz.phase !== 'idle') ? `<div style="height:25px; margin-bottom:6px;"></div>` : '';
+        const emptySpaceForBtn = (window.infState.step >= 2 && isMappedPhase) ? `<div style="height:25px; margin-bottom:6px;"></div>` : '';
 
-        if (wiz.phase === 'mapping' || wiz.phase === 'idle') {
+        if (!isMappedPhase) {
             let colLetter = String.fromCharCode(65 + (c % 26)); 
             if (c >= 26) colLetter = String.fromCharCode(64 + Math.floor(c / 26)) + colLetter;
             let mappedLabel = "";
@@ -498,13 +570,13 @@ window.infRenderTable = function() {
             }
             th.innerHTML = `${colLetter} ${mappedLabel}`;
         } else {
-            th.innerHTML = `${emptySpaceForBtn}<div>${mappedKeys[c] || `데이터 ${c+1}`}</div>`;
+            th.innerHTML = `${emptySpaceForBtn}<div>${finalColumns[c] || `데이터 ${c+1}`}</div>`;
             th.style.background = '#e9ecef';
             th.style.color = '#1C5691';
         }
         
         th.onclick = (e) => {
-            if (window.infState.step === 1 && wiz.phase === 'mapping') {
+            if (window.infState.step === 1 && wiz.phase === 'mapping' && !isMappedPhase) {
                 if (!wiz.activeTarget) return alert("위에서 매칭할 항목 버튼을 먼저 선택해주세요.");
                 wiz.mapped[wiz.activeTarget] = c;
                 const unmapped = wiz.columns.find(col => wiz.mapped[col] === undefined);
@@ -585,7 +657,7 @@ window.infRenderTable = function() {
     }
     thead.appendChild(headerTr);
 
-    const yearColIdx = wiz.mapped['취득년도']; 
+    const yearColIdx = isMappedPhase ? finalColumns.indexOf('취득년도') : wiz.mapped['취득년도']; 
     
     data.forEach((row, rIdx) => {
         const yearVal = String(row[yearColIdx] || '').replace(/null/gi, '');
@@ -616,8 +688,8 @@ window.infRenderTable = function() {
             let cellVal = (row[c] !== undefined && row[c] !== null && String(row[c]).toLowerCase() !== "null") ? row[c] : '';
             let align = 'left';
             
-            if (wiz.phase !== 'mapping' && wiz.phase !== 'idle') {
-                const headerName = mappedKeys[c];
+            if (isMappedPhase) {
+                const headerName = finalColumns[c];
                 if (headerName === '취득년도') {
                     align = 'center';
                 } else {
@@ -719,7 +791,7 @@ window.infRenderTable = function() {
         tr.innerHTML = rowHtml;
 
         tr.onclick = (e) => {
-            if (window.infState.step === 1 && wiz.phase === 'mapping') return;
+            if (window.infState.step === 1 && !isMappedPhase) return;
 
             if (e.shiftKey && window.infState.lastClickedRow !== -1) {
                 const start = Math.min(window.infState.lastClickedRow, rIdx), end = Math.max(window.infState.lastClickedRow, rIdx);
