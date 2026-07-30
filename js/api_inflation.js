@@ -442,7 +442,6 @@ window.infRenderTable = function() {
     
     window.infState.step = currentSection;
 
-    // 활성 탭에 현재 단계를 영구 저장
     if (window.infState.activeTab && window.infState.data[window.infState.activeTab]) {
         window.infState.data[window.infState.activeTab].step = currentSection;
     }
@@ -458,7 +457,6 @@ window.infRenderTable = function() {
     const tbody = tbodys[targetIdx];
     if (!thead || !tbody) return;
 
-    // ★ 1. 칠판 지우개 (이전 탭의 잔상을 테이블에서 완벽하게 제거)
     thead.innerHTML = ''; 
     tbody.innerHTML = '';
 
@@ -468,7 +466,6 @@ window.infRenderTable = function() {
     const mapBtns = document.getElementById('infMappingButtons');
     const btnNext = document.getElementById('btnInfNextStep');
 
-    // ★ 2. 해당 탭에 엑셀 데이터가 없다면 UI를 빈 깡통 상태로 리셋하고 즉시 종료!
     if(!tData || !tData.raw || tData.raw.length === 0) {
         if (currentSection === 1) {
             if (wizText) wizText.innerHTML = `🎯 [<b>${window.infState.activeTab}</b>] 우측 상단의 초록색 버튼을 눌러 이 사업장의 엑셀 원본 파일을 불러와 주세요.`;
@@ -477,23 +474,20 @@ window.infRenderTable = function() {
             if (mapBtns) mapBtns.style.display = 'none';
             if (btnNext) btnNext.style.display = 'none';
             
-            // 글로벌 마법사 변수도 리셋하여 꼬임 방지
             wiz.phase = 'idle';
             wiz.active = false;
         }
         return; 
     }
 
-    // ★ 3. 데이터가 존재할 경우 테이블 그리기 및 UI 스마트 복원 시작
     const data = tData.raw;
     const finalColumns = ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득일', '취득년도', '취득가액'];
     
-    // 데이터의 열 갯수가 딱 8개면 '매핑이 완료된 탭'으로 인식
-    const isMappedPhase = (data[0] && data[0].length === finalColumns.length); 
+    // ★ [버그 완벽 수정] 열 갯수가 변하더라도 마법사 상태 변수(phase)를 기준으로 매핑 완료 여부를 판별합니다!
+    const isMappedPhase = (wiz.phase !== 'mapping' && wiz.phase !== 'idle'); 
 
     if (currentSection === 1) {
         if (tData.hasSubtotal) {
-            // 부분합까지 모두 끝난 완벽한 탭일 경우
             if(wizText) wizText.innerHTML = `✅ [<b>${window.infState.activeTab}</b>] 명세서 정제 및 부분합 처리가 완료되었습니다. 다음 단계로 이동해 주세요.`;
             if(btnStart) btnStart.style.display = 'none';
             if(btnFinish) btnFinish.style.display = 'none';
@@ -505,7 +499,6 @@ window.infRenderTable = function() {
                 if(typeof window.infProceedToStep2 === 'function') btnNext.onclick = window.infProceedToStep2;
             }
         } else if (isMappedPhase) {
-            // 매핑은 끝났고 행을 지우고 있는 탭일 경우
             if(wizText) wizText.innerHTML = `🧹 1.5단계: 불필요한 행(빈 줄, 합계 등)을 선택 후 <b>[Delete]</b> 키로 지우시고, <b>'부분합 및 정렬'</b> 버튼을 눌러주세요.`;
             if(btnStart) btnStart.style.display = 'none';
             if(btnFinish) btnFinish.style.display = 'none';
@@ -518,7 +511,6 @@ window.infRenderTable = function() {
             }
             wiz.phase = 'row-delete'; 
         } else {
-            // 엑셀만 불러왔거나 열심히 매핑을 하고 있는 탭일 경우
             if (wiz.phase === 'mapping') {
                 if(wizText) wizText.innerHTML = `🎯 아래 버튼 중 하나를 선택하고, 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭하세요. (없는 항목은 무시하세요)`;
                 if(btnStart) btnStart.style.display = 'none';
