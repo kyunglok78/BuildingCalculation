@@ -188,7 +188,9 @@ function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
             tbody.appendChild(trArch);
         });
 
-        const accRate = parseFloat(group['부속비율'] || 20.0);
+        // ★ [핵심 버그 수정] JavaScript에서 0은 false로 인식되므로, 값이 명시적으로 있는지 확인!
+        const accRate = parseFloat(group['부속비율'] !== undefined && group['부속비율'] !== "" ? group['부속비율'] : 20.0);
+        
         const recoSub = parseFloat(group['재조달_부속'] || 0);
         const curSub = parseFloat(group['현재_부속'] || 0);
         const recoTotal = parseFloat(group['재조달_합계'] || 0);
@@ -458,7 +460,9 @@ window.recalculateValuation = function(mode, siteName) {
             totRecoArch += r.재조달_건축; totCurArch += r.현재_건축;
         });
 
-        const accRate = parseFloat(group.부속비율 || 20.0) / 100.0;
+        // ★ [핵심 버그 수정] JavaScript에서 0은 false로 인식되므로, 값이 명시적으로 있는지 확인!
+        const accRate = parseFloat(group.부속비율 !== undefined && group.부속비율 !== "" ? group.부속비율 : 20.0) / 100.0;
+        
         group.재조달_부속 = Math.floor((totRecoArch * accRate) / 1000) * 1000;
         const repResidualRatio = group.records.length > 0 ? (group.records[0].잔가율 / 100.0) : 1.0;
         group.현재_부속 = Math.floor((group.재조달_부속 * repResidualRatio) / 1000) * 1000;
