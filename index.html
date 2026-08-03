@@ -342,23 +342,36 @@
              </div>
             
 
-        <!-- 3. 결과 및 보고서 -->
-        <div class="menu-category" style="margin-top: 15px;">
-            <div class="menu-title" style="color: #FFCC00; font-size: 14px; font-weight: bold; margin-bottom: 10px;">
-                <i class="fa-solid fa-folder-open"></i> 3. 결과 및 보고서
+         <!-- 3. 결과 및 보고서 -->
+            <div class="menu-category" style="margin-top: 15px;">
+                <div class="menu-title" style="color: #FFCC00; font-size: 14px; font-weight: bold; margin-bottom: 10px;">
+                    <i class="fa-solid fa-folder-open"></i> 3. 결과 및 보고서
+                </div>
+                <div class="menu-item" id="nav-sec-3-1" onclick="switchSection('sec-3-1')" style="padding: 8px 10px; color: #ccc; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-radius: 4px; transition: 0.2s;">
+                    <span style="font-size: 13px;">3.1 가액평가 검산</span>
+                    <span class="status-badge status-wait" style="font-size: 10px; padding: 2px 6px; border-radius: 10px; background: #6c757d; color: white;">대기</span>
+                </div>
+                <div class="menu-item" id="nav-sec-3-2" onclick="switchSection('sec-3-2')" style="padding: 8px 10px; color: #ccc; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-radius: 4px; transition: 0.2s;">
+                    <span style="font-size: 13px;">3.2 총괄표 작성</span>
+                    <span class="status-badge status-wait" style="font-size: 10px; padding: 2px 6px; border-radius: 10px; background: #6c757d; color: white;">대기</span>
+                </div>
+                <div class="menu-item" id="nav-sec-3-3" onclick="switchSection('sec-3-3')" style="padding: 8px 10px; color: #ccc; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-radius: 4px; transition: 0.2s;">
+                    <span style="font-size: 13px;">3.3 보고서 작성 및 출력</span>
+                    <span class="status-badge status-wait" style="font-size: 10px; padding: 2px 6px; border-radius: 10px; background: #6c757d; color: white;">대기</span>
+                </div>
             </div>
-            <div class="menu-item" id="nav-sec-3-1" onclick="switchSection('sec-3-1')" style="padding: 8px 10px; color: #ccc; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-radius: 4px; transition: 0.2s;">
-                <span style="font-size: 13px;">3.1 가액평가 검산</span>
-                <span class="status-badge status-wait" style="font-size: 10px; padding: 2px 6px; border-radius: 10px; background: #6c757d; color: white;">대기</span>
-            </div>
-            <div class="menu-item" id="nav-sec-3-2" onclick="switchSection('sec-3-2')" style="padding: 8px 10px; color: #ccc; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-radius: 4px; transition: 0.2s;">
-                <span style="font-size: 13px;">3.2 총괄표 작성</span>
-                <span class="status-badge status-wait" style="font-size: 10px; padding: 2px 6px; border-radius: 10px; background: #6c757d; color: white;">대기</span>
-            </div>
-            <div class="menu-item" id="nav-sec-3-3" onclick="switchSection('sec-3-3')" style="padding: 8px 10px; color: #ccc; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-radius: 4px; transition: 0.2s;">
-                <span style="font-size: 13px;">3.3 보고서 작성 및 출력</span>
-                <span class="status-badge status-wait" style="font-size: 10px; padding: 2px 6px; border-radius: 10px; background: #6c757d; color: white;">대기</span>
-            </div>
+            
+        </div> <!-- sidebar-menu-wrapper 닫기 -->
+
+        <!-- ★ 복원된 하단 저장/불러오기 버튼 영역 -->
+        <div class="sidebar-bottom">
+            <button type="button" onclick="saveProject()" style="background-color: #FFCC00; color: #2C2C2C; border: none; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; width: 100%; text-align: left; display: flex; align-items: center; gap: 10px; transition: 0.2s;">
+                <i class="fa-solid fa-bolt"></i> 빠른 저장 (.kbproj)
+            </button>
+            <button type="button" onclick="document.getElementById('loadProjectFile').click()" style="background-color: #333; color: white; border: 1px solid #555; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; width: 100%; text-align: left; display: flex; align-items: center; gap: 10px; transition: 0.2s;">
+                <i class="fa-solid fa-folder-open"></i> 파일 불러오기 (.kbproj)
+            </button>
+            <input type="file" id="loadProjectFile" accept=".kbproj" style="display: none;" onchange="loadProject(event)">
         </div>
     </nav>
 
