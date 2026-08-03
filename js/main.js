@@ -1432,3 +1432,38 @@ window.exportSummaryExcel = function() {
         alert("엑셀 다운로드 중 오류가 발생했습니다.\n" + error.message);
     }
 };
+
+// ============================================================================
+// [13] 보고서 생성 파이썬 연동 UI 시뮬레이션
+// ============================================================================
+window.runReportGeneration = function() {
+    const templatePath = document.getElementById('reportTemplatePath').value;
+    const evalTypeSelect = document.getElementById('reportEvalType');
+    const evalType = evalTypeSelect.options[evalTypeSelect.selectedIndex].text;
+    const logBox = document.getElementById('reportLogBox');
+    
+    if (!templatePath) {
+        alert("2번 항목에서 엑셀 보고서 양식(.xlsx) 파일을 첨부해 주세요.");
+        return;
+    }
+    
+    // 파이썬 프로그램의 로그 출력 방식을 동일하게 재현
+    logBox.value = "--- 보고서 생성을 시작합니다 ---\n";
+    logBox.value += `[설정] 선택된 작성 기준: ${evalType}\n`;
+    logBox.value += "[시스템] 현재 메모리에 적재된 평가 데이터를 취합 및 분석 중...\n";
+    
+    setTimeout(() => {
+        logBox.value += "[성공] 표지 시트 작성 및 데이터 매핑 완료\n";
+    }, 800);
+    
+    setTimeout(() => {
+        logBox.value += "[성공] 총괄표 생성 및 합산 금액 집계 완료\n";
+    }, 1500);
+
+    setTimeout(() => {
+        logBox.value += "[성공] 세부평가 시트 동적 서식 생성 (부속설비 로직 포함) 완료\n";
+        logBox.value += "[성공] 불필요한 템플릿 시트 삭제 및 탭 정렬 완료\n";
+        logBox.value += ">>> 작업이 성공적으로 완료되었습니다!\n";
+        alert("보고서 생성이 완료되었습니다.\n(현재는 웹 UI 시뮬레이션이 작동 중이며, 실제 엑셀 파일 생성은 백엔드 서버 연동 후 다운로드됩니다.)");
+    }, 2500);
+};
