@@ -1206,10 +1206,13 @@ window.confirmAllKfpaData = function() {
         const titleRecords = window.kbState.evalData.title[siteName] || [];
         const siteGroups = {};
         
-        const dongAreaMap = {};
+        // ★ [핵심 수정 1] 일련번호의 '하이픈(-) 앞자리'를 뽑아내어 그룹 총면적을 합산합니다!
+        const groupAreaMap = {};
         records.forEach(r => {
-            const d = r.동명칭;
-            dongAreaMap[d] = (dongAreaMap[d] || 0) + (parseFloat(r.연면적) || 0);
+            const fullSeq = r.일련번호 || r.동명칭 || "";
+            // 하이픈이 있으면 앞자리 추출 (예: '1-24' -> '1'), 없으면 전체 사용
+            const groupKey = fullSeq.includes('-') ? fullSeq.split('-')[0] : fullSeq;
+            groupAreaMap[groupKey] = (groupAreaMap[groupKey] || 0) + (parseFloat(r.연면적) || 0);
         });
         
         records.forEach(r => {
@@ -1229,16 +1232,36 @@ window.confirmAllKfpaData = function() {
                 }
             }
 
+            // ★ [핵심 수정 2] 같은 앞자리(groupKey)를 가진 레코드들을 하나의 배열(그룹)로 묶어줍니다!
+            const fullSeq = evalRecord.일련번호 || evalRecord.동명칭 || "";
+            const groupKey = fullSeq.includes('-') ? fullSeq.split('-')[0] : fullSeq;
             const d = evalRecord.동명칭;
-            let inheritedRatio = (dongAreaMap[d] <= 300 && dongAreaMap[d] > 0) ? 0.0 : 20.0;
+
+            // 잘게 쪼개진 건물들의 면적을 모두 더한 '그룹 총면적(groupAreaMap)'을 기준으로 부속비율 결정
+            let inheritedRatio = (groupAreaMap[groupKey] <= 300 && groupAreaMap[groupKey] > 0) ? 0.0 : 20.0;
             
+            // 혹시 표제부에 동일한 이름으로 평가된 비율이 있다면 그것을 우선 따름
             const tGroup = titleRecords.find(g => (g.동명칭 || "") === d);
             if (tGroup && tGroup.부속비율 !== undefined) inheritedRatio = tGroup.부속비율;
 
-            if(!siteGroups[d]) {
-                siteGroups[d] = { "동명칭": d, "부속비율": inheritedRatio, "재조달_부속": 0, "재조달_합계": 0, "현재_부속": 0, "현재_합계": 0, "records": [] };
+            if(!siteGroups[groupKey]) {
+                // 새로운 그룹이 생성될 때 1번만 부속비율을 세팅 (렌더링 시 그룹 맨 밑에 딱 1번만 부속설비가 나옴)
+                const displayDongName = `[${groupKey}번 건물 그룹]`;
+                siteGroups[groupKey] = { 
+                    "동명칭": displayDongName, 
+                    "일련번호": groupKey, 
+                    "부속비율": inheritedRatio, 
+                    "재조달_부속": 0, 
+                    "재조달_합계": 0, 
+                    "현재_부속": 0, 
+                    "현재_합계": 0, 
+                    "records": [] 
+                };
             }
-            siteGroups[d].records.push(evalRecord);
+            
+            // 표의 세부 데이터(행)에는 원래 엑셀에 있던 이름(1-1동 등)이 그대로 나오도록 유지
+            evalRecord.동명칭 = d;
+            siteGroups[groupKey].records.push(evalRecord);
         });
 
         window.kbState.evalData.kfpa[siteName] = Object.values(siteGroups);
@@ -1246,10 +1269,14 @@ window.confirmAllKfpaData = function() {
     });
 
     window.kbState.activeSite.kfpa = sites[0];
-    goToSlide('slide7');
+    
+    // 화면 자동 전환 (SPA 구조 대응)
+    if (typeof switchSection === 'function') switchSection('sec-2-2-2');
+    else if (typeof goToSlide === 'function') goToSlide('slide7');
+    
     renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
     
-    alert(`🎉 총 ${sites.length}개 사업장의 화협자료가 일괄 전송되었습니다!\n(총면적 300㎡ 이하 건물은 부속비율 0%가 자동 적용되었습니다.)`);
+    alert(`🎉 화협자료가 [일련번호 앞자리]를 기준으로 완벽하게 통합 그룹화되었습니다!\n\n(그룹 전체 총면적 300㎡ 이하 건물은 부속비율 0%가 자동 적용되었습니다.)`);
 };
 
 // ============================================================================
