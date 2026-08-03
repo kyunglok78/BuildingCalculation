@@ -1103,7 +1103,7 @@ window.renderKfpaPreview = function(siteName) {
     tbody.innerHTML = '';
     let grandTotalArea = 0;
 
-    // ★ [핵심 1] 일련번호 앞자리(groupKey)를 기준으로 건물을 그룹핑합니다.
+    // 일련번호 앞자리를 기준으로 그룹핑
     const groups = {};
     records.forEach((r, origIdx) => {
         r._origIdx = origIdx; 
@@ -1118,11 +1118,13 @@ window.renderKfpaPreview = function(siteName) {
         const group = groups[gk];
         let calcSum = 0;
 
-        // 1. 일반 층(행) 렌더링 및 입력창 활성화
         group.items.forEach(r => {
             calcSum += (parseFloat(r.연면적) || 0);
             grandTotalArea += (parseFloat(r.연면적) || 0);
             
+            // ★ 평소에 보여질 콤마(,)가 포함된 예쁜 숫자 포맷
+            const displayArea = Number(r.연면적).toLocaleString('ko-KR', {minimumFractionDigits:2, maximumFractionDigits:2});
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td style="font-weight:bold;">${r.일련번호}</td>
@@ -1131,22 +1133,27 @@ window.renderKfpaPreview = function(siteName) {
                 <td>${r.준공연도}</td>
                 <td>${r.층수}</td>
                 <td>${r.구조명}</td>
-                <td style="text-align:right; padding: 4px;">
-                    <input type="number" step="0.01" value="${r.연면적}" 
-                        style="width:90px; text-align:right; border:1px solid #ccc; border-radius:3px; padding:4px; font-weight:bold; color:#333; background:#f0fdf4;"
-                        oninput="window.updateKfpaArea('${siteName}', ${r._origIdx}, this.value)">
+                
+                <!-- ★ [디자인 개선] 평소엔 텍스트처럼 투명하게, 클릭 시 입력칸으로 변신 -->
+                <td style="text-align:right; padding: 0; position: relative;">
+                    <input type="text" value="${displayArea}" 
+                        style="width: 100%; box-sizing: border-box; text-align: right; border: 1px solid transparent; background: transparent; font-family: inherit; font-size: inherit; color: #333; outline: none; cursor: pointer; padding: 8px 10px; transition: 0.2s;"
+                        onfocus="this.style.borderBottom='2px solid #1C5691'; this.style.background='#fff'; this.value='${r.연면적}'; this.select();"
+                        onblur="this.style.borderBottom='1px solid transparent'; this.style.background='transparent';"
+                        onmouseover="if(document.activeElement !== this) this.style.background='#f1f5f9';"
+                        onmouseout="if(document.activeElement !== this) this.style.background='transparent';"
+                        onchange="window.updateKfpaArea('${siteName}', ${r._origIdx}, this.value)"
+                        title="클릭하여 면적 수정 (수정 후 엔터)">
                 </td>
+                
                 <td style="text-align:left;">${r.용도}</td>
             `;
             tbody.appendChild(tr);
         });
 
-        // 2. ★ [핵심 2] 동면적합계(소계) 강제 렌더링 및 자동 검증 알고리즘
         if (group.subtotal || group.items.length > 0) {
             const officialSum = group.subtotal ? (parseFloat(group.subtotal.연면적) || 0) : calcSum;
             const diff = Math.abs(calcSum - officialSum);
-            
-            // 시스템 합산액과 엑셀 원본 합계가 다르면 빨간불 켜짐! (0.01은 부동소수점 오차 방지)
             const isMismatch = group.subtotal && diff > 0.01; 
 
             const trSub = document.createElement('tr');
@@ -1158,7 +1165,7 @@ window.renderKfpaPreview = function(siteName) {
             trSub.innerHTML = `
                 <td></td><td></td>
                 <td colspan="4" style="color:${isMismatch ? '#d32f2f' : '#1C5691'}; text-align:center;">동면적합계</td>
-                <td style="text-align:right; color:${isMismatch ? '#d32f2f' : '#1C5691'}; font-size:14px;">
+                <td style="text-align:right; color:${isMismatch ? '#d32f2f' : '#1C5691'}; font-size:14px; padding-right: 10px;">
                     ${calcSum.toLocaleString('ko-KR', {minimumFractionDigits:2, maximumFractionDigits:2})}
                 </td>
                 <td style="text-align:left;">${warningMsg}</td>
@@ -1169,13 +1176,13 @@ window.renderKfpaPreview = function(siteName) {
 
     const totalTr = document.createElement('tr');
     totalTr.style.background = '#cbd5e1'; totalTr.style.fontWeight = 'bold';
-    totalTr.innerHTML = `<td colspan="6" style="text-align:center; color:#333;">${siteName} 사업장 총면적 합계</td><td style="text-align:right; color:#d32f2f; font-size:14px;">${grandTotalArea.toLocaleString('ko-KR', {minimumFractionDigits:2, maximumFractionDigits:2})}</td><td></td>`;
+    totalTr.innerHTML = `<td colspan="6" style="text-align:center; color:#333;">${siteName} 사업장 총면적 합계</td><td style="text-align:right; color:#d32f2f; font-size:14px; padding-right: 10px;">${grandTotalArea.toLocaleString('ko-KR', {minimumFractionDigits:2, maximumFractionDigits:2})}</td><td></td>`;
     tbody.appendChild(totalTr);
 
     if(btnConfirm) btnConfirm.style.display = 'inline-block';
 };
 
-// CSS 애니메이션용 스타일 태그 추가 (깜빡이는 효과)
+// 깜빡이는 경고 효과용 CSS
 if (!document.getElementById('kfpaWarningStyle')) {
     const style = document.createElement('style');
     style.id = 'kfpaWarningStyle';
@@ -1355,14 +1362,14 @@ window.confirmAllKfpaData = function() {
 // [11-1] 화협 연면적 실시간 수정 및 합계 검증 로직
 // ============================================================================
 window.updateKfpaArea = function(siteName, origIdx, newVal) {
-    let val = parseFloat(newVal);
+    // 콤마(,)가 포함된 채로 입력되어도 숫자로 정확히 변환합니다.
+    let val = parseFloat(String(newVal).replace(/,/g, ''));
     if(isNaN(val)) val = 0;
     
-    // 데이터 스토어 값 즉시 변경
     if(window.tempKfpaDataStore && window.tempKfpaDataStore[siteName] && window.tempKfpaDataStore[siteName][origIdx]) {
         window.tempKfpaDataStore[siteName][origIdx].연면적 = val;
         
-        // 화면을 다시 그려서 합계와 경고 메시지를 즉시 새로고침 (오차가 사라지면 경고도 즉시 소멸!)
+        // 데이터 업데이트 후 화면 새로고침 (오차가 맞으면 경고 즉시 해제)
         window.renderKfpaPreview(siteName);
     }
 };
