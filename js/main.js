@@ -1096,34 +1096,92 @@ window.renderKfpaPreview = function(siteName) {
 
     if(!records || records.length === 0) {
         tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 60px; color:#999; font-size:14px;"><i class="fa-regular fa-folder-open" style="font-size:30px; margin-bottom:10px; display:block;"></i>우측 상단의 <b>[해당 사업장 화협 엑셀 첨부]</b>를 눌러 데이터를 업로드해주세요.</td></tr>`;
-    } else {
-        tbody.innerHTML = '';
-        let totalArea = 0;
+        if(btnConfirm) btnConfirm.style.display = 'none';
+        return;
+    }
 
-        records.forEach(r => {
+    tbody.innerHTML = '';
+    let grandTotalArea = 0;
+
+    // ★ [핵심 1] 일련번호 앞자리(groupKey)를 기준으로 건물을 그룹핑합니다.
+    const groups = {};
+    records.forEach((r, origIdx) => {
+        r._origIdx = origIdx; 
+        const gk = r.groupKey || "기타";
+        if(!groups[gk]) groups[gk] = { items: [], subtotal: null };
+        
+        if(r.isSubtotal) groups[gk].subtotal = r;
+        else groups[gk].items.push(r);
+    });
+
+    Object.keys(groups).forEach(gk => {
+        const group = groups[gk];
+        let calcSum = 0;
+
+        // 1. 일반 층(행) 렌더링 및 입력창 활성화
+        group.items.forEach(r => {
+            calcSum += (parseFloat(r.연면적) || 0);
+            grandTotalArea += (parseFloat(r.연면적) || 0);
+            
             const tr = document.createElement('tr');
-            if(r.isSubtotal) { 
-                tr.style.background = '#e9ecef'; tr.style.fontWeight = 'bold';
-                tr.innerHTML = `<td></td><td></td><td colspan="4" style="color:#1C5691; text-align:center;">${r.동명칭}</td><td style="text-align:right; color:#1C5691;">${r.연면적.toLocaleString('ko-KR', {minimumFractionDigits:2, maximumFractionDigits:2})}</td><td></td>`;
-            } else { 
-                totalArea += r.연면적;
-                tr.innerHTML = `<td style="font-weight:bold;">${r.일련번호}</td><td>${r.동번호}</td><td style="font-weight:bold; color:#1C5691;">${r.동명칭}</td><td>${r.준공연도}</td><td>${r.층수}</td><td>${r.구조명}</td><td style="text-align:right;">${r.연면적.toLocaleString('ko-KR', {minimumFractionDigits:2, maximumFractionDigits:2})}</td><td style="text-align:left;">${r.용도}</td>`;
-            }
+            tr.innerHTML = `
+                <td style="font-weight:bold;">${r.일련번호}</td>
+                <td>${r.동번호}</td>
+                <td style="font-weight:bold; color:#1C5691;">${r.동명칭}</td>
+                <td>${r.준공연도}</td>
+                <td>${r.층수}</td>
+                <td>${r.구조명}</td>
+                <td style="text-align:right; padding: 4px;">
+                    <input type="number" step="0.01" value="${r.연면적}" 
+                        style="width:90px; text-align:right; border:1px solid #ccc; border-radius:3px; padding:4px; font-weight:bold; color:#333; background:#f0fdf4;"
+                        oninput="window.updateKfpaArea('${siteName}', ${r._origIdx}, this.value)">
+                </td>
+                <td style="text-align:left;">${r.용도}</td>
+            `;
             tbody.appendChild(tr);
         });
 
-        const totalTr = document.createElement('tr');
-        totalTr.style.background = '#cbd5e1'; totalTr.style.fontWeight = 'bold';
-        totalTr.innerHTML = `<td colspan="6" style="text-align:center; color:#333;">${siteName} 사업장 총면적 합계</td><td style="text-align:right; color:#d32f2f;">${totalArea.toLocaleString('ko-KR', {minimumFractionDigits:2, maximumFractionDigits:2})}</td><td></td>`;
-        tbody.appendChild(totalTr);
-    }
+        // 2. ★ [핵심 2] 동면적합계(소계) 강제 렌더링 및 자동 검증 알고리즘
+        if (group.subtotal || group.items.length > 0) {
+            const officialSum = group.subtotal ? (parseFloat(group.subtotal.연면적) || 0) : calcSum;
+            const diff = Math.abs(calcSum - officialSum);
+            
+            // 시스템 합산액과 엑셀 원본 합계가 다르면 빨간불 켜짐! (0.01은 부동소수점 오차 방지)
+            const isMismatch = group.subtotal && diff > 0.01; 
 
-    if (window.tempKfpaDataStore && Object.keys(window.tempKfpaDataStore).length > 0) {
-        if(btnConfirm) btnConfirm.style.display = 'inline-block';
-    } else {
-        if(btnConfirm) btnConfirm.style.display = 'none';
-    }
+            const trSub = document.createElement('tr');
+            trSub.style.background = isMismatch ? '#ffe5e5' : '#e9ecef';
+            trSub.style.fontWeight = 'bold';
+            
+            const warningMsg = isMismatch ? `<span style="color:#d32f2f; font-size:13px; font-weight:bold; animation: blink 1.5s infinite;"><i class="fa-solid fa-triangle-exclamation"></i> 동면적을 확인하세요! (엑셀 원본 합계: ${officialSum.toLocaleString('ko-KR')}㎡ / 차이: ${diff.toFixed(2)}㎡)</span>` : '';
+            
+            trSub.innerHTML = `
+                <td></td><td></td>
+                <td colspan="4" style="color:${isMismatch ? '#d32f2f' : '#1C5691'}; text-align:center;">동면적합계</td>
+                <td style="text-align:right; color:${isMismatch ? '#d32f2f' : '#1C5691'}; font-size:14px;">
+                    ${calcSum.toLocaleString('ko-KR', {minimumFractionDigits:2, maximumFractionDigits:2})}
+                </td>
+                <td style="text-align:left;">${warningMsg}</td>
+            `;
+            tbody.appendChild(trSub);
+        }
+    });
+
+    const totalTr = document.createElement('tr');
+    totalTr.style.background = '#cbd5e1'; totalTr.style.fontWeight = 'bold';
+    totalTr.innerHTML = `<td colspan="6" style="text-align:center; color:#333;">${siteName} 사업장 총면적 합계</td><td style="text-align:right; color:#d32f2f; font-size:14px;">${grandTotalArea.toLocaleString('ko-KR', {minimumFractionDigits:2, maximumFractionDigits:2})}</td><td></td>`;
+    tbody.appendChild(totalTr);
+
+    if(btnConfirm) btnConfirm.style.display = 'inline-block';
 };
+
+// CSS 애니메이션용 스타일 태그 추가 (깜빡이는 효과)
+if (!document.getElementById('kfpaWarningStyle')) {
+    const style = document.createElement('style');
+    style.id = 'kfpaWarningStyle';
+    style.innerHTML = `@keyframes blink { 50% { opacity: 0.5; } }`;
+    document.head.appendChild(style);
+}
 
 window.loadKfpaExcel = function(event) {
     const file = event.target.files[0];
@@ -1152,12 +1210,21 @@ window.loadKfpaExcel = function(event) {
 
             const records = [];
             let lastDongNo = "-"; let lastDongNm = "본동";
+            let lastGroupKey = "1"; // ★ 추가: 소계를 위한 앞자리 그룹 추적
 
             jsonData.forEach((row, idx) => {
                 let serial = String(row[colSerial] || "").trim();
                 let dNo = String(row[colDongNo] || "").trim();
                 let dNm = String(row[colDongNm] || "").trim();
                 let isSubtotal = dNm.includes("합계") || dNm.includes("소계") || serial.includes("합계");
+
+                // ★ 추가: 그룹 키 설정 (소계는 직전 일련번호 그룹에 종속됨)
+                let groupKey = serial.includes('-') ? serial.split('-')[0] : serial;
+                if (serial && !isSubtotal) {
+                    lastGroupKey = groupKey;
+                } else if (isSubtotal) {
+                    groupKey = lastGroupKey;
+                }
 
                 if(dNo && dNo !== "-" && dNo !== "undefined") lastDongNo = dNo;
                 if(dNm && dNm !== "-" && dNm !== "undefined" && !isSubtotal) lastDongNm = dNm;
@@ -1173,12 +1240,13 @@ window.loadKfpaExcel = function(event) {
                 let yearStr = String(row[colYear] || "").replace(/[^0-9]/g, '');
                 if(yearStr.length >= 4) buildYear = parseInt(yearStr.substring(0, 4));
 
-                if(area > 0) {
+                // ★ 수정: 면적이 0이라도 공식 합계(isSubtotal) 행이면 데이터에 포함시켜 검증에 사용
+                if(area > 0 || isSubtotal) {
                     records.push({
                         "일련번호": serial, "동번호": lastDongNo, "층수": floorStr,
                         "동명칭": isSubtotal ? dNm : lastDongNm, "용도": purps, "연면적": area,
                         "구조명": strctCode, "구조코드": strctCode, "준공연도": buildYear,
-                        "isSubtotal": isSubtotal, 
+                        "isSubtotal": isSubtotal, "groupKey": groupKey, 
                         "단가": 0.0, "노무비": 0.0, "물가지수": 1.0, "감가율": 1.78, "재조달_건축": 0, "잔가율": 100.0, "현재_건축": 0
                     });
                 }
@@ -1189,7 +1257,7 @@ window.loadKfpaExcel = function(event) {
             if (typeof window.tempKfpaDataStore === 'undefined') window.tempKfpaDataStore = {};
             window.tempKfpaDataStore[siteName] = records;
             renderKfpaPreview(siteName); 
-            alert(`✅ [${siteName}] 화협 엑셀 로드 완료!\n상단의 다른 탭이 있다면 이동해서 마저 업로드하시거나,\n모두 올리셨다면 우측 [전체 확정]을 눌러주세요.`);
+            alert(`✅ [${siteName}] 화협 엑셀 로드 완료!\n동면적 합계에 빨간색 경고가 뜬 항목이 있는지 확인 후 수정해주세요.`);
 
         } catch (err) { alert("파일 파싱 중 오류 발생: " + err); }
     };
@@ -1281,6 +1349,22 @@ window.confirmAllKfpaData = function() {
     renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
     
     alert(`🎉 화협자료가 [일련번호 앞자리]를 기준으로 완벽하게 통합 그룹화되었습니다!\n\n(그룹 전체 총면적 300㎡ 이하 건물은 부속비율 0%가 자동 적용되었습니다.)`);
+};
+
+// ============================================================================
+// [11-1] 화협 연면적 실시간 수정 및 합계 검증 로직
+// ============================================================================
+window.updateKfpaArea = function(siteName, origIdx, newVal) {
+    let val = parseFloat(newVal);
+    if(isNaN(val)) val = 0;
+    
+    // 데이터 스토어 값 즉시 변경
+    if(window.tempKfpaDataStore && window.tempKfpaDataStore[siteName] && window.tempKfpaDataStore[siteName][origIdx]) {
+        window.tempKfpaDataStore[siteName][origIdx].연면적 = val;
+        
+        // 화면을 다시 그려서 합계와 경고 메시지를 즉시 새로고침 (오차가 사라지면 경고도 즉시 소멸!)
+        window.renderKfpaPreview(siteName);
+    }
 };
 
 // ============================================================================
