@@ -1924,7 +1924,7 @@ window.resetRowDeletion = function() {
 };
 
 // ============================================================================
-// [16] 스마트 빈 셀 자동 탐지 및 일괄 삭제 기능
+// [16] 스마트 빈 셀 자동 탐지 및 일괄 삭제 기능 (CSS 강제적용 및 공백 완벽제거 픽스)
 // ============================================================================
 window.highlightEmptyRows = function() {
     const targetColName = document.getElementById('emptyCheckTarget').value;
@@ -1935,9 +1935,7 @@ window.highlightEmptyRows = function() {
         return alert(`'${targetColName}' 항목이 아직 엑셀의 열과 매핑되지 않았습니다.\n상단의 [열 매핑 마법사]를 통해 먼저 알파벳 매칭을 완료해 주세요.`);
     }
     
-    const excelColLetter = window.infState.wizard.mapped[targetColName]; // 예: "C"
-    
-    // 2. 영문 알파벳을 테이블 인덱스 숫자로 변환 (A=0, B=1, C=2...)
+    const excelColLetter = window.infState.wizard.mapped[targetColName];
     let colIndex = 0;
     for (let i = 0; i < excelColLetter.length; i++) {
         colIndex = colIndex * 26 + (excelColLetter.charCodeAt(i) - 64);
@@ -1953,40 +1951,44 @@ window.highlightEmptyRows = function() {
     // 3. 빈 셀 탐지 및 붉은색 칠하기
     rows.forEach(tr => {
         const cells = tr.querySelectorAll('td');
-        // 첫 번째 칸(cells[0])은 '행 번호' 이므로, 엑셀 데이터는 cells[colIndex + 1] 에 위치함
+        let cellText = "";
+        
+        // 배열 길이 체크 (행의 칸 수가 모자라도 빈 값으로 간주)
         if (cells.length > colIndex + 1) {
-            const targetCell = cells[colIndex + 1];
-            const cellText = targetCell.innerText.trim();
+            // ★ 줄바꿈, 띄어쓰기 등 보이지 않는 모든 공백문자를 완벽하게 제거 후 검사
+            cellText = cells[colIndex + 1].innerText.replace(/\s/g, ''); 
+        }
+        
+        // 완전한 빈 칸이거나 '-' 또는 '0' 인 경우 타겟팅
+        if (cellText === '' || cellText === '-' || cellText === 'null' || cellText === 'undefined' || cellText === '0' || cellText === '0.00') {
+            tr.classList.add('delete-target-row');
             
-            // 빈 칸이거나 '-' 등 쓸모없는 값일 경우 타겟으로 지정
-            if (cellText === '' || cellText === '-' || cellText === 'null' || cellText === 'undefined' || cellText === '0') {
-                tr.classList.add('delete-target-row');
-                tr.style.backgroundColor = '#ffe5e5';
-                tr.style.transition = '0.2s';
-                tr.style.cursor = 'pointer';
-                tr.title = "클릭하면 지우기 대상에서 제외(해제)됩니다.";
-                highlightCount++;
-                
-                // 클릭 시 예외 처리 (해제 기능)
-                tr.onclick = function() {
-                    if (this.classList.contains('delete-target-row')) {
-                        this.classList.remove('delete-target-row');
-                        this.style.backgroundColor = ''; // 원래 색으로 복구
-                        this.title = "";
-                    } else {
-                        this.classList.add('delete-target-row');
-                        this.style.backgroundColor = '#ffe5e5';
-                        this.title = "클릭하면 지우기 대상에서 제외(해제)됩니다.";
-                    }
-                };
-            }
+            // ★ CSS 우선순위(기본 줄무늬 배경색)에 밀리지 않도록 !important 강제 부여
+            tr.style.setProperty('background-color', '#ffe5e5', 'important');
+            tr.style.transition = '0.2s';
+            tr.style.cursor = 'pointer';
+            tr.title = "클릭하면 지우기 대상에서 제외(해제)됩니다.";
+            highlightCount++;
+            
+            // 클릭 시 예외 처리 (해제 및 재지정)
+            tr.onclick = function() {
+                if (this.classList.contains('delete-target-row')) {
+                    this.classList.remove('delete-target-row');
+                    this.style.removeProperty('background-color'); // 원래 색상으로 복구
+                    this.title = "";
+                } else {
+                    this.classList.add('delete-target-row');
+                    this.style.setProperty('background-color', '#ffe5e5', 'important');
+                    this.title = "클릭하면 지우기 대상에서 제외(해제)됩니다.";
+                }
+            };
         }
     });
     
     if (highlightCount > 0) {
-        alert(`🚨 [${targetColName}] 기준, 총 ${highlightCount}개의 빈 행이 발견되어 붉은색으로 표시되었습니다.\n\n지우면 안 되는 행이 있다면 마우스로 클릭하여 붉은색을 해제한 후 일괄 삭제를 진행해 주세요.`);
+        alert(`🚨 [${targetColName}] 열 기준, 총 ${highlightCount}개의 빈 행이 발견되어 붉은색으로 표시되었습니다.\n\n지우면 안 되는 행이 있다면 붉은색 행을 마우스로 클릭하여 해제한 후 일괄 삭제를 진행해 주세요.`);
     } else {
-        alert("해당 열에는 비어있는 칸이 없습니다! (데이터 정상)");
+        alert(`해당 열(${excelColLetter}열)에는 비어있는 칸이 없습니다! (데이터 정상)`);
     }
 };
 
@@ -2002,7 +2004,7 @@ window.bulkDeleteHighlightedRows = function() {
     let currentData = window.infState.data[activeTab];
     if (!currentData || !Array.isArray(currentData)) return alert("데이터를 찾을 수 없습니다.");
     
-    // 삭제할 원본 배열의 인덱스를 수집 (첫 번째 칸의 행번호 - 1)
+    // 삭제할 원본 배열의 인덱스를 수집
     let indicesToDelete = [];
     highlightedRows.forEach(tr => {
         const rowNumText = tr.querySelector('td').innerText;
@@ -2012,7 +2014,7 @@ window.bulkDeleteHighlightedRows = function() {
         }
     });
     
-    // 인덱스가 밀리지 않도록 반드시 큰 번호(뒤)부터 내림차순 삭제
+    // 인덱스가 밀리지 않도록 뒤에서부터 역순으로 삭제
     indicesToDelete.sort((a, b) => b - a);
     
     indicesToDelete.forEach(idx => {
@@ -2025,12 +2027,57 @@ window.bulkDeleteHighlightedRows = function() {
     if (typeof window.infRenderTable === 'function') {
         window.infRenderTable();
     } else {
-        highlightedRows.forEach(tr => tr.remove()); // 만약 렌더함수 오류 시 강제 DOM 삭제
+        highlightedRows.forEach(tr => tr.remove());
     }
     
     alert(`🗑️ 총 ${highlightedRows.length}개의 빈 행이 아주 깔끔하게 일괄 삭제되었습니다!`);
     
-    // ★ 추가: 행 삭제가 완료된 직후, 우측 상단에 '행 삭제 추가 작업(되돌리기)' 버튼 표출!
+    // 행 삭제 완료 후 복구 버튼 노출
     const btnReset = document.getElementById('btnResetRowDelete');
     if (btnReset) btnReset.style.display = 'inline-block';
 };
+
+// ============================================================================
+// [17] 매핑된 버튼 다시 클릭 시 매핑 해제(Unmap) 기능 추가
+// ============================================================================
+document.addEventListener('click', function(e) {
+    // 매핑 버튼 영역 안의 버튼을 클릭했는지 확인
+    const btn = e.target.closest('#infMappingButtons button');
+    if (!btn) return;
+
+    // 버튼 텍스트에 체크표시(✓)가 있다면 이미 매핑된 상태임을 의미함
+    if (btn.innerText.includes('✓')) {
+        e.preventDefault();
+        e.stopPropagation(); // ⭐️ 기존 매핑 클릭 이벤트 가로채기 (중단)
+
+        const targetName = btn.innerText.replace('✓', '').trim();
+
+        // 1. 시스템 메모리(infState)에서 해당 매핑 정보 삭제
+        if (window.infState && window.infState.wizard && window.infState.wizard.mapped) {
+            delete window.infState.wizard.mapped[targetName];
+        }
+
+        // 2. 테이블 헤더에 붙어있는 노란색 배지(Badge) 시각적 제거
+        const ths = document.querySelectorAll('.infTheadGlobal th, .infTheadGlobal td');
+        ths.forEach(th => {
+            const badges = th.querySelectorAll('span');
+            badges.forEach(badge => {
+                if (badge.innerText.includes(targetName)) {
+                    badge.remove();
+                }
+            });
+        });
+
+        // 3. 클릭한 버튼의 텍스트와 디자인을 초기 상태로 복구
+        btn.innerText = targetName;
+        btn.style.background = '#fff';
+        btn.style.color = '#333';
+        btn.style.border = '1px solid #ccc';
+        btn.style.boxShadow = 'none';
+
+        // 4. 만약 방금 해제한 버튼이 활성화 상태였다면 타겟 리셋
+        if (window.infState && window.infState.wizard.activeTarget === targetName) {
+            window.infState.wizard.activeTarget = '';
+        }
+    }
+}, true); // true: 캡처 단계에서 우선 실행하여 기존 매핑 로직 방어
