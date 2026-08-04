@@ -908,7 +908,7 @@ window.batchApplyRatio = function(mode, siteName) {
 // [10] ★ 프로젝트 저장 및 불러오기 (건물평가 + 물가보정 통합 저장 완벽 지원)
 // ============================================================================
 
-window.quickSaveProject = function() {
+window.saveProject = function() {
     try {
         const hasEvalData = Object.keys(window.kbState.evalData.title).length > 0 || 
                             Object.keys(window.kbState.evalData.floor).length > 0 || 
@@ -1899,41 +1899,27 @@ window.cancelComplexDepr = function(mode, siteName, gIdx) {
 };
 
 // ============================================================================
-// [15] 명세서 정제 마법사 되돌리기 (강력한 초기화 로직으로 수정)
+// [15] 스마트 행 삭제 복구 및 추가 작업 기능
 // ============================================================================
-window.infResetToMapping = function() {
-    if (!confirm("매핑 및 행 삭제 이전 상태로 완전히 되돌리시겠습니까?\n(진행된 데이터가 초기화됩니다.)")) return;
+window.resetRowDeletion = function() {
+    if (!confirm("행 삭제 작업을 처음부터 다시 하시겠습니까?\n(열 매핑 정보는 그대로 유지되며, 지워졌던 행들이 다시 복구됩니다.)")) return;
     
     try {
-        if (window.infState) {
-            window.infState.wizard.phase = 'idle';
-            window.infState.wizard.mapped = {};
-            window.infState.wizard.activeTarget = '';
+        if (window.infState && window.infState.rawData && Object.keys(window.infState.rawData).length > 0) {
+            // 원본 데이터로 다시 복구 (매핑된 설정은 건드리지 않음)
+            window.infState.data = JSON.parse(JSON.stringify(window.infState.rawData));
             
-            // 1. 원본 데이터 백업이 있으면 즉시 복원
-            if (window.infState.rawData && Object.keys(window.infState.rawData).length > 0) {
-                window.infState.data = JSON.parse(JSON.stringify(window.infState.rawData));
-                if(typeof window.infInitTabs === 'function') window.infInitTabs();
-                if(typeof window.infRenderTable === 'function') window.infRenderTable();
-                alert("🔄 초기화가 완료되었습니다. '열 매핑 마법사 시작' 버튼을 눌러 다시 진행해 주세요.");
-            } else {
-                // 2. 백업이 없으면 화면을 싹 비우고 재첨부 유도 (먹통 방지)
-                window.infState.data = {};
-                document.querySelector('.infTbodyGlobal').innerHTML = '<tr><td style="padding: 60px; text-align: center; color: #999;"><i class="fa-solid fa-folder-open" style="font-size:30px; margin-bottom:10px; display:block;"></i>초기화되었습니다. 우측 상단의 <b>[원본 불러오기]</b>를 눌러 엑셀을 다시 첨부해 주세요.</td></tr>';
-                let fileInput = document.getElementById('infExcelFile');
-                if(fileInput) fileInput.value = ''; // 파일 첨부 리셋
-                alert("초기화 완료!\n엑셀 원본을 다시 한 번 첨부(업로드)해 주세요.");
+            // 테이블 다시 그리기
+            if (typeof window.infRenderTable === 'function') {
+                window.infRenderTable();
             }
+            
+            alert("데이터가 복구되었습니다. 붉은색 패널의 도구를 이용해 추가적으로 행 삭제 작업을 진행해 주세요.");
+        } else {
+            alert("복구할 원본 데이터가 없습니다. 엑셀 파일을 다시 불러와 주세요.");
         }
-        
-        // UI 버튼 복구
-        const wizardArea = document.getElementById('infWizardArea');
-        if (wizardArea) wizardArea.style.display = 'flex'; 
-        const btnNext = document.getElementById('btnInfNextStep');
-        if (btnNext) btnNext.style.display = 'none';
-        
     } catch (error) {
-        console.error("되돌리기 오류:", error);
+        console.error("행 삭제 되돌리기 오류:", error);
     }
 };
 
@@ -2043,4 +2029,8 @@ window.bulkDeleteHighlightedRows = function() {
     }
     
     alert(`🗑️ 총 ${highlightedRows.length}개의 빈 행이 아주 깔끔하게 일괄 삭제되었습니다!`);
+    
+    // ★ 추가: 행 삭제가 완료된 직후, 우측 상단에 '행 삭제 추가 작업(되돌리기)' 버튼 표출!
+    const btnReset = document.getElementById('btnResetRowDelete');
+    if (btnReset) btnReset.style.display = 'inline-block';
 };

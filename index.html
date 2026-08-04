@@ -692,15 +692,14 @@
                     <label style="cursor: pointer;"><input type="radio" name="infMode" value="integrated" onchange="infInitTabs()"> 통합 평가</label>
                 </div>
                 
-                <!-- ★ 이 부분을 수정합니다 (버튼들을 나란히 배치) -->
                 <div style="display: flex; gap: 10px;">
                     <input type="file" id="infExcelFile" accept=".xlsx, .xls, .csv" style="display: none;" onchange="infLoadExcel(event)">
                     <button type="button" class="btn-dark" style="background:#28a745;" onclick="document.getElementById('infExcelFile').click()">
                         <i class="fa-solid fa-file-excel"></i> (2) 고정자산명세서 원본 불러오기
                     </button>
-                    <!-- ★ 새로 추가된 되돌리기 버튼 -->
-                    <button type="button" class="btn-dark" style="background:#dc3545;" onclick="window.infResetToMapping()">
-                        <i class="fa-solid fa-rotate-left"></i> 매핑/행삭제 되돌리기
+                    <!-- ★ 행 삭제 완료 후에만 등장할 버튼 (초기 숨김) -->
+                    <button type="button" id="btnResetRowDelete" class="btn-dark" style="background:#dc3545; display:none;" onclick="window.resetRowDeletion()">
+                        <i class="fa-solid fa-rotate-left"></i> 행 삭제 추가 작업
                     </button>
                 </div>
             </div>
@@ -709,15 +708,14 @@
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <span style="font-size:15px; font-weight:bold; color:#166534;" id="infWizardText">🎯 아래 버튼 중 하나를 선택하고, 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭해 매칭하세요!</span>
                     <button type="button" class="btn-yellow" id="btnStartWizard" onclick="infStartWizard()">열 매핑 마법사 시작</button>
-                    <button type="button" class="btn-yellow" id="btnFinishMapping" onclick="infFinishMapping()" style="display:none; background:#1C5691; color:white; border:none;">열 매핑 완료 및 행 지우기로 전환 ▶</button>
+                    <!-- ★ 열 매핑 완료 버튼 클릭 시 -> 스마트 삭제 패널 표출 -->
+                    <button type="button" class="btn-yellow" id="btnFinishMapping" onclick="infFinishMapping(); document.getElementById('smartDeletePanel').style.display='flex';" style="display:none; background:#1C5691; color:white; border:none;">열 매핑 완료 및 행 지우기로 전환 ▶</button>
                 </div>
                 <div id="infMappingButtons" style="display:none; gap:10px; flex-wrap:wrap; padding-top:10px; border-top:1px dashed #a7f3d0;"></div>
             </div>
 
-            <!-- ========================================================= -->
-            <!-- ★ 추가: 스마트 빈 셀 자동 탐지 및 일괄 삭제 도구 (여기 삽입!) -->
-            <!-- ========================================================= -->
-            <div id="smartDeletePanel" style="background:#fff3cd; border:1px solid #ffeeba; padding:15px; border-radius:4px; margin-top: 15px; display: flex; align-items: center; gap: 10px;">
+            <!-- ★ 매핑 전에는 숨어있는 스마트 행 삭제 도구 패널 (초기 숨김) -->
+            <div id="smartDeletePanel" style="background:#fff3cd; border:1px solid #ffeeba; padding:15px; border-radius:4px; margin-top: 15px; display: none; align-items: center; gap: 10px;">
                 <span style="font-weight:bold; color:#856404;"><i class="fa-solid fa-broom"></i> 스마트 행 삭제 도구:</span>
                 <select id="emptyCheckTarget" class="input-box" style="padding: 6px; font-weight:bold; width: 160px; border:1px solid #ffc107;">
                     <option value="">검사할 매핑 항목...</option>
@@ -741,7 +739,6 @@
         </div>
     </div>
     
-
     <div id="infTabs1" class="infTabsContainer" style="display: flex; border-bottom: 2px solid #1C5691;"></div>
     <div class="data-table-wrapper infTableContainerWrapper" style="flex:1; border-top: none; overflow-x: auto; overflow-y: auto; background: #fff;">
         <table class="data-table infTableGlobal" style="white-space: nowrap; user-select: none;">
