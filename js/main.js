@@ -1804,8 +1804,49 @@ window.resetRowDeletion = function() {
 };
 
 // ============================================================================
-// [16] 스마트 빈 셀 자동 탐지 기능 (이벤트 중복 제거)
+// [16] 스마트 빈 셀 자동 탐지 기능 (영구 데이터 저장 및 절대 지워지지 않는 색상 적용)
 // ============================================================================
+
+// 1. 기존 시스템의 색상 초기화 방해를 막기 위한 초강력 CSS 강제 주입
+if (!document.getElementById('smartDeleteStyle')) {
+    const style = document.createElement('style');
+    style.id = 'smartDeleteStyle';
+    style.innerHTML = `
+        tr.delete-target-row td {
+            background-color: #ffe5e5 !important;
+        }
+        tr.delete-target-row {
+            background-color: #ffe5e5 !important;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// 2. 표가 다시 그려져도 붉은색이 유지되도록 기존 렌더링 함수 가로채기(Patch)
+if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isSmartPatched) {
+    const originalRender = window.infRenderTable;
+    window.infRenderTable = function() {
+        originalRender.apply(this, arguments); 
+        
+        if(!window.infState || !window.infState.data || !window.infState.activeTab) return;
+        const currentData = window.infState.data[window.infState.activeTab];
+        const tbody = document.querySelector('.infTbodyGlobal');
+        if(!tbody) return;
+        
+        tbody.querySelectorAll('tr').forEach(tr => {
+            const td = tr.querySelector('td');
+            if(!td) return;
+            const origIdx = parseInt(td.innerText) - 1;
+            // 데이터에 '삭제 대기'로 기록되어 있다면 렌더링 시 클래스 다시 부여
+            if(!isNaN(origIdx) && currentData[origIdx] && currentData[origIdx]._isDeleteTarget) {
+                tr.classList.add('delete-target-row');
+                tr.title = "클릭하면 지우기 대상에서 제외(해제)됩니다.";
+            }
+        });
+    };
+    window.infRenderTable.isSmartPatched = true;
+}
+
 window.highlightEmptyRows = function() {
     const targetColName = document.getElementById('emptyCheckTarget').value;
     if (!targetColName) return alert("먼저 검사할 항목(예: 자산계정, 취득가액 등)을 선택해 주세요.");
@@ -1826,22 +1867,25 @@ window.highlightEmptyRows = function() {
     const tbody = document.querySelector('.infTbodyGlobal');
     if (!tbody) return;
     
+    const activeTab = window.infState.activeTab;
+    const currentData = window.infState.data[activeTab];
+    if (!currentData) return;
+
     let highlightCount = 0;
     const rows = tbody.querySelectorAll('tr');
     
     rows.forEach(tr => {
         const cells = tr.querySelectorAll('td');
-        let cellText = "";
+        if (cells.length <= targetCellIndex) return;
         
-        if (cells.length > targetCellIndex) {
-            cellText = cells[targetCellIndex].innerText.replace(/\s/g, ''); 
-        }
+        const cellText = cells[targetCellIndex].innerText.replace(/\s/g, ''); 
+        const origIdx = parseInt(cells[0].innerText) - 1;
         
         if (cellText === '' || cellText === '-' || cellText === 'null' || cellText === 'undefined' || cellText === '0' || cellText === '0.00' || cellText === 'NaN') {
-            // 이미 칠해진 행이 아닐 경우에만 추가
-            if (!tr.classList.contains('delete-target-row')) {
+            // 데이터 저장소에 상태 기록 및 붉은색 지정
+            if (!isNaN(origIdx) && currentData[origIdx] && !currentData[origIdx]._isDeleteTarget) {
+                currentData[origIdx]._isDeleteTarget = true;
                 tr.classList.add('delete-target-row');
-                tr.style.setProperty('background-color', '#ffe5e5', 'important');
                 tr.title = "클릭하면 지우기 대상에서 제외(해제)됩니다.";
                 highlightCount++;
             }
@@ -1856,41 +1900,35 @@ window.highlightEmptyRows = function() {
 };
 
 window.bulkDeleteHighlightedRows = function() {
-    const highlightedRows = document.querySelectorAll('.infTbodyGlobal tr.delete-target-row');
-    if (highlightedRows.length === 0) {
-        return alert("삭제할 붉은색 행이 없습니다.\n먼저 스캔을 하거나 표의 행을 클릭해 붉은색으로 지정해 주세요.");
-    }
-    
-    if (!confirm(`정말 붉은색으로 표시된 ${highlightedRows.length}개의 행을 일괄 삭제하시겠습니까?\n(이 작업은 취소할 수 없습니다.)`)) return;
-    
     const activeTab = window.infState.activeTab;
     let currentData = window.infState.data[activeTab];
     if (!currentData || !Array.isArray(currentData)) return alert("데이터를 찾을 수 없습니다.");
     
     let indicesToDelete = [];
-    highlightedRows.forEach(tr => {
-        const rowNumText = tr.querySelector('td').innerText;
-        const origIdx = parseInt(rowNumText) - 1; 
-        if (!isNaN(origIdx)) {
-            indicesToDelete.push(origIdx);
+    for (let i = 0; i < currentData.length; i++) {
+        if (currentData[i]._isDeleteTarget) {
+            indicesToDelete.push(i);
         }
-    });
+    }
+    
+    if (indicesToDelete.length === 0) {
+        return alert("삭제할 붉은색 행이 없습니다.\n먼저 스캔을 하거나 표의 행을 클릭해 붉은색으로 지정해 주세요.");
+    }
+    
+    if (!confirm(`정말 붉은색으로 표시된 ${indicesToDelete.length}개의 행을 일괄 삭제하시겠습니까?\n(이 작업은 취소할 수 없습니다.)`)) return;
     
     indicesToDelete.sort((a, b) => b - a);
     
     indicesToDelete.forEach(idx => {
-        if(idx >= 0 && idx < currentData.length) {
-            currentData.splice(idx, 1);
-        }
+        currentData.splice(idx, 1);
     });
     
+    // 강제 화면 갱신
     if (typeof window.infRenderTable === 'function') {
         window.infRenderTable();
-    } else {
-        highlightedRows.forEach(tr => tr.remove());
     }
     
-    alert(`🗑️ 총 ${highlightedRows.length}개의 빈 행이 아주 깔끔하게 일괄 삭제되었습니다!`);
+    alert(`🗑️ 총 ${indicesToDelete.length}개의 빈 행이 아주 깔끔하게 일괄 삭제되었습니다!`);
     
     const btnReset = document.getElementById('btnResetRowDelete');
     if (btnReset) btnReset.style.display = 'inline-block';
@@ -1936,34 +1974,35 @@ document.addEventListener('click', function(e) {
 }, true);
 
 // ============================================================================
-// [18] ★ 명세서 표 임의 행 클릭 시 수동 삭제 토글 기능 (완벽 구현)
+// [18] ★ 명세서 표 임의 행 클릭 시 수동 삭제 토글 기능 (절대 풀리지 않음)
 // ============================================================================
 document.addEventListener('click', function(e) {
-    // 1. 명세서 테이블 내부를 클릭했는지 확인
     const tbody = e.target.closest('.infTbodyGlobal');
     if (!tbody) return;
 
-    // 2. 인풋, 셀렉트박스, 버튼 등 다른 기능을 하는 요소 클릭 시에는 무시
     if (['INPUT', 'SELECT', 'BUTTON'].includes(e.target.tagName)) return;
 
-    // 3. 클릭한 행(tr) 찾기
     const tr = e.target.closest('tr');
     if (!tr) return;
 
-    // 4. "데이터가 없습니다" 같은 전체 폭찰(colspan) 안내 메시지 줄은 무시
     const firstTd = tr.querySelector('td');
     if (!firstTd || firstTd.colSpan > 5) return;
 
-    // 5. 붉은색 토글 로직
-    if (tr.classList.contains('delete-target-row')) {
-        // 이미 붉은색이면 -> 하얀색(일반)으로 복구
+    const origIdx = parseInt(firstTd.innerText) - 1;
+    if (isNaN(origIdx)) return;
+    
+    if (!window.infState || !window.infState.data || !window.infState.activeTab) return;
+    const currentData = window.infState.data[window.infState.activeTab];
+    if (!currentData || !currentData[origIdx]) return;
+
+    // 실제 데이터 상태 토글
+    if (currentData[origIdx]._isDeleteTarget) {
+        currentData[origIdx]._isDeleteTarget = false;
         tr.classList.remove('delete-target-row');
-        tr.style.removeProperty('background-color');
         tr.title = "";
     } else {
-        // 하얀색이면 -> 붉은색(삭제 대기)으로 지정
+        currentData[origIdx]._isDeleteTarget = true;
         tr.classList.add('delete-target-row');
-        tr.style.setProperty('background-color', '#ffe5e5', 'important');
         tr.title = "클릭하면 지우기 대상에서 제외(해제)됩니다.";
     }
-});
+}, true); // 다른 스크립트보다 무조건 먼저 실행되도록 캡처(Capture) 권한 획득
