@@ -449,27 +449,195 @@ window.recalculateValuation = function(mode, siteName) {
 
     groups.forEach(group => {
         let totRecoArch = 0, totCurArch = 0;
+        let sumArea = 0, sumWeight = 0;
+        let uniqueConfigs = new Set(); // 복합구조 여부 판단용
+
+        // 1. 가중평균 산출 및 복합구조 감지
+        group.records.forEach(r => {
+            const area = parseFloat(r.연면적) || 0;
+            const yearlyDepr = parseFloat(r.감가율) || 1.78;
+            const buildYear = parseInt(r.준공연도) || evalYear;
+            const elapsed = Math.max(0, evalYear - buildYear);
+            
+            uniqueConfigs.add(`${yearlyDepr}_${buildYear}`);
+
+            let totalDepr = elapsed * yearlyDepr;
+            if (totalDepr > 70) totalDepr = 70; // 잔가율 30% 하한선 반영
+
+            sumArea += area;
+            sumWeight += (totalDepr * area);
+        });
+
+        // 2. 상태 저장 (구조가 다르고 면적이 존재할 경우만 복합구조로 인식)
+        group.isComplex = (uniqueConfigs.size > 1 && sumArea > 0);
+        group.avgTotalDepr = sumArea > 0 ? (sumWeight / sumArea) : 0;
+
+        // 3. 재조달 및 현재가액 재계산
         group.records.forEach(r => {
             const compConstCost = (r.연면적 || 0) * (r.단가 || 0) * (r.물가지수 || 1.0);
             r.재조달_건축 = Math.floor(compConstCost / 1000) * 1000;
             const elapsed = Math.max(0, evalYear - (r.준공연도 || evalYear));
-            let residualRatio = 1.0 - (elapsed * ((r.감가율 || 1.78) / 100.0));
-            if (residualRatio < 0.30) residualRatio = 0.30; 
-            r.잔가율 = residualRatio * 100.0;
-            r.현재_건축 = Math.floor((r.재조달_건축 * residualRatio) / 1000) * 1000;
-            totRecoArch += r.재조달_건축; totCurArch += r.현재_건축;
+            
+            // ★ 복합구조 일괄 적용이 켜져있다면, 개별 감가율을 무시하고 덮어씌움!
+            if (group.complexApplied) {
+                let appliedResidual = 100.0 - group.complexRate;
+                if (appliedResidual < 30) appliedResidual = 30;
+                r.잔가율 = appliedResidual;
+            } else {
+                let residualRatio = 100.0 - (elapsed * (r.감가율 || 1.78));
+                if (residualRatio < 30.0) residualRatio = 30.0; 
+                r.잔가율 = residualRatio;
+            }
+            
+            r.현재_건축 = Math.floor((r.재조달_건축 * (r.잔가율 / 100.0)) / 1000) * 1000;
+            totRecoArch += r.재조달_건축; 
+            totCurArch += r.현재_건축;
         });
 
-        // ★ [핵심 버그 수정] JavaScript에서 0은 false로 인식되므로, 값이 명시적으로 있는지 확인!
+        // 4. 부속설비 산출
         const accRate = parseFloat(group.부속비율 !== undefined && group.부속비율 !== "" ? group.부속비율 : 20.0) / 100.0;
-        
         group.재조달_부속 = Math.floor((totRecoArch * accRate) / 1000) * 1000;
-        const repResidualRatio = group.records.length > 0 ? (group.records[0].잔가율 / 100.0) : 1.0;
+        
+        // 부속설비의 잔가율은 복합구조 적용시 해당 잔가율, 미적용시 첫번째 항목 기준
+        const repResidualRatio = group.complexApplied ? (Math.max(30, 100.0 - group.complexRate) / 100.0) : (group.records.length > 0 ? (group.records[0].잔가율 / 100.0) : 1.0);
+        
         group.현재_부속 = Math.floor((group.재조달_부속 * repResidualRatio) / 1000) * 1000;
         group.재조달_합계 = totRecoArch + group.재조달_부속;
         group.현재_합계 = totCurArch + group.현재_부속;
     });
 };
+
+function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
+    let grandTotalArea = 0, grandTotalReco = 0, grandTotalCur = 0;
+    const groups = Array.isArray(groupedData) ? groupedData : Object.values(groupedData);
+
+    groups.forEach((group, gIdx) => {
+        let groupArea = 0;
+        const records = group.records || group.데이터리스트 || [group]; 
+
+        records.forEach((record, rIdx) => {
+            const seq = record['일련번호'] || '-';
+            const dongName = record['동명칭'] || '-';
+            const usage = record['용도'] || '-';
+            const area = parseFloat(record['연면적'] || 0);
+            const strct = record['구조'] || record['구조명'] || '-';
+            const buildYear = record['준공연도'] || '-'; 
+            const strctCode = record['구조코드'] || '-';
+            const unitPrice = parseFloat(record['단가'] || 0);
+            const laborCost = parseFloat(record['노무비'] || 0);
+            const priceIdx = parseFloat(record['물가지수'] || 1.0);
+            const recoArch = parseFloat(record['재조달_건축'] || 0);
+            const depRate = parseFloat(record['감가율'] || 1.78);
+            const remainRate = parseFloat(record['잔가율'] || 100);
+            const curArch = parseFloat(record['현재_건축'] || 0);
+
+            groupArea += area;
+
+            const codeVal = (strctCode !== "nan" && strctCode !== "-") ? strctCode : "";
+            const codeInputHtml = `
+                <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
+                    <input type="text" value="${codeVal}" style="width:80px; text-align:center; border:1px solid #ccc; padding:3px; font-weight:bold;" 
+                        onchange="applyCodeToRecord(this.value, '${mode}', '${siteName}', ${gIdx}, ${rIdx})">
+                    <button type="button" onclick="openCodeModal('${mode}', '${siteName}', ${gIdx}, ${rIdx}, this.previousElementSibling.value)" 
+                        style="cursor:pointer; padding:3px 6px; background:#1C5691; color:white; border:none; border-radius:3px;" title="단가표 검색">🔍</button>
+                </div>`;
+
+            // 복합구조 일괄적용 중이면 개별 감가율 입력칸을 가리고 알림
+            const depInputHtml = group.complexApplied ? `<span style="font-size:11px; color:#999;">일괄적용됨</span>` : `
+                <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
+                    <input type="number" step="0.01" value="${depRate}" style="width:50px; text-align:center; border:1px solid #ccc; padding:3px; font-weight:bold; color:#0056b3;" 
+                        onchange="applyDeprToRecord(this.value, '${mode}', '${siteName}', ${gIdx}, ${rIdx})">
+                    <button type="button" onclick="openDeprModal('${mode}', '${siteName}', ${gIdx}, ${rIdx})" 
+                        style="cursor:pointer; padding:3px 6px; background:#28A745; color:white; border:none; border-radius:3px;" title="표준 감가율 검색">🔍</button>
+                </div>`;
+
+            const trashIcon = (rIdx === 0) ? `<i class="fa-solid fa-trash-can" onclick="event.stopPropagation(); deleteEvalItem('${mode}', '${siteName}', ${gIdx})" style="color:#dc3545; margin-left:8px; cursor:pointer;" title="이 동 전체 삭제"></i>` : '';
+            const dongDisp = `${dongName} ${trashIcon}`;
+
+            const trArch = document.createElement('tr');
+            trArch.style.backgroundColor = '#ffffff';
+            
+            // 적용된 잔가율이 다를 경우 시각적 강조
+            const dispRemainRate = group.complexApplied ? `<span style="color:#d32f2f; font-weight:bold;">${remainRate.toFixed(2)}%</span>` : `${remainRate.toFixed(2)}%`;
+
+            trArch.innerHTML = `
+                <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '일련번호', 'text')">${seq}</td>
+                <td style="color:#0056b3; font-weight:bold; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '동명칭', 'text')">${dongDisp}</td>
+                <td style="color:#0056b3;">건축공사비</td>
+                <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '용도', 'text')">${usage}</td>
+                <td style="text-align:right; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '연면적', 'number')">${formatArea(area)}</td>
+                <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '구조', 'text')">${strct}</td>
+                <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '준공연도', 'number')">${buildYear}</td>
+                <td>${codeInputHtml}</td>
+                <td style="text-align:right; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '단가', 'number')">${formatPrice(unitPrice)}</td>
+                <td style="text-align:right; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '노무비', 'number')">${formatPrice(laborCost)}</td>
+                <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '물가지수', 'number')">${priceIdx.toFixed(4)}</td>
+                <td style="text-align:right; color:#0056b3;">${formatPrice(recoArch)}</td>
+                <td>${depInputHtml}</td>
+                <td>${dispRemainRate}</td>
+                <td style="text-align:right; color:#0056b3;">${formatPrice(curArch)}</td>
+            `;
+            tbody.appendChild(trArch);
+        });
+
+        const accRate = parseFloat(group['부속비율'] !== undefined && group['부속비율'] !== "" ? group['부속비율'] : 20.0);
+        const recoSub = parseFloat(group['재조달_부속'] || 0);
+        const curSub = parseFloat(group['현재_부속'] || 0);
+        const recoTotal = parseFloat(group['재조달_합계'] || 0);
+        const curTotal = parseFloat(group['현재_합계'] || 0);
+        const mainDongName = group['동명칭'] || '-';
+
+        grandTotalArea += groupArea; grandTotalReco += recoTotal; grandTotalCur += curTotal;
+
+        // ★ 조건부 노출 로직 (일괄 적용 버튼)
+        let complexHtml = '';
+        if (group.complexApplied) {
+            complexHtml = `
+                <div style="color:#d32f2f; font-weight:bold; font-size:12px; cursor:pointer; background:#ffe5e5; padding:6px; border-radius:4px; border: 1px solid #f5c6cb; display:inline-block;"
+                     onclick="window.cancelComplexDepr('${mode}', '${siteName}', ${gIdx})" title="클릭 시 일괄 적용이 해제되고 원래 감가율로 돌아갑니다.">
+                    <i class="fa-solid fa-check"></i> 복합구조 감가율 ${group.complexRate.toFixed(2)}% 적용됨 (해제)
+                </div>`;
+        } else if (group.isComplex) {
+            complexHtml = `
+                <button type="button" onclick="window.openComplexModal('${mode}', '${siteName}', ${gIdx})" 
+                        style="background:#6f42c1; color:white; border:none; padding:6px 10px; border-radius:4px; font-size:12px; font-weight:bold; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);">
+                    <i class="fa-solid fa-magnifying-glass-chart"></i> 복합 가중평균 검산
+                </button>`;
+        }
+
+        const trSub = document.createElement('tr');
+        trSub.style.backgroundColor = '#f8f9fa';
+        trSub.innerHTML = `
+            <td colspan="2"></td><td>부속설비</td><td>[${mainDongName}] 일괄부속</td><td colspan="6"></td>
+            <td style="font-weight:bold; color:#0056b3; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, 0, '부속비율', 'number', 'group')">${accRate.toFixed(1)}%</td>
+            <td style="text-align:right;">${formatPrice(recoSub)}</td>
+            
+            <!-- ★ 복합구조 버튼 위치 지정 -->
+            <td colspan="2" style="text-align:center; vertical-align:middle;">
+                ${complexHtml}
+            </td>
+            
+            <td style="text-align:right;">${formatPrice(curSub)}</td>
+        `;
+        tbody.appendChild(trSub);
+
+        const trTotal = document.createElement('tr');
+        trTotal.style.backgroundColor = '#e2e8f0'; trTotal.style.fontWeight = 'bold';
+        trTotal.innerHTML = `
+            <td colspan="2"></td><td>[${mainDongName}] 소계</td><td></td><td style="text-align:right;">${formatArea(groupArea)}</td><td colspan="6"></td>
+            <td style="text-align:right;">${formatPrice(recoTotal)}</td><td colspan="2"></td><td style="text-align:right;">${formatPrice(curTotal)}</td>
+        `;
+        tbody.appendChild(trTotal);
+    });
+
+    const trGrandTotal = document.createElement('tr');
+    trGrandTotal.style.backgroundColor = '#cbd5e1'; trGrandTotal.style.fontWeight = 'bold';
+    trGrandTotal.innerHTML = `
+        <td colspan="4" style="text-align:center;">사업장 합계</td><td style="text-align:right;">${formatArea(grandTotalArea)}</td><td colspan="6"></td>
+        <td style="text-align:right;">${formatPrice(grandTotalReco)}</td><td colspan="2"></td><td style="text-align:right;">${formatPrice(grandTotalCur)}</td>
+    `;
+    tbody.appendChild(trGrandTotal);
+}
 
 // ============================================================================
 // [7] 단가/물가/구조코드 연동 로직
@@ -1588,4 +1756,91 @@ window.runReportGeneration = function() {
         logBox.value += ">>> 작업이 성공적으로 완료되었습니다!\n";
         alert("보고서 생성이 완료되었습니다.\n(현재는 웹 UI 시뮬레이션이 작동 중이며, 실제 엑셀 파일 생성은 백엔드 서버 연동 후 다운로드됩니다.)");
     }, 2500);
+};
+
+// ============================================================================
+// [14] 복합구조 가중평균 검산 및 일괄 덮어쓰기 모듈
+// ============================================================================
+window.currentComplexTarget = null;
+
+window.openComplexModal = function(mode, siteName, gIdx) {
+    const evalYearInput = document.getElementById('evalYear');
+    const evalYear = parseInt(evalYearInput ? evalYearInput.value : new Date().getFullYear());
+    const siteData = window.kbState.evalData[mode][siteName];
+    const group = Array.isArray(siteData) ? siteData[gIdx] : siteData[Object.keys(siteData)[gIdx]];
+    
+    window.currentComplexTarget = { mode, siteName, gIdx, group };
+    
+    const tbody = document.getElementById('complexDeprTbody');
+    const tfoot = document.getElementById('complexDeprTfoot');
+    tbody.innerHTML = '';
+    
+    let sumArea = 0, sumWeight = 0;
+    
+    group.records.forEach(r => {
+        const area = parseFloat(r.연면적) || 0;
+        const yearlyDepr = parseFloat(r.감가율) || 1.78;
+        const buildYear = parseInt(r.준공연도) || evalYear;
+        const elapsed = Math.max(0, evalYear - buildYear);
+        
+        let totalDepr = elapsed * yearlyDepr;
+        if (totalDepr > 70) totalDepr = 70; // 30% 잔가 하한선 제한 반영
+        
+        const weight = totalDepr * area;
+        sumArea += area; sumWeight += weight;
+        
+        tbody.innerHTML += `
+            <tr>
+                <td style="text-align:center;">${r.구조명 || '-'}</td>
+                <td style="text-align:center;">${r.용도 || '-'}</td>
+                <td style="text-align:center;">${yearlyDepr.toFixed(2)}%</td>
+                <td style="text-align:center;">${elapsed}년</td>
+                <td style="text-align:center; color:#d32f2f; font-weight:bold;">${totalDepr.toFixed(2)}%</td>
+                <td style="text-align:right;">${area.toLocaleString('ko-KR', {minimumFractionDigits:2})}</td>
+                <td style="text-align:right; color:#1C5691;">${weight.toLocaleString('ko-KR', {minimumFractionDigits:2})}</td>
+            </tr>
+        `;
+    });
+    
+    const avgDepr = sumArea > 0 ? (sumWeight / sumArea) : 0;
+    
+    tfoot.innerHTML = `
+        <tr>
+            <td colspan="5" style="text-align:center;">합계 및 산출 과정</td>
+            <td style="text-align:right;">${sumArea.toLocaleString('ko-KR', {minimumFractionDigits:2})}</td>
+            <td style="text-align:right; color:#1C5691;">${sumWeight.toLocaleString('ko-KR', {minimumFractionDigits:2})}</td>
+        </tr>
+        <tr style="background:#cbd5e1; font-size:15px; color:#d32f2f;">
+            <td colspan="7" style="text-align:center; padding:15px;">
+                가중치 합계 (${sumWeight.toLocaleString('ko-KR', {maximumFractionDigits:0})}) ÷ 면적 합계 (${sumArea.toLocaleString('ko-KR', {maximumFractionDigits:0})}) 
+                = <b>가중평균 총감가율 ${avgDepr.toFixed(2)}%</b>
+            </td>
+        </tr>
+    `;
+    
+    document.getElementById('btnApplyComplex').onclick = function() {
+        group.complexApplied = true;
+        group.complexRate = avgDepr;
+        window.recalculateValuation(mode, siteName);
+        window.renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
+        window.closeComplexModal();
+        alert(`✅ 해당 그룹의 잔가율이 모두 ${(100 - avgDepr).toFixed(2)}% (총감가율 ${avgDepr.toFixed(2)}%)로 일괄 덮어씌워졌습니다.`);
+    };
+    
+    document.getElementById('complexDeprModal').style.display = 'flex';
+};
+
+window.closeComplexModal = function() {
+    document.getElementById('complexDeprModal').style.display = 'none';
+    window.currentComplexTarget = null;
+};
+
+window.cancelComplexDepr = function(mode, siteName, gIdx) {
+    if(confirm("일괄 적용된 복합구조 감가율을 해제하고 개별 감가율로 되돌리시겠습니까?")) {
+        const siteData = window.kbState.evalData[mode][siteName];
+        const group = Array.isArray(siteData) ? siteData[gIdx] : siteData[Object.keys(siteData)[gIdx]];
+        group.complexApplied = false;
+        window.recalculateValuation(mode, siteName);
+        window.renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
+    }
 };

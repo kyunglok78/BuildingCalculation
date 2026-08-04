@@ -191,6 +191,37 @@
     </div>
 </div>
 
+<!-- ★ 복합구조 가중평균 검산 및 일괄 적용 팝업창 -->
+<div class="modal-overlay" id="complexDeprModal" style="display:none; z-index: 1000; justify-content: center; align-items: center;">
+    <div class="modal-content" style="width: 850px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+        <div class="modal-header" style="background:#6f42c1; color:white; padding:15px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight:bold;"><i class="fa-solid fa-calculator"></i> 복합구조건물 가중평균 감가율 산출 (검산)</span>
+            <i class="fa-solid fa-xmark modal-close" style="cursor:pointer; font-size:18px;" onclick="window.closeComplexModal()"></i>
+        </div>
+        <div class="modal-body" style="padding: 20px; background:#f4f5f7;">
+            <p style="font-size:13px; color:#555; margin-bottom:10px;">
+                👉 하나의 건물 그룹 내에 서로 다른 구조나 준공연도가 섞인 <b>복합구조 건물</b>입니다. 교재 원칙에 따라 연면적을 기준으로 산출된 <b>가중평균 총감가율</b> 내역입니다.
+            </p>
+            <div style="overflow-y: auto; background:#fff; border:1px solid #ddd; border-radius:4px; margin-bottom: 15px;">
+                <table class="data-table" style="margin-bottom:0;">
+                    <thead style="background: #eee;">
+                        <tr>
+                            <th>구조명</th><th>용도</th><th>경년감가율</th><th>경과년수</th>
+                            <th style="color:#d32f2f;">총감가율</th><th>면적(㎡)</th><th style="color:#1C5691;">가중치</th>
+                        </tr>
+                    </thead>
+                    <tbody id="complexDeprTbody"></tbody>
+                    <tfoot id="complexDeprTfoot" style="background: #e9ecef; font-weight: bold;"></tfoot>
+                </table>
+            </div>
+            <div style="text-align: right;">
+                <button type="button" id="btnApplyComplex" class="btn-dark" style="background:#d32f2f; padding:10px 25px; border:none; font-size:14px; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.2);">
+                    <i class="fa-solid fa-check-double"></i> 이 평균 감가율로 그룹 내 건물들 일괄 덮어쓰기
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- 3-5. 감가율 일괄 지정 팝업창 (엑셀 원본 100% 연동 & 검색 기능 & 화면 최대 확장 버전) -->
 <div class="modal-overlay" id="deprBatchModal" style="display:none; z-index: 1000; justify-content: center; align-items: center;">
