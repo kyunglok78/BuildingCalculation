@@ -2043,4 +2043,4 @@ window.bulkDeleteHighlightedRows = function() {
     }
     
     alert(`🗑️ 총 ${highlightedRows.length}개의 빈 행이 아주 깔끔하게 일괄 삭제되었습니다!`);
-};};
+};
