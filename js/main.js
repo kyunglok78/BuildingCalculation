@@ -451,31 +451,45 @@ window.recalculateValuation = function(mode, siteName) {
     groups.forEach(group => {
         let totRecoArch = 0, totCurArch = 0;
         let sumArea = 0, sumWeight = 0;
-        let uniqueConfigs = new Set(); // 복합구조 여부 판단용
+        let configAreas = {}; // ★ 추가: 구조/연도별 면적 합계를 추적하기 위한 객체
 
-        // 1. 가중평균 산출 및 복합구조 감지
+        // 1. 가중평균 산출 데이터 수집 및 면적 비중 계산
         group.records.forEach(r => {
             const area = parseFloat(r.연면적) || 0;
             const yearlyDepr = parseFloat(r.감가율) || 1.78;
             const buildYear = parseInt(r.준공연도) || evalYear;
             const elapsed = Math.max(0, evalYear - buildYear);
             
-            uniqueConfigs.add(`${yearlyDepr}_${buildYear}`);
+            // 구조와 연도를 결합한 고유 키 생성
+            const configKey = `${yearlyDepr}_${buildYear}`;
+            configAreas[configKey] = (configAreas[configKey] || 0) + area;
 
-            // ★ 수정 1: 70% 상한 제한 삭제 (순수 감가율 누적)
+            // 70% 상한 제한 없이 순수 감가율 누적
             let totalDepr = elapsed * yearlyDepr;
 
-            // ★ 수정 2: 가중치 산출 시 총감가율(%)을 100으로 나눔
+            // 가중치 산출 시 총감가율(%)을 100으로 나눔
             const weight = (totalDepr / 100.0) * area; 
 
             sumArea += area;
             sumWeight += weight;
         });
 
-        // 2. 상태 저장 (구조가 다르고 면적이 존재할 경우만 복합구조로 인식)
-        group.isComplex = (uniqueConfigs.size > 1 && sumArea > 0);
+        // ★ 추가: 그룹 내에서 가장 면적이 넓은 '주건물'의 면적 찾기
+        let maxConfigArea = 0;
+        for (let key in configAreas) {
+            if (configAreas[key] > maxConfigArea) {
+                maxConfigArea = configAreas[key];
+            }
+        }
+
+        // ★ 추가: 주건물을 제외한 나머지(증개축/타구조) 부분의 면적 비중 산출
+        const minorAreaRatio = sumArea > 0 ? (sumArea - maxConfigArea) / sumArea : 0;
+
+        // 2. 상태 저장 
+        // ★ 핵심 룰 적용: 구조가 2개 이상이더라도, 타 구조 면적이 20%를 '초과'할 때만 복합구조 버튼 노출!
+        group.isComplex = (Object.keys(configAreas).length > 1 && sumArea > 0 && minorAreaRatio > 0.20);
         
-        // ★ 수정 3: 가중치가 100으로 나뉘었으므로, 평균 산출 후 다시 100을 곱해 %로 복원
+        // 가중평균 산출 (화면 표출용)
         group.avgTotalDepr = sumArea > 0 ? (sumWeight / sumArea) * 100.0 : 0;
 
         // 3. 재조달 및 현재가액 재계산
@@ -484,7 +498,7 @@ window.recalculateValuation = function(mode, siteName) {
             r.재조달_건축 = Math.floor(compConstCost / 1000) * 1000;
             const elapsed = Math.max(0, evalYear - (r.준공연도 || evalYear));
             
-            // ★ 복합구조 일괄 적용이 켜져있다면, 덮어씌우기! (이때 최종 잔가율 30% 하한선만 지켜줍니다)
+            // 복합구조 일괄 적용이 켜져있다면, 덮어씌우기
             if (group.complexApplied) {
                 let appliedResidual = 100.0 - group.complexRate;
                 if (appliedResidual < 30) appliedResidual = 30; // 최종 하한선 방어
@@ -1881,5 +1895,54 @@ window.cancelComplexDepr = function(mode, siteName, gIdx) {
         group.complexApplied = false;
         window.recalculateValuation(mode, siteName);
         window.renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
+    }
+};
+
+// ============================================================================
+// [15] 명세서 정제 마법사 되돌리기 (Undo) 기능
+// ============================================================================
+window.infResetToMapping = function() {
+    if (!confirm("매핑 및 행 삭제 이전 상태로 완전히 되돌리시겠습니까?\n(현재 정제된 데이터는 초기화됩니다.)")) {
+        return;
+    }
+    
+    try {
+        // 1. 마법사 및 매핑 상태 초기화
+        if (window.infState) {
+            window.infState.wizard.phase = 'idle';
+            window.infState.wizard.mapped = {};
+            window.infState.wizard.activeTarget = '';
+            
+            // 만약 시스템에 원본 데이터 백업(rawData)이 존재한다면 즉시 복원
+            if (window.infState.rawData) {
+                window.infState.data = JSON.parse(JSON.stringify(window.infState.rawData));
+            }
+        }
+
+        // 2. UI 초기화 (1-3단계 완료 메시지 숨기고 마법사 패널 다시 열기)
+        const wizardArea = document.getElementById('infWizardArea');
+        if (wizardArea) wizardArea.style.display = 'flex'; 
+        
+        const btnNext = document.getElementById('btnInfNextStep');
+        if (btnNext) btnNext.style.display = 'none'; 
+
+        // 상단 단계 텍스트 색상 복구 (1-2단계 포커스)
+        const step1 = document.getElementById('step-1-1');
+        const step2 = document.getElementById('step-1-2');
+        const step3 = document.getElementById('step-1-3');
+        if(step1) step1.style.color = '#999';
+        if(step2) step2.style.color = '#1C5691';
+        if(step3) step3.style.color = '#999';
+
+        // 3. 화면 재렌더링
+        if (typeof window.infRenderTable === 'function') {
+            window.infRenderTable();
+        }
+
+        alert("🔄 초기화가 완료되었습니다. '열 매핑 마법사 시작' 버튼을 눌러 다시 진행해 주세요.\n(만약 표가 비어있다면 엑셀 파일을 다시 한 번 첨부해 주세요.)");
+        
+    } catch (error) {
+        console.error("되돌리기 중 오류 발생:", error);
+        alert("되돌리기 중 오류가 발생했습니다. 엑셀 파일을 다시 불러와주세요.");
     }
 };

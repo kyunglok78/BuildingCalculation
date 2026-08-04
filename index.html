@@ -685,16 +685,22 @@
 
     <div id="infStep1Panel" class="card" style="margin-bottom: 15px;">
         <div class="card-body" style="padding: 15px 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <div style="display: flex; gap: 20px; align-items: center;">
                     <span style="font-weight: bold; color: #1C5691;">(1) 평가 방식:</span>
                     <label style="cursor: pointer;"><input type="radio" name="infMode" value="location" checked onchange="infInitTabs()"> 소재지별 평가</label>
                     <label style="cursor: pointer;"><input type="radio" name="infMode" value="integrated" onchange="infInitTabs()"> 통합 평가</label>
                 </div>
-                <div>
+                
+                <!-- ★ 이 부분을 수정합니다 (버튼들을 나란히 배치) -->
+                <div style="display: flex; gap: 10px;">
                     <input type="file" id="infExcelFile" accept=".xlsx, .xls, .csv" style="display: none;" onchange="infLoadExcel(event)">
                     <button type="button" class="btn-dark" style="background:#28a745;" onclick="document.getElementById('infExcelFile').click()">
                         <i class="fa-solid fa-file-excel"></i> (2) 고정자산명세서 원본 불러오기
+                    </button>
+                    <!-- ★ 새로 추가된 되돌리기 버튼 -->
+                    <button type="button" class="btn-dark" style="background:#dc3545;" onclick="window.infResetToMapping()">
+                        <i class="fa-solid fa-rotate-left"></i> 매핑/행삭제 되돌리기
                     </button>
                 </div>
             </div>
