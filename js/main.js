@@ -440,6 +440,7 @@ window.editCell = function(tdElement, mode, siteName, gIdx, rIdx, field, inputTy
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { input.removeEventListener('blur', saveValue); saveValue(); } });
 };
 
+
 window.recalculateValuation = function(mode, siteName) {
     const evalYearInput = document.getElementById('evalYear');
     const evalYear = parseInt(evalYearInput ? evalYearInput.value : new Date().getFullYear());
@@ -461,16 +462,21 @@ window.recalculateValuation = function(mode, siteName) {
             
             uniqueConfigs.add(`${yearlyDepr}_${buildYear}`);
 
+            // ★ 수정 1: 70% 상한 제한 삭제 (순수 감가율 누적)
             let totalDepr = elapsed * yearlyDepr;
-            if (totalDepr > 70) totalDepr = 70; // 잔가율 30% 하한선 반영
+
+            // ★ 수정 2: 가중치 산출 시 총감가율(%)을 100으로 나눔
+            const weight = (totalDepr / 100.0) * area; 
 
             sumArea += area;
-            sumWeight += (totalDepr * area);
+            sumWeight += weight;
         });
 
         // 2. 상태 저장 (구조가 다르고 면적이 존재할 경우만 복합구조로 인식)
         group.isComplex = (uniqueConfigs.size > 1 && sumArea > 0);
-        group.avgTotalDepr = sumArea > 0 ? (sumWeight / sumArea) : 0;
+        
+        // ★ 수정 3: 가중치가 100으로 나뉘었으므로, 평균 산출 후 다시 100을 곱해 %로 복원
+        group.avgTotalDepr = sumArea > 0 ? (sumWeight / sumArea) * 100.0 : 0;
 
         // 3. 재조달 및 현재가액 재계산
         group.records.forEach(r => {
@@ -478,14 +484,14 @@ window.recalculateValuation = function(mode, siteName) {
             r.재조달_건축 = Math.floor(compConstCost / 1000) * 1000;
             const elapsed = Math.max(0, evalYear - (r.준공연도 || evalYear));
             
-            // ★ 복합구조 일괄 적용이 켜져있다면, 개별 감가율을 무시하고 덮어씌움!
+            // ★ 복합구조 일괄 적용이 켜져있다면, 덮어씌우기! (이때 최종 잔가율 30% 하한선만 지켜줍니다)
             if (group.complexApplied) {
                 let appliedResidual = 100.0 - group.complexRate;
-                if (appliedResidual < 30) appliedResidual = 30;
+                if (appliedResidual < 30) appliedResidual = 30; // 최종 하한선 방어
                 r.잔가율 = appliedResidual;
             } else {
                 let residualRatio = 100.0 - (elapsed * (r.감가율 || 1.78));
-                if (residualRatio < 30.0) residualRatio = 30.0; 
+                if (residualRatio < 30.0) residualRatio = 30.0; // 최종 하한선 방어
                 r.잔가율 = residualRatio;
             }
             
@@ -506,6 +512,7 @@ window.recalculateValuation = function(mode, siteName) {
         group.현재_합계 = totCurArch + group.현재_부속;
     });
 };
+
 
 function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
     let grandTotalArea = 0, grandTotalReco = 0, grandTotalCur = 0;
@@ -1789,10 +1796,12 @@ window.openComplexModal = function(mode, siteName, gIdx) {
         const buildYear = parseInt(r.준공연도) || evalYear;
         const elapsed = Math.max(0, evalYear - buildYear);
         
-        let totalDepr = elapsed * yearlyDepr;
-        if (totalDepr > 70) totalDepr = 70; // 30% 잔가 하한선 제한 반영
+        // ★ 수정: 70% 캡(제한) 삭제! 있는 그대로 누적 계산
+        let totalDepr = elapsed * yearlyDepr; 
         
-        const weight = totalDepr * area;
+        // ★ 수정: 가중치 산출 시 100으로 나누기
+        const weight = (totalDepr / 100.0) * area; 
+        
         sumArea += area; sumWeight += weight;
         
         tbody.innerHTML += `
@@ -1808,9 +1817,9 @@ window.openComplexModal = function(mode, siteName, gIdx) {
         `;
     });
     
-    const avgDepr = sumArea > 0 ? (sumWeight / sumArea) : 0;
+    // ★ 수정: 평균을 구한 후, 화면에 %로 예쁘게 보여주기 위해 다시 100을 곱함
+    const avgDepr = sumArea > 0 ? (sumWeight / sumArea) * 100.0 : 0;
     
-    // ★ 버튼을 텍스트 바로 옆으로 이동시켰습니다.
     tfoot.innerHTML = `
         <tr>
             <td colspan="5" style="text-align:center;">합계 및 산출 과정</td>
@@ -1819,7 +1828,7 @@ window.openComplexModal = function(mode, siteName, gIdx) {
         </tr>
         <tr style="background:#cbd5e1; font-size:15px; color:#d32f2f;">
             <td colspan="7" style="text-align:center; padding:15px; vertical-align:middle;">
-                가중치 합계 (${sumWeight.toLocaleString('ko-KR', {maximumFractionDigits:0})}) ÷ 면적 합계 (${sumArea.toLocaleString('ko-KR', {maximumFractionDigits:0})}) 
+                가중치 합계 (${sumWeight.toLocaleString('ko-KR', {maximumFractionDigits:2})}) ÷ 면적 합계 (${sumArea.toLocaleString('ko-KR', {maximumFractionDigits:2})}) × 100
                 = <b>가중평균 총감가율 ${avgDepr.toFixed(2)}%</b>
                 
                 <button type="button" onclick="window.applyComplexDepr('${mode}', '${siteName}', ${gIdx}, ${avgDepr})" 
@@ -1830,7 +1839,6 @@ window.openComplexModal = function(mode, siteName, gIdx) {
         </tr>
     `;
     
-    // ★ 팝업이 화면 밖으로 넘치지 않게 강제 보정 (사라지지 않는 문제 완벽 해결!)
     const modalContent = document.querySelector('#complexDeprModal .modal-content');
     const modalBody = document.querySelector('#complexDeprModal .modal-body');
     if (modalContent) {
@@ -1843,7 +1851,6 @@ window.openComplexModal = function(mode, siteName, gIdx) {
         modalBody.style.flex = '1';
     }
 
-    // 기존 HTML에 있던 불필요한 하단 버튼 숨김
     const oldApplyBtn = document.getElementById('btnApplyComplex');
     if(oldApplyBtn) oldApplyBtn.parentElement.style.display = 'none';
 
