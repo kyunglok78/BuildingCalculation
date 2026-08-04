@@ -542,8 +542,12 @@ function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
                         style="cursor:pointer; padding:3px 6px; background:#1C5691; color:white; border:none; border-radius:3px;" title="단가표 검색">🔍</button>
                 </div>`;
 
-            // 복합구조 일괄적용 중이면 개별 감가율 입력칸을 가리고 알림
-            const depInputHtml = group.complexApplied ? `<span style="font-size:11px; color:#999;">일괄적용됨</span>` : `
+ // ★ 일괄적용 시, 테이블 셀에 감가율/잔가율이 명확하게 들어가도록 수정!
+            const depInputHtml = group.complexApplied 
+                ? `<div style="color:#d32f2f; font-weight:bold; font-size:12px; background:#fff3f3; padding:4px; border-radius:3px; border:1px solid #f5c6cb;" title="가중평균 총감가율 적용됨">
+                    총 ${group.complexRate.toFixed(2)}%
+                   </div>` 
+                : `
                 <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
                     <input type="number" step="0.01" value="${depRate}" style="width:50px; text-align:center; border:1px solid #ccc; padding:3px; font-weight:bold; color:#0056b3;" 
                         onchange="applyDeprToRecord(this.value, '${mode}', '${siteName}', ${gIdx}, ${rIdx})">
@@ -557,8 +561,10 @@ function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
             const trArch = document.createElement('tr');
             trArch.style.backgroundColor = '#ffffff';
             
-            // 적용된 잔가율이 다를 경우 시각적 강조
-            const dispRemainRate = group.complexApplied ? `<span style="color:#d32f2f; font-weight:bold;">${remainRate.toFixed(2)}%</span>` : `${remainRate.toFixed(2)}%`;
+            // ★ 일괄적용 시 잔가율 수치도 붉은색으로 명확하게 렌더링
+            const dispRemainRate = group.complexApplied 
+                ? `<span style="color:#d32f2f; font-weight:bold; font-size:13px;">${remainRate.toFixed(2)}%</span>` 
+                : `${remainRate.toFixed(2)}%`;
 
             trArch.innerHTML = `
                 <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '일련번호', 'text')">${seq}</td>
@@ -1804,6 +1810,7 @@ window.openComplexModal = function(mode, siteName, gIdx) {
     
     const avgDepr = sumArea > 0 ? (sumWeight / sumArea) : 0;
     
+    // ★ 버튼을 텍스트 바로 옆으로 이동시켰습니다.
     tfoot.innerHTML = `
         <tr>
             <td colspan="5" style="text-align:center;">합계 및 산출 과정</td>
@@ -1811,28 +1818,53 @@ window.openComplexModal = function(mode, siteName, gIdx) {
             <td style="text-align:right; color:#1C5691;">${sumWeight.toLocaleString('ko-KR', {minimumFractionDigits:2})}</td>
         </tr>
         <tr style="background:#cbd5e1; font-size:15px; color:#d32f2f;">
-            <td colspan="7" style="text-align:center; padding:15px;">
+            <td colspan="7" style="text-align:center; padding:15px; vertical-align:middle;">
                 가중치 합계 (${sumWeight.toLocaleString('ko-KR', {maximumFractionDigits:0})}) ÷ 면적 합계 (${sumArea.toLocaleString('ko-KR', {maximumFractionDigits:0})}) 
                 = <b>가중평균 총감가율 ${avgDepr.toFixed(2)}%</b>
+                
+                <button type="button" onclick="window.applyComplexDepr('${mode}', '${siteName}', ${gIdx}, ${avgDepr})" 
+                        style="background:#d32f2f; color:white; border:none; padding:8px 20px; border-radius:4px; font-size:14px; font-weight:bold; margin-left:20px; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.2); transition:0.2s;">
+                    <i class="fa-solid fa-check-double"></i> 적용하기
+                </button>
             </td>
         </tr>
     `;
     
-    document.getElementById('btnApplyComplex').onclick = function() {
-        group.complexApplied = true;
-        group.complexRate = avgDepr;
-        window.recalculateValuation(mode, siteName);
-        window.renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
-        window.closeComplexModal();
-        alert(`✅ 해당 그룹의 잔가율이 모두 ${(100 - avgDepr).toFixed(2)}% (총감가율 ${avgDepr.toFixed(2)}%)로 일괄 덮어씌워졌습니다.`);
-    };
-    
+    // ★ 팝업이 화면 밖으로 넘치지 않게 강제 보정 (사라지지 않는 문제 완벽 해결!)
+    const modalContent = document.querySelector('#complexDeprModal .modal-content');
+    const modalBody = document.querySelector('#complexDeprModal .modal-body');
+    if (modalContent) {
+        modalContent.style.maxHeight = '90vh';
+        modalContent.style.display = 'flex';
+        modalContent.style.flexDirection = 'column';
+    }
+    if (modalBody) {
+        modalBody.style.overflowY = 'auto';
+        modalBody.style.flex = '1';
+    }
+
+    // 기존 HTML에 있던 불필요한 하단 버튼 숨김
+    const oldApplyBtn = document.getElementById('btnApplyComplex');
+    if(oldApplyBtn) oldApplyBtn.parentElement.style.display = 'none';
+
     document.getElementById('complexDeprModal').style.display = 'flex';
 };
 
 window.closeComplexModal = function() {
     document.getElementById('complexDeprModal').style.display = 'none';
     window.currentComplexTarget = null;
+};
+
+window.applyComplexDepr = function(mode, siteName, gIdx, avgDepr) {
+    const siteData = window.kbState.evalData[mode][siteName];
+    const group = Array.isArray(siteData) ? siteData[gIdx] : siteData[Object.keys(siteData)[gIdx]];
+    
+    group.complexApplied = true;
+    group.complexRate = avgDepr; // 산출된 총감가율 저장
+    
+    window.recalculateValuation(mode, siteName);
+    window.renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
+    window.closeComplexModal();
 };
 
 window.cancelComplexDepr = function(mode, siteName, gIdx) {
