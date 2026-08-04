@@ -1924,23 +1924,28 @@ window.resetRowDeletion = function() {
 };
 
 // ============================================================================
-// [16] 스마트 빈 셀 자동 탐지 및 일괄 삭제 기능 (CSS 강제적용 및 공백 완벽제거 픽스)
+// [16] 스마트 빈 셀 자동 탐지 및 일괄 삭제 기능
 // ============================================================================
 window.highlightEmptyRows = function() {
     const targetColName = document.getElementById('emptyCheckTarget').value;
     if (!targetColName) return alert("먼저 검사할 항목(예: 자산계정, 취득가액 등)을 선택해 주세요.");
     
-    // 1. 엑셀의 어떤 열(A, B, C...)과 매핑되었는지 확인
-    if (!window.infState || !window.infState.wizard || !window.infState.wizard.mapped[targetColName]) {
-        return alert(`'${targetColName}' 항목이 아직 엑셀의 열과 매핑되지 않았습니다.\n상단의 [열 매핑 마법사]를 통해 먼저 알파벳 매칭을 완료해 주세요.`);
-    }
+    // 1. 현재 화면에 렌더링된 테이블의 헤더(머리글)에서 대상 항목이 몇 번째 칸인지 찾기 (알파벳 기준이 아닌 실제 화면 기준!)
+    const thead = document.querySelector('.infTheadGlobal tr');
+    if (!thead) return;
     
-    const excelColLetter = window.infState.wizard.mapped[targetColName];
-    let colIndex = 0;
-    for (let i = 0; i < excelColLetter.length; i++) {
-        colIndex = colIndex * 26 + (excelColLetter.charCodeAt(i) - 64);
+    let targetCellIndex = -1;
+    const ths = thead.querySelectorAll('th, td');
+    ths.forEach((th, idx) => {
+        // 테이블 머리글 텍스트에 '자산계정', '자산번호' 등이 포함되어 있다면 해당 인덱스 추출
+        if (th.innerText.includes(targetColName)) {
+            targetCellIndex = idx;
+        }
+    });
+
+    if (targetCellIndex === -1) {
+        return alert(`현재 테이블에서 '${targetColName}' 항목의 열을 찾을 수 없습니다.`);
     }
-    colIndex -= 1; 
     
     const tbody = document.querySelector('.infTbodyGlobal');
     if (!tbody) return;
@@ -1948,29 +1953,29 @@ window.highlightEmptyRows = function() {
     let highlightCount = 0;
     const rows = tbody.querySelectorAll('tr');
     
-    // 3. 빈 셀 탐지 및 붉은색 칠하기
+    // 2. 찾아낸 열 인덱스를 바탕으로 빈 셀 탐지 및 붉은색 칠하기
     rows.forEach(tr => {
         const cells = tr.querySelectorAll('td');
         let cellText = "";
         
-        // 배열 길이 체크 (행의 칸 수가 모자라도 빈 값으로 간주)
-        if (cells.length > colIndex + 1) {
-            // ★ 줄바꿈, 띄어쓰기 등 보이지 않는 모든 공백문자를 완벽하게 제거 후 검사
-            cellText = cells[colIndex + 1].innerText.replace(/\s/g, ''); 
+        // 데이터가 해당 열에 존재하는지 확인
+        if (cells.length > targetCellIndex) {
+            // 줄바꿈, 띄어쓰기 등 보이지 않는 공백을 완벽하게 제거 후 순수 텍스트 검사
+            cellText = cells[targetCellIndex].innerText.replace(/\s/g, ''); 
         }
         
-        // 완전한 빈 칸이거나 '-' 또는 '0' 인 경우 타겟팅
-        if (cellText === '' || cellText === '-' || cellText === 'null' || cellText === 'undefined' || cellText === '0' || cellText === '0.00') {
+        // 완전한 빈 칸이거나 무의미한 기호/숫자인 경우 타겟팅
+        if (cellText === '' || cellText === '-' || cellText === 'null' || cellText === 'undefined' || cellText === '0' || cellText === '0.00' || cellText === 'NaN') {
             tr.classList.add('delete-target-row');
             
-            // ★ CSS 우선순위(기본 줄무늬 배경색)에 밀리지 않도록 !important 강제 부여
+            // 기존 줄무늬 배경색에 밀리지 않도록 !important 강제 부여
             tr.style.setProperty('background-color', '#ffe5e5', 'important');
             tr.style.transition = '0.2s';
             tr.style.cursor = 'pointer';
             tr.title = "클릭하면 지우기 대상에서 제외(해제)됩니다.";
             highlightCount++;
             
-            // 클릭 시 예외 처리 (해제 및 재지정)
+            // 클릭 시 예외 처리 (해제 기능)
             tr.onclick = function() {
                 if (this.classList.contains('delete-target-row')) {
                     this.classList.remove('delete-target-row');
@@ -1988,7 +1993,7 @@ window.highlightEmptyRows = function() {
     if (highlightCount > 0) {
         alert(`🚨 [${targetColName}] 열 기준, 총 ${highlightCount}개의 빈 행이 발견되어 붉은색으로 표시되었습니다.\n\n지우면 안 되는 행이 있다면 붉은색 행을 마우스로 클릭하여 해제한 후 일괄 삭제를 진행해 주세요.`);
     } else {
-        alert(`해당 열(${excelColLetter}열)에는 비어있는 칸이 없습니다! (데이터 정상)`);
+        alert(`해당 열에는 비어있는 칸이 없습니다! (데이터 정상)`);
     }
 };
 
