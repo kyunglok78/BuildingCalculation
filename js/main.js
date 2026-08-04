@@ -1905,53 +1905,55 @@ window.highlightEmptyRows = function() {
 };
 
 window.bulkDeleteHighlightedRows = function() {
+    const activeTab = window.infState.activeTab;
+    if (!window.infState || !window.infState.data || !window.infState.data[activeTab]) {
+        return alert("데이터를 찾을 수 없습니다.");
+    }
+
+    let currentData = window.infState.data[activeTab];
+    let targetCount = currentData.filter(item => item && item._isDeleteTarget).length;
+
+    // 만약 데이터 기록엔 없는데 화면에 붉은색이 있다면(예외상황) 강제 동기화
     const highlightedRows = document.querySelectorAll('.infTbodyGlobal tr.delete-target-row');
-    if (highlightedRows.length === 0) {
-        return alert("삭제할 붉은색 행이 없습니다.\n먼저 스캔을 하거나 표의 행을 클릭해 붉은색으로 지정해 주세요.");
+    if (targetCount === 0 && highlightedRows.length > 0) {
+        highlightedRows.forEach(tr => {
+            const td = tr.querySelector('td');
+            if (td) {
+                const idx = parseInt(td.innerText) - 1;
+                if (!isNaN(idx) && currentData[idx]) currentData[idx]._isDeleteTarget = true;
+            }
+        });
+        targetCount = currentData.filter(item => item && item._isDeleteTarget).length;
+    }
+
+    if (targetCount === 0) {
+        return alert("삭제할 붉은색 행이 없습니다.\n스캔을 하거나 표의 행을 클릭해 붉은색으로 지정해 주세요.");
     }
     
-    if (!confirm(`정말 붉은색으로 표시된 ${highlightedRows.length}개의 행을 일괄 삭제하시겠습니까?\n(이 작업은 취소할 수 없습니다.)`)) return;
+    if (!confirm(`정말 붉은색으로 표시된 ${targetCount}개의 행을 일괄 삭제하시겠습니까?\n(이 작업은 취소할 수 없습니다.)`)) return;
     
-    // 1. 화면에서 삭제할 줄 번호(인덱스) 수집
-    let indicesToDelete = [];
-    highlightedRows.forEach(tr => {
-        const td = tr.querySelector('td');
-        if (td) {
-            const origIdx = parseInt(td.innerText) - 1; 
-            if (!isNaN(origIdx)) indicesToDelete.push(origIdx);
+    // ★ 가장 확실한 필터링 방식: _isDeleteTarget이 안 붙어있는 애들만 살려둠 (인덱스 꼬임 원천 차단)
+    const cacheKeys = ['data', 'rawData', 'displayData', 'filteredData'];
+    cacheKeys.forEach(key => {
+        if (window.infState[key]) {
+            Object.keys(window.infState[key]).forEach(subKey => {
+                let arr = window.infState[key][subKey];
+                if (Array.isArray(arr)) {
+                    // 삭제 대상이 아닌 항목만 추출하여 새 배열로 교체!
+                    window.infState[key][subKey] = arr.filter(item => !item._isDeleteTarget);
+                }
+            });
         }
     });
     
-    // 인덱스가 밀리지 않도록 뒤(큰 숫자)에서부터 역순 삭제
-    indicesToDelete.sort((a, b) => b - a); 
-    
-    // 2. ★ 초강력 좀비 방지: 시스템이 몰래 숨겨둔 모든 캐시 데이터(rawData 등)에서 강제 추출 및 완벽 파괴
-    if (window.infState) {
-        const cacheKeys = ['data', 'rawData', 'displayData', 'filteredData'];
-        cacheKeys.forEach(key => {
-            if (window.infState[key]) {
-                Object.keys(window.infState[key]).forEach(subKey => {
-                    let arr = window.infState[key][subKey];
-                    if (Array.isArray(arr)) {
-                        indicesToDelete.forEach(idx => {
-                            if (idx >= 0 && idx < arr.length) {
-                                arr.splice(idx, 1);
-                            }
-                        });
-                    }
-                });
-            }
-        });
-    }
-    
-    // 3. 강제 화면 갱신
+    // 화면 강제 갱신
     if (typeof window.infRenderTable === 'function') {
         window.infRenderTable();
     } else {
         highlightedRows.forEach(tr => tr.remove());
     }
     
-    alert(`🗑️ 총 ${indicesToDelete.length}개의 빈 행이 뿌리까지 완벽하게 일괄 삭제되었습니다!`);
+    alert(`🗑️ 총 ${targetCount}개의 빈 행이 찌꺼기 하나 없이 완벽하게 일괄 삭제되었습니다!`);
     
     const btnReset = document.getElementById('btnResetRowDelete');
     if (btnReset) btnReset.style.display = 'inline-block';
@@ -1998,8 +2000,9 @@ document.addEventListener('click', function(e) {
 }, true);
 
 // ============================================================================
-// [18] ★ 명세서 표 임의 행 클릭 및 키보드(Delete) 수동 삭제/토글 기능 
+// [18] ★ 명세서 표 임의 행 클릭 & [Ctrl + 마이너스(-)] 수동 삭제 토글 기능
 // ============================================================================
+// 마우스 클릭 시 토글
 document.addEventListener('click', function(e) {
     const tbody = e.target.closest('.infTbodyGlobal');
     if (!tbody) return;
@@ -2012,7 +2015,6 @@ document.addEventListener('click', function(e) {
     const firstTd = tr.querySelector('td');
     if (!firstTd || firstTd.colSpan > 5) return;
 
-    // 기존 시스템의 충돌 이벤트 차단
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
@@ -2020,7 +2022,6 @@ document.addEventListener('click', function(e) {
     const origIdx = parseInt(firstTd.innerText) - 1;
     if (isNaN(origIdx)) return;
     
-    // 시각적 토글 및 데이터 상태 갱신
     if (tr.classList.contains('delete-target-row')) {
         tr.classList.remove('delete-target-row');
         tr.style.removeProperty('background-color');
@@ -2044,11 +2045,15 @@ document.addEventListener('click', function(e) {
     }
 }, true);
 
-// ★ 추가: 키보드 Delete 키를 눌렀을 때도 선택된 행이 붉은색으로 토글되도록 지원
+// 키보드 단축키 (Ctrl + -) 적용
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'Delete') {
-        // 현재 마우스가 올라가 있거나 포커스된 행을 타겟팅
-        const activeTr = document.querySelector('.infTbodyGlobal tr:hover') || document.activeElement.closest('tr');
+    // Mac의 Cmd 키와 Windows의 Ctrl 키 모두 지원, 마이너스(-) 키 입력 시 작동
+    if ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_')) {
+        // 브라우저 기본 축소(Zoom Out) 방지
+        e.preventDefault(); 
+        
+        // 현재 마우스가 올라가 있는 행(Hover) 찾기
+        const activeTr = document.querySelector('.infTbodyGlobal tr:hover');
         if (!activeTr) return;
 
         const firstTd = activeTr.querySelector('td');
@@ -2056,8 +2061,6 @@ document.addEventListener('keydown', function(e) {
 
         const origIdx = parseInt(firstTd.innerText) - 1;
         if (isNaN(origIdx)) return;
-
-        e.preventDefault(); // 기본 브라우저 동작 방지
 
         if (activeTr.classList.contains('delete-target-row')) {
             activeTr.classList.remove('delete-target-row');
