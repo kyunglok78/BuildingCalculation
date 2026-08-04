@@ -394,7 +394,7 @@
             
         </div> <!-- sidebar-menu-wrapper 닫기 -->
 
-        <!-- ★ 복원된 하단 저장/불러오기 버튼 영역 -->
+        <!-- 사이드바 하단 저장/불러오기 영역 -->
         <div class="sidebar-bottom">
             <button type="button" onclick="saveProject()" style="background-color: #FFCC00; color: #2C2C2C; border: none; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; width: 100%; text-align: left; display: flex; align-items: center; gap: 10px; transition: 0.2s;">
                 <i class="fa-solid fa-bolt"></i> 빠른 저장 (.kbproj)
@@ -402,7 +402,8 @@
             <button type="button" onclick="document.getElementById('loadProjectFile').click()" style="background-color: #333; color: white; border: 1px solid #555; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; width: 100%; text-align: left; display: flex; align-items: center; gap: 10px; transition: 0.2s;">
                 <i class="fa-solid fa-folder-open"></i> 파일 불러오기 (.kbproj)
             </button>
-            <input type="file" id="loadProjectFile" accept=".kbproj" style="display: none;" onchange="loadProject(event)">
+            <!-- ★ 여기 onclick="this.value=null;" 추가! -->
+            <input type="file" id="loadProjectFile" accept=".kbproj" style="display: none;" onclick="this.value=null;" onchange="loadProject(event)">
         </div>
     </nav>
 

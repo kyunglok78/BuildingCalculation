@@ -983,7 +983,10 @@ window.saveProject = function() {
     }
 };
 
-window.quickLoadProject = function(event) {
+// ============================================================================
+// [10-2] 프로젝트 불러오기 기능 (버그 수정 및 안전한 복원)
+// ============================================================================
+window.loadProject = function(event) {
     const file = event.target.files[0];
     if (!file) return;
 
@@ -997,6 +1000,7 @@ window.quickLoadProject = function(event) {
                 return value;
             });
             
+            // 1. 상태 변수 복원
             if (projectData.kbState) window.kbState = projectData.kbState;
             if (projectData.inflationSheets) window.kbState.inflationSheets = projectData.inflationSheets;
             if (projectData.indexData) window.kbState.indexData = projectData.indexData;
@@ -1006,11 +1010,13 @@ window.quickLoadProject = function(event) {
             if (projectData.targetKfpaSite) window.targetKfpaSite = projectData.targetKfpaSite;
             if (projectData.targetKfpaAddress) window.targetKfpaAddress = projectData.targetKfpaAddress;
 
+            // 2. 기본 정보 텍스트 복원
             if (projectData.contractor) document.querySelectorAll('.contractor-sync').forEach(el => el.value = projectData.contractor);
             if (projectData.evalYear) { const y = document.getElementById('evalYear'); if(y) y.value = projectData.evalYear; }
             if (projectData.unitCostPath) { const u = document.getElementById('unitCostPath'); if(u) u.value = projectData.unitCostPath; }
             if (projectData.priceIndexPath) { const p = document.getElementById('priceIndexPath'); if(p) p.value = projectData.priceIndexPath; }
 
+            // 3. 소재지 테이블 복원
             const tbody = document.getElementById('locationTbody');
             if (tbody) {
                 tbody.innerHTML = ''; 
@@ -1035,125 +1041,7 @@ window.quickLoadProject = function(event) {
                 } 
             }
 
-            // ★ 대장 데이터 완벽 렌더링 로직 (과거 파일에서 통째로 이식 완료)
-            if (window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
-                const dataContainer = document.getElementById('fetchedDataContainer');
-                const tabsContainer = document.getElementById('slide3Tabs');
-                const emptyMsg = document.getElementById('emptyStateMsg');
-                
-                if (emptyMsg) emptyMsg.style.display = 'none';
-                if (dataContainer && tabsContainer) {
-                    dataContainer.style.display = 'block';
-                    dataContainer.innerHTML = ''; 
-                    tabsContainer.innerHTML = '';
-
-                    const korMap = {
-                        "platPlc": "대지위치", "bldNm": "건물명", "mainPurpsCdNm": "주용도",
-                        "mainBldCnt": "주건축물수", "subBldCnt": "부속건축물수", "totArea": "연면적(㎡)",
-                        "pmsDay": "허가일", "stcnsDay": "착공일", "useAprDay": "사용승인일",
-                        "dongNm": "동명칭", "grndFlrCnt": "지상층수", "ugrndFlrCnt": "지하층수",
-                        "heit": "높이(m)", "strctCdNm": "구조명", "roofCdNm": "지붕코드명",
-                        "flrGbCdNm": "층구분", "flrNoNm": "층번호", "area": "면적(㎡)", "etcPurps": "기타용도"
-                    };
-
-                    let isFirst = true;
-                    for (const [siteName, siteData] of Object.entries(window.kbState.fetchedData)) {
-                        const tabBtn = document.createElement('div');
-                        tabBtn.innerText = siteName;
-                        tabBtn.style.cssText = `padding:10px 20px; cursor:pointer; font-weight:${isFirst ? 'bold' : 'normal'}; border:1px solid ${isFirst ? '#1C5691' : '#e2e8f0'}; border-bottom:none; border-radius:4px 4px 0 0; margin-right:5px; background:${isFirst ? '#1C5691' : '#f1f5f9'}; color:${isFirst ? '#ffffff' : '#94a3b8'};`;
-                        
-                        const contentDiv = document.createElement('div');
-                        contentDiv.style.display = isFirst ? 'block' : 'none';
-                        
-                        tabBtn.onclick = () => { 
-                            Array.from(tabsContainer.children).forEach(c => { c.style.background = '#f1f5f9'; c.style.color = '#94a3b8'; c.style.fontWeight = 'normal'; c.style.borderColor = '#e2e8f0'; });
-                            Array.from(dataContainer.children).forEach(c => c.style.display = 'none');
-                            tabBtn.style.background = '#1C5691'; tabBtn.style.color = '#ffffff'; tabBtn.style.fontWeight = 'bold'; tabBtn.style.borderColor = '#1C5691';
-                            contentDiv.style.display = 'block';
-                        };
-                        tabsContainer.appendChild(tabBtn);
-
-                        for (const [title, rows] of Object.entries(siteData)) {
-                            if (title === 'address' || title === 'errors' || !Array.isArray(rows) || rows.length === 0) continue;
-                            
-                            const sectionTitle = document.createElement('h3');
-                            let korTitle = title === 'recap' ? '총괄표제부 정보' : (title === 'title' ? '표제부 상세' : (title === 'floor' ? '층별 개요' : title));
-                            sectionTitle.innerText = `■ ${korTitle}`; 
-                            sectionTitle.style.cssText = 'font-size:15px; margin: 20px 0 10px 0; color:#1C5691;';
-                            contentDiv.appendChild(sectionTitle);
-
-                            const tableWrapper = document.createElement('div');
-                            tableWrapper.style.cssText = 'overflow-x:auto; margin-bottom:20px; border:1px solid #ddd; max-height: 300px; overflow-y: auto;';
-                            
-                            const table = document.createElement('table');
-                            table.className = 'data-table'; 
-                            table.style.margin = '0';
-                            
-                            const thead = document.createElement('thead');
-                            const headerRow = document.createElement('tr');
-                            thead.style.position = 'sticky';
-                            thead.style.top = '0';
-                            thead.style.zIndex = '1';
-                            
-                            const cols = Object.keys(rows[0]);
-                            cols.forEach(col => {
-                                const th = document.createElement('th');
-                                const korName = korMap[col] || col;
-                                th.innerHTML = `${korName} <span style="font-size:10px; color:#ccc;">▲▼</span>`;
-                                th.style.cursor = 'pointer';
-                                
-                                th.dataset.sortOrder = 'asc';
-                                th.onclick = () => {
-                                    const isAsc = th.dataset.sortOrder === 'asc';
-                                    th.dataset.sortOrder = isAsc ? 'desc' : 'asc';
-                                    
-                                    const tbody = table.querySelector('tbody');
-                                    const rowArray = Array.from(tbody.querySelectorAll('tr'));
-                                    const colIndex = Array.from(headerRow.children).indexOf(th);
-                                    
-                                    rowArray.sort((a, b) => {
-                                        const cellA = a.children[colIndex].innerText.replace(/,/g, '');
-                                        const cellB = b.children[colIndex].innerText.replace(/,/g, '');
-                                        const valA = isNaN(cellA) ? cellA : parseFloat(cellA);
-                                        const valB = isNaN(cellB) ? cellB : parseFloat(cellB);
-                                        
-                                        if(valA > valB) return isAsc ? 1 : -1;
-                                        if(valA < valB) return isAsc ? -1 : 1;
-                                        return 0;
-                                    });
-                                    rowArray.forEach(tr => tbody.appendChild(tr)); 
-                                };
-                                headerRow.appendChild(th);
-                            });
-                            thead.appendChild(headerRow);
-                            table.appendChild(thead);
-                            
-                            const tbody = document.createElement('tbody');
-                            rows.forEach((row, rIdx) => {
-                                const tr = document.createElement('tr');
-                                tr.style.background = rIdx % 2 === 0 ? '#fff' : '#f9f9fa';
-                                cols.forEach(col => {
-                                    const td = document.createElement('td');
-                                    let cellValue = row[col];
-                                    if (cellValue === null || String(cellValue).toLowerCase() === "null" || String(cellValue).toLowerCase() === "nan" || cellValue === "") {
-                                        cellValue = '-';
-                                    }
-                                    td.innerText = cellValue;
-                                    td.style.textAlign = 'center';
-                                    tr.appendChild(td);
-                                });
-                                tbody.appendChild(tr);
-                            });
-                            table.appendChild(tbody);
-                            tableWrapper.appendChild(table);
-                            contentDiv.appendChild(tableWrapper);
-                        }
-                        dataContainer.appendChild(contentDiv);
-                        isFirst = false;
-                    }
-                }
-            }
-
+            // 4. 물가보정(명세서) 데이터 최우선 복원
             if (projectData.infState) {
                 window.infState = projectData.infState;
                 if (window.infState.data) {
@@ -1169,23 +1057,9 @@ window.quickLoadProject = function(event) {
                 if (!window.infState.mappingRules) {
                     window.infState.mappingRules = JSON.parse(localStorage.getItem('kb_mapping_rules_v3')) || window.initialRules;
                 }
-                if (typeof window.infInitTabs === 'function' && window.infState.tabs && window.infState.tabs.length > 0) {
-                    setTimeout(() => {
-                        ['sec-2-3-1', 'sec-2-3-2', 'sec-2-3-3'].forEach(id => {
-                            const el = document.getElementById(id);
-                            if(el) el.classList.remove('active');
-                        });
-                        const activeSec = document.getElementById('sec-2-3-' + window.infState.step);
-                        if(activeSec) activeSec.classList.add('active');
-
-                        window.infInitTabs();
-                        if (typeof window.infRenderTable === 'function') window.infRenderTable();
-                    }, 400); 
-                }
-            } else {
-                window.infState = { mode: 'location', tabs: [], activeTab: '', step: 1, data: {}, wizard: { active: false, phase: 'idle', columns: ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득일', '취득가액'], activeTarget: '', mapped: {} }, foldingLevel: 3, lastClickedRow: -1, lastClickedCol: -1, pastYear: null };
             }
 
+            // 5. 사이드바 메뉴 뱃지 상태 복원
             if (projectData.sidebarStates) {
                 for (const [menuId, state] of Object.entries(projectData.sidebarStates)) {
                     const menu = document.getElementById(menuId);
@@ -1202,21 +1076,27 @@ window.quickLoadProject = function(event) {
                 if (typeof updateMenuState === 'function') updateMenuState();
             }
 
+            alert("✅ 가액평가 데이터가 복구되었습니다. 화면을 초기화합니다.");
+            
+            // 페이지 렌더링
             if (typeof runGroupedRenderTest === 'function') runGroupedRenderTest();
+            if (typeof window.infInitTabs === 'function' && window.infState && window.infState.tabs && window.infState.tabs.length > 0) {
+                window.infInitTabs();
+                if (typeof window.infRenderTable === 'function') window.infRenderTable();
+            }
 
-            // ★ 화면 겹침 완벽 방지: 시선을 깔끔하게 1.1 화면으로 고정
             setTimeout(() => {
                 if (typeof switchSection === 'function') switchSection('sec-1-1');
-            }, 600);
+            }, 100);
 
-            alert("✅ 모든 데이터가 완벽하게 복구되었습니다!");
         } catch (err) {
-            alert("⚠️ 파일 형식이 잘못되었거나 손상된 파일입니다.\n(에러: " + err.message + ")");
+            console.error("불러오기 오류:", err);
+            alert("⚠️ 파일 형식이 잘못되었거나 손상된 파일입니다.\n(에러 상세: " + err.message + ")");
         }
     };
     reader.readAsText(file);
-    event.target.value = ''; 
 };
+
 
 // ============================================================================
 // [11] ★ 화협(KFPA) 다중 사업장 바구니 보존 및 일괄 확정 로직 
@@ -1924,23 +1804,19 @@ window.resetRowDeletion = function() {
 };
 
 // ============================================================================
-// [16] 스마트 빈 셀 자동 탐지 및 일괄 삭제 기능
+// [16] 스마트 빈 셀 자동 탐지 기능 (이벤트 중복 제거)
 // ============================================================================
 window.highlightEmptyRows = function() {
     const targetColName = document.getElementById('emptyCheckTarget').value;
     if (!targetColName) return alert("먼저 검사할 항목(예: 자산계정, 취득가액 등)을 선택해 주세요.");
     
-    // 1. 현재 화면에 렌더링된 테이블의 헤더(머리글)에서 대상 항목이 몇 번째 칸인지 찾기 (알파벳 기준이 아닌 실제 화면 기준!)
     const thead = document.querySelector('.infTheadGlobal tr');
     if (!thead) return;
     
     let targetCellIndex = -1;
     const ths = thead.querySelectorAll('th, td');
     ths.forEach((th, idx) => {
-        // 테이블 머리글 텍스트에 '자산계정', '자산번호' 등이 포함되어 있다면 해당 인덱스 추출
-        if (th.innerText.includes(targetColName)) {
-            targetCellIndex = idx;
-        }
+        if (th.innerText.includes(targetColName)) targetCellIndex = idx;
     });
 
     if (targetCellIndex === -1) {
@@ -1953,45 +1829,27 @@ window.highlightEmptyRows = function() {
     let highlightCount = 0;
     const rows = tbody.querySelectorAll('tr');
     
-    // 2. 찾아낸 열 인덱스를 바탕으로 빈 셀 탐지 및 붉은색 칠하기
     rows.forEach(tr => {
         const cells = tr.querySelectorAll('td');
         let cellText = "";
         
-        // 데이터가 해당 열에 존재하는지 확인
         if (cells.length > targetCellIndex) {
-            // 줄바꿈, 띄어쓰기 등 보이지 않는 공백을 완벽하게 제거 후 순수 텍스트 검사
             cellText = cells[targetCellIndex].innerText.replace(/\s/g, ''); 
         }
         
-        // 완전한 빈 칸이거나 무의미한 기호/숫자인 경우 타겟팅
         if (cellText === '' || cellText === '-' || cellText === 'null' || cellText === 'undefined' || cellText === '0' || cellText === '0.00' || cellText === 'NaN') {
-            tr.classList.add('delete-target-row');
-            
-            // 기존 줄무늬 배경색에 밀리지 않도록 !important 강제 부여
-            tr.style.setProperty('background-color', '#ffe5e5', 'important');
-            tr.style.transition = '0.2s';
-            tr.style.cursor = 'pointer';
-            tr.title = "클릭하면 지우기 대상에서 제외(해제)됩니다.";
-            highlightCount++;
-            
-            // 클릭 시 예외 처리 (해제 기능)
-            tr.onclick = function() {
-                if (this.classList.contains('delete-target-row')) {
-                    this.classList.remove('delete-target-row');
-                    this.style.removeProperty('background-color'); // 원래 색상으로 복구
-                    this.title = "";
-                } else {
-                    this.classList.add('delete-target-row');
-                    this.style.setProperty('background-color', '#ffe5e5', 'important');
-                    this.title = "클릭하면 지우기 대상에서 제외(해제)됩니다.";
-                }
-            };
+            // 이미 칠해진 행이 아닐 경우에만 추가
+            if (!tr.classList.contains('delete-target-row')) {
+                tr.classList.add('delete-target-row');
+                tr.style.setProperty('background-color', '#ffe5e5', 'important');
+                tr.title = "클릭하면 지우기 대상에서 제외(해제)됩니다.";
+                highlightCount++;
+            }
         }
     });
     
     if (highlightCount > 0) {
-        alert(`🚨 [${targetColName}] 열 기준, 총 ${highlightCount}개의 빈 행이 발견되어 붉은색으로 표시되었습니다.\n\n지우면 안 되는 행이 있다면 붉은색 행을 마우스로 클릭하여 해제한 후 일괄 삭제를 진행해 주세요.`);
+        alert(`🚨 [${targetColName}] 열 기준, 총 ${highlightCount}개의 빈 행이 자동 탐지되었습니다.\n\n수동으로 표 안의 아무 행이나 '클릭'하여 붉은색을 추가하거나 뺄 수 있습니다!`);
     } else {
         alert(`해당 열에는 비어있는 칸이 없습니다! (데이터 정상)`);
     }
@@ -2000,7 +1858,7 @@ window.highlightEmptyRows = function() {
 window.bulkDeleteHighlightedRows = function() {
     const highlightedRows = document.querySelectorAll('.infTbodyGlobal tr.delete-target-row');
     if (highlightedRows.length === 0) {
-        return alert("삭제할 붉은색 행이 없습니다.\n먼저 [빈 셀 찾아 붉은색 표시] 버튼을 눌러 스캔해 주세요.");
+        return alert("삭제할 붉은색 행이 없습니다.\n먼저 스캔을 하거나 표의 행을 클릭해 붉은색으로 지정해 주세요.");
     }
     
     if (!confirm(`정말 붉은색으로 표시된 ${highlightedRows.length}개의 행을 일괄 삭제하시겠습니까?\n(이 작업은 취소할 수 없습니다.)`)) return;
@@ -2009,7 +1867,6 @@ window.bulkDeleteHighlightedRows = function() {
     let currentData = window.infState.data[activeTab];
     if (!currentData || !Array.isArray(currentData)) return alert("데이터를 찾을 수 없습니다.");
     
-    // 삭제할 원본 배열의 인덱스를 수집
     let indicesToDelete = [];
     highlightedRows.forEach(tr => {
         const rowNumText = tr.querySelector('td').innerText;
@@ -2019,7 +1876,6 @@ window.bulkDeleteHighlightedRows = function() {
         }
     });
     
-    // 인덱스가 밀리지 않도록 뒤에서부터 역순으로 삭제
     indicesToDelete.sort((a, b) => b - a);
     
     indicesToDelete.forEach(idx => {
@@ -2028,7 +1884,6 @@ window.bulkDeleteHighlightedRows = function() {
         }
     });
     
-    // 화면 완벽하게 재렌더링
     if (typeof window.infRenderTable === 'function') {
         window.infRenderTable();
     } else {
@@ -2037,32 +1892,27 @@ window.bulkDeleteHighlightedRows = function() {
     
     alert(`🗑️ 총 ${highlightedRows.length}개의 빈 행이 아주 깔끔하게 일괄 삭제되었습니다!`);
     
-    // 행 삭제 완료 후 복구 버튼 노출
     const btnReset = document.getElementById('btnResetRowDelete');
     if (btnReset) btnReset.style.display = 'inline-block';
 };
 
 // ============================================================================
-// [17] 매핑된 버튼 다시 클릭 시 매핑 해제(Unmap) 기능 추가
+// [17] 매핑된 버튼 다시 클릭 시 매핑 해제(Unmap) 기능 
 // ============================================================================
 document.addEventListener('click', function(e) {
-    // 매핑 버튼 영역 안의 버튼을 클릭했는지 확인
     const btn = e.target.closest('#infMappingButtons button');
     if (!btn) return;
 
-    // 버튼 텍스트에 체크표시(✓)가 있다면 이미 매핑된 상태임을 의미함
     if (btn.innerText.includes('✓')) {
         e.preventDefault();
-        e.stopPropagation(); // ⭐️ 기존 매핑 클릭 이벤트 가로채기 (중단)
+        e.stopPropagation(); 
 
         const targetName = btn.innerText.replace('✓', '').trim();
 
-        // 1. 시스템 메모리(infState)에서 해당 매핑 정보 삭제
         if (window.infState && window.infState.wizard && window.infState.wizard.mapped) {
             delete window.infState.wizard.mapped[targetName];
         }
 
-        // 2. 테이블 헤더에 붙어있는 노란색 배지(Badge) 시각적 제거
         const ths = document.querySelectorAll('.infTheadGlobal th, .infTheadGlobal td');
         ths.forEach(th => {
             const badges = th.querySelectorAll('span');
@@ -2073,16 +1923,47 @@ document.addEventListener('click', function(e) {
             });
         });
 
-        // 3. 클릭한 버튼의 텍스트와 디자인을 초기 상태로 복구
         btn.innerText = targetName;
         btn.style.background = '#fff';
         btn.style.color = '#333';
         btn.style.border = '1px solid #ccc';
         btn.style.boxShadow = 'none';
 
-        // 4. 만약 방금 해제한 버튼이 활성화 상태였다면 타겟 리셋
         if (window.infState && window.infState.wizard.activeTarget === targetName) {
             window.infState.wizard.activeTarget = '';
         }
     }
-}, true); // true: 캡처 단계에서 우선 실행하여 기존 매핑 로직 방어
+}, true);
+
+// ============================================================================
+// [18] ★ 명세서 표 임의 행 클릭 시 수동 삭제 토글 기능 (완벽 구현)
+// ============================================================================
+document.addEventListener('click', function(e) {
+    // 1. 명세서 테이블 내부를 클릭했는지 확인
+    const tbody = e.target.closest('.infTbodyGlobal');
+    if (!tbody) return;
+
+    // 2. 인풋, 셀렉트박스, 버튼 등 다른 기능을 하는 요소 클릭 시에는 무시
+    if (['INPUT', 'SELECT', 'BUTTON'].includes(e.target.tagName)) return;
+
+    // 3. 클릭한 행(tr) 찾기
+    const tr = e.target.closest('tr');
+    if (!tr) return;
+
+    // 4. "데이터가 없습니다" 같은 전체 폭찰(colspan) 안내 메시지 줄은 무시
+    const firstTd = tr.querySelector('td');
+    if (!firstTd || firstTd.colSpan > 5) return;
+
+    // 5. 붉은색 토글 로직
+    if (tr.classList.contains('delete-target-row')) {
+        // 이미 붉은색이면 -> 하얀색(일반)으로 복구
+        tr.classList.remove('delete-target-row');
+        tr.style.removeProperty('background-color');
+        tr.title = "";
+    } else {
+        // 하얀색이면 -> 붉은색(삭제 대기)으로 지정
+        tr.classList.add('delete-target-row');
+        tr.style.setProperty('background-color', '#ffe5e5', 'important');
+        tr.title = "클릭하면 지우기 대상에서 제외(해제)됩니다.";
+    }
+});
