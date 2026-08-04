@@ -1899,50 +1899,148 @@ window.cancelComplexDepr = function(mode, siteName, gIdx) {
 };
 
 // ============================================================================
-// [15] 명세서 정제 마법사 되돌리기 (Undo) 기능
+// [15] 명세서 정제 마법사 되돌리기 (강력한 초기화 로직으로 수정)
 // ============================================================================
 window.infResetToMapping = function() {
-    if (!confirm("매핑 및 행 삭제 이전 상태로 완전히 되돌리시겠습니까?\n(현재 정제된 데이터는 초기화됩니다.)")) {
-        return;
-    }
+    if (!confirm("매핑 및 행 삭제 이전 상태로 완전히 되돌리시겠습니까?\n(진행된 데이터가 초기화됩니다.)")) return;
     
     try {
-        // 1. 마법사 및 매핑 상태 초기화
         if (window.infState) {
             window.infState.wizard.phase = 'idle';
             window.infState.wizard.mapped = {};
             window.infState.wizard.activeTarget = '';
             
-            // 만약 시스템에 원본 데이터 백업(rawData)이 존재한다면 즉시 복원
-            if (window.infState.rawData) {
+            // 1. 원본 데이터 백업이 있으면 즉시 복원
+            if (window.infState.rawData && Object.keys(window.infState.rawData).length > 0) {
                 window.infState.data = JSON.parse(JSON.stringify(window.infState.rawData));
+                if(typeof window.infInitTabs === 'function') window.infInitTabs();
+                if(typeof window.infRenderTable === 'function') window.infRenderTable();
+                alert("🔄 초기화가 완료되었습니다. '열 매핑 마법사 시작' 버튼을 눌러 다시 진행해 주세요.");
+            } else {
+                // 2. 백업이 없으면 화면을 싹 비우고 재첨부 유도 (먹통 방지)
+                window.infState.data = {};
+                document.querySelector('.infTbodyGlobal').innerHTML = '<tr><td style="padding: 60px; text-align: center; color: #999;"><i class="fa-solid fa-folder-open" style="font-size:30px; margin-bottom:10px; display:block;"></i>초기화되었습니다. 우측 상단의 <b>[원본 불러오기]</b>를 눌러 엑셀을 다시 첨부해 주세요.</td></tr>';
+                let fileInput = document.getElementById('infExcelFile');
+                if(fileInput) fileInput.value = ''; // 파일 첨부 리셋
+                alert("초기화 완료!\n엑셀 원본을 다시 한 번 첨부(업로드)해 주세요.");
             }
         }
-
-        // 2. UI 초기화 (1-3단계 완료 메시지 숨기고 마법사 패널 다시 열기)
+        
+        // UI 버튼 복구
         const wizardArea = document.getElementById('infWizardArea');
         if (wizardArea) wizardArea.style.display = 'flex'; 
-        
         const btnNext = document.getElementById('btnInfNextStep');
-        if (btnNext) btnNext.style.display = 'none'; 
-
-        // 상단 단계 텍스트 색상 복구 (1-2단계 포커스)
-        const step1 = document.getElementById('step-1-1');
-        const step2 = document.getElementById('step-1-2');
-        const step3 = document.getElementById('step-1-3');
-        if(step1) step1.style.color = '#999';
-        if(step2) step2.style.color = '#1C5691';
-        if(step3) step3.style.color = '#999';
-
-        // 3. 화면 재렌더링
-        if (typeof window.infRenderTable === 'function') {
-            window.infRenderTable();
-        }
-
-        alert("🔄 초기화가 완료되었습니다. '열 매핑 마법사 시작' 버튼을 눌러 다시 진행해 주세요.\n(만약 표가 비어있다면 엑셀 파일을 다시 한 번 첨부해 주세요.)");
+        if (btnNext) btnNext.style.display = 'none';
         
     } catch (error) {
-        console.error("되돌리기 중 오류 발생:", error);
-        alert("되돌리기 중 오류가 발생했습니다. 엑셀 파일을 다시 불러와주세요.");
+        console.error("되돌리기 오류:", error);
     }
 };
+
+// ============================================================================
+// [16] 스마트 빈 셀 자동 탐지 및 일괄 삭제 기능
+// ============================================================================
+window.highlightEmptyRows = function() {
+    const targetColName = document.getElementById('emptyCheckTarget').value;
+    if (!targetColName) return alert("먼저 검사할 항목(예: 자산계정, 취득가액 등)을 선택해 주세요.");
+    
+    // 1. 엑셀의 어떤 열(A, B, C...)과 매핑되었는지 확인
+    if (!window.infState || !window.infState.wizard || !window.infState.wizard.mapped[targetColName]) {
+        return alert(`'${targetColName}' 항목이 아직 엑셀의 열과 매핑되지 않았습니다.\n상단의 [열 매핑 마법사]를 통해 먼저 알파벳 매칭을 완료해 주세요.`);
+    }
+    
+    const excelColLetter = window.infState.wizard.mapped[targetColName]; // 예: "C"
+    
+    // 2. 영문 알파벳을 테이블 인덱스 숫자로 변환 (A=0, B=1, C=2...)
+    let colIndex = 0;
+    for (let i = 0; i < excelColLetter.length; i++) {
+        colIndex = colIndex * 26 + (excelColLetter.charCodeAt(i) - 64);
+    }
+    colIndex -= 1; 
+    
+    const tbody = document.querySelector('.infTbodyGlobal');
+    if (!tbody) return;
+    
+    let highlightCount = 0;
+    const rows = tbody.querySelectorAll('tr');
+    
+    // 3. 빈 셀 탐지 및 붉은색 칠하기
+    rows.forEach(tr => {
+        const cells = tr.querySelectorAll('td');
+        // 첫 번째 칸(cells[0])은 '행 번호' 이므로, 엑셀 데이터는 cells[colIndex + 1] 에 위치함
+        if (cells.length > colIndex + 1) {
+            const targetCell = cells[colIndex + 1];
+            const cellText = targetCell.innerText.trim();
+            
+            // 빈 칸이거나 '-' 등 쓸모없는 값일 경우 타겟으로 지정
+            if (cellText === '' || cellText === '-' || cellText === 'null' || cellText === 'undefined' || cellText === '0') {
+                tr.classList.add('delete-target-row');
+                tr.style.backgroundColor = '#ffe5e5';
+                tr.style.transition = '0.2s';
+                tr.style.cursor = 'pointer';
+                tr.title = "클릭하면 지우기 대상에서 제외(해제)됩니다.";
+                highlightCount++;
+                
+                // 클릭 시 예외 처리 (해제 기능)
+                tr.onclick = function() {
+                    if (this.classList.contains('delete-target-row')) {
+                        this.classList.remove('delete-target-row');
+                        this.style.backgroundColor = ''; // 원래 색으로 복구
+                        this.title = "";
+                    } else {
+                        this.classList.add('delete-target-row');
+                        this.style.backgroundColor = '#ffe5e5';
+                        this.title = "클릭하면 지우기 대상에서 제외(해제)됩니다.";
+                    }
+                };
+            }
+        }
+    });
+    
+    if (highlightCount > 0) {
+        alert(`🚨 [${targetColName}] 기준, 총 ${highlightCount}개의 빈 행이 발견되어 붉은색으로 표시되었습니다.\n\n지우면 안 되는 행이 있다면 마우스로 클릭하여 붉은색을 해제한 후 일괄 삭제를 진행해 주세요.`);
+    } else {
+        alert("해당 열에는 비어있는 칸이 없습니다! (데이터 정상)");
+    }
+};
+
+window.bulkDeleteHighlightedRows = function() {
+    const highlightedRows = document.querySelectorAll('.infTbodyGlobal tr.delete-target-row');
+    if (highlightedRows.length === 0) {
+        return alert("삭제할 붉은색 행이 없습니다.\n먼저 [빈 셀 찾아 붉은색 표시] 버튼을 눌러 스캔해 주세요.");
+    }
+    
+    if (!confirm(`정말 붉은색으로 표시된 ${highlightedRows.length}개의 행을 일괄 삭제하시겠습니까?\n(이 작업은 취소할 수 없습니다.)`)) return;
+    
+    const activeTab = window.infState.activeTab;
+    let currentData = window.infState.data[activeTab];
+    if (!currentData || !Array.isArray(currentData)) return alert("데이터를 찾을 수 없습니다.");
+    
+    // 삭제할 원본 배열의 인덱스를 수집 (첫 번째 칸의 행번호 - 1)
+    let indicesToDelete = [];
+    highlightedRows.forEach(tr => {
+        const rowNumText = tr.querySelector('td').innerText;
+        const origIdx = parseInt(rowNumText) - 1; 
+        if (!isNaN(origIdx)) {
+            indicesToDelete.push(origIdx);
+        }
+    });
+    
+    // 인덱스가 밀리지 않도록 반드시 큰 번호(뒤)부터 내림차순 삭제
+    indicesToDelete.sort((a, b) => b - a);
+    
+    indicesToDelete.forEach(idx => {
+        if(idx >= 0 && idx < currentData.length) {
+            currentData.splice(idx, 1);
+        }
+    });
+    
+    // 화면 완벽하게 재렌더링
+    if (typeof window.infRenderTable === 'function') {
+        window.infRenderTable();
+    } else {
+        highlightedRows.forEach(tr => tr.remove()); // 만약 렌더함수 오류 시 강제 DOM 삭제
+    }
+    
+    alert(`🗑️ 총 ${highlightedRows.length}개의 빈 행이 아주 깔끔하게 일괄 삭제되었습니다!`);
+};};

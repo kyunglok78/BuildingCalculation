@@ -713,9 +713,35 @@
                 </div>
                 <div id="infMappingButtons" style="display:none; gap:10px; flex-wrap:wrap; padding-top:10px; border-top:1px dashed #a7f3d0;"></div>
             </div>
+
+            <!-- ========================================================= -->
+            <!-- ★ 추가: 스마트 빈 셀 자동 탐지 및 일괄 삭제 도구 (여기 삽입!) -->
+            <!-- ========================================================= -->
+            <div id="smartDeletePanel" style="background:#fff3cd; border:1px solid #ffeeba; padding:15px; border-radius:4px; margin-top: 15px; display: flex; align-items: center; gap: 10px;">
+                <span style="font-weight:bold; color:#856404;"><i class="fa-solid fa-broom"></i> 스마트 행 삭제 도구:</span>
+                <select id="emptyCheckTarget" class="input-box" style="padding: 6px; font-weight:bold; width: 160px; border:1px solid #ffc107;">
+                    <option value="">검사할 매핑 항목...</option>
+                    <option value="소재지">소재지</option>
+                    <option value="자산계정">자산계정</option>
+                    <option value="자산번호">자산번호</option>
+                    <option value="자산명">자산명</option>
+                    <option value="국산/외산">국산/외산</option>
+                    <option value="취득일">취득일</option>
+                    <option value="취득가액">취득가액</option>
+                </select>
+                <button type="button" class="btn-dark" style="background:#ffc107; color:#333; border:none; padding:8px 15px; font-weight:bold; box-shadow:0 1px 3px rgba(0,0,0,0.1);" onclick="window.highlightEmptyRows()">
+                    <i class="fa-solid fa-magnifying-glass"></i> 빈 셀 찾아 붉은색 표시
+                </button>
+                <span style="font-size:12px; color:#666;">(※ 붉은색으로 표시된 행을 클릭하면 해제됩니다.)</span>
+                
+                <button type="button" class="btn-dark" style="background:#dc3545; color:#fff; border:none; padding:8px 15px; margin-left:auto; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.2);" onclick="window.bulkDeleteHighlightedRows()">
+                    <i class="fa-solid fa-trash-can"></i> 일괄 지우기
+                </button>
+            </div>
         </div>
     </div>
     
+
     <div id="infTabs1" class="infTabsContainer" style="display: flex; border-bottom: 2px solid #1C5691;"></div>
     <div class="data-table-wrapper infTableContainerWrapper" style="flex:1; border-top: none; overflow-x: auto; overflow-y: auto; background: #fff;">
         <table class="data-table infTableGlobal" style="white-space: nowrap; user-select: none;">
