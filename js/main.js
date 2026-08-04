@@ -1998,7 +1998,7 @@ document.addEventListener('click', function(e) {
 }, true);
 
 // ============================================================================
-// [18] ★ 명세서 표 임의 행 클릭 시 수동 삭제 토글 기능 (기존 시스템 완벽 차단)
+// [18] ★ 명세서 표 임의 행 클릭 및 키보드(Delete) 수동 삭제/토글 기능 
 // ============================================================================
 document.addEventListener('click', function(e) {
     const tbody = e.target.closest('.infTbodyGlobal');
@@ -2012,7 +2012,7 @@ document.addEventListener('click', function(e) {
     const firstTd = tr.querySelector('td');
     if (!firstTd || firstTd.colSpan > 5) return;
 
-    // ★★★ 핵심: 기존 시스템의 클릭 이벤트(파란색 선택, 화면 갱신 등)가 작동하지 못하도록 3중으로 겹겹이 차단 ★★★
+    // 기존 시스템의 충돌 이벤트 차단
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
@@ -2022,7 +2022,6 @@ document.addEventListener('click', function(e) {
     
     // 시각적 토글 및 데이터 상태 갱신
     if (tr.classList.contains('delete-target-row')) {
-        // 붉은색 해제
         tr.classList.remove('delete-target-row');
         tr.style.removeProperty('background-color');
         tr.title = "";
@@ -2033,7 +2032,6 @@ document.addEventListener('click', function(e) {
             });
         }
     } else {
-        // 붉은색 지정
         tr.classList.add('delete-target-row');
         tr.style.setProperty('background-color', '#ffe5e5', 'important');
         tr.title = "클릭하면 지우기 대상에서 제외(해제)됩니다.";
@@ -2044,4 +2042,43 @@ document.addEventListener('click', function(e) {
             });
         }
     }
-}, true); // ★ capture(가로채기) 단계를 사용하여 기존 시스템보다 무조건 먼저 실행 후 차단!
+}, true);
+
+// ★ 추가: 키보드 Delete 키를 눌렀을 때도 선택된 행이 붉은색으로 토글되도록 지원
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Delete') {
+        // 현재 마우스가 올라가 있거나 포커스된 행을 타겟팅
+        const activeTr = document.querySelector('.infTbodyGlobal tr:hover') || document.activeElement.closest('tr');
+        if (!activeTr) return;
+
+        const firstTd = activeTr.querySelector('td');
+        if (!firstTd || firstTd.colSpan > 5) return;
+
+        const origIdx = parseInt(firstTd.innerText) - 1;
+        if (isNaN(origIdx)) return;
+
+        e.preventDefault(); // 기본 브라우저 동작 방지
+
+        if (activeTr.classList.contains('delete-target-row')) {
+            activeTr.classList.remove('delete-target-row');
+            activeTr.style.removeProperty('background-color');
+            activeTr.title = "";
+            
+            if (window.infState && window.infState.data) {
+                Object.values(window.infState.data).forEach(arr => {
+                    if (Array.isArray(arr) && arr[origIdx]) arr[origIdx]._isDeleteTarget = false;
+                });
+            }
+        } else {
+            activeTr.classList.add('delete-target-row');
+            activeTr.style.setProperty('background-color', '#ffe5e5', 'important');
+            activeTr.title = "클릭하면 지우기 대상에서 제외(해제)됩니다.";
+            
+            if (window.infState && window.infState.data) {
+                Object.values(window.infState.data).forEach(arr => {
+                    if (Array.isArray(arr) && arr[origIdx]) arr[origIdx]._isDeleteTarget = true;
+                });
+            }
+        }
+    }
+});
