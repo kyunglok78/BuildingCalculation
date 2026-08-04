@@ -614,7 +614,7 @@ function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
             complexHtml = `
                 <button type="button" onclick="window.openComplexModal('${mode}', '${siteName}', ${gIdx})" 
                         style="background:#6f42c1; color:white; border:none; padding:6px 10px; border-radius:4px; font-size:12px; font-weight:bold; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);">
-                    <i class="fa-solid fa-magnifying-glass-chart"></i> 복합 가중평균 검산
+                    <i class="fa-solid fa-magnifying-glass-chart"></i> 복합 평균감가율 계산 및 적용
                 </button>`;
         }
 
