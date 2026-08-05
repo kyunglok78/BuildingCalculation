@@ -247,7 +247,7 @@ window.infFinishMapping = function() {
     wiz.phase = 'row-delete';
     wiz.activeTarget = '';
     
-    document.getElementById('infWizardText').innerHTML = `🧹 1.5단계: 불필요한 행(빈 줄, 합계 등)을 선택 후 <b>[Delete]</b> 키로 지우시고, <b>우측 하단의 '부분합 및 정렬' 버튼</b>을 눌러주세요.`;
+    document.getElementById('infWizardText').innerHTML = `🧹 1.5단계: 불필요한 행(빈 줄, 합계 등)을 선택 후 <b>[Ctrl] + [-]</b> 키로 지우시고, <b>우측 하단의 '부분합 및 정렬' 버튼</b>을 눌러주세요.`;
     document.getElementById('btnFinishMapping').style.display = 'none';
     document.getElementById('infMappingButtons').style.display = 'none';
     

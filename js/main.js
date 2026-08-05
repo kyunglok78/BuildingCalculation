@@ -1804,34 +1804,40 @@ window.resetRowDeletion = function() {
 };
 
 // ============================================================================
-// [16] 자산번호 콤마(,) 강제 제거 (텍스트화)
+// [16] 자산번호 콤마(,) 강제 제거 (무한반복 타이머 삭제 -> 렌더링 시 1회만 동작 최적화)
 // ============================================================================
-setInterval(() => {
-    const thead = document.querySelector('.infTheadGlobal tr');
-    if (!thead) return;
+if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isCommaPatched) {
+    const originalRender = window.infRenderTable;
+    window.infRenderTable = function() {
+        // 원래 표 그리는 함수 먼저 실행
+        originalRender.apply(this, arguments); 
+        
+        // 다 그린 직후에 자산번호 기둥(열) 찾아서 콤마 딱 한 번만 제거
+        const thead = document.querySelector('.infTheadGlobal tr');
+        if (!thead) return;
 
-    let targetIdx = -1;
-    // '자산번호' 열 위치 찾기
-    thead.querySelectorAll('th, td').forEach((th, idx) => {
-        if (th.innerText.includes('자산번호')) targetIdx = idx;
-    });
+        let targetIdx = -1;
+        thead.querySelectorAll('th, td').forEach((th, idx) => {
+            if (th.innerText.includes('자산번호')) targetIdx = idx;
+        });
 
-    if (targetIdx > -1) {
-        const tbody = document.querySelector('.infTbodyGlobal');
-        if (tbody) {
-            tbody.querySelectorAll('tr').forEach(tr => {
-                const cells = tr.querySelectorAll('td');
-                if (cells.length > targetIdx) {
-                    let text = cells[targetIdx].innerText;
-                    // 콤마가 있으면 가차없이 텍스트 형태로 지워버림
-                    if (text.includes(',')) {
-                        cells[targetIdx].innerText = text.replace(/,/g, '');
+        if (targetIdx > -1) {
+            const tbody = document.querySelector('.infTbodyGlobal');
+            if (tbody) {
+                tbody.querySelectorAll('tr').forEach(tr => {
+                    const cells = tr.querySelectorAll('td');
+                    if (cells.length > targetIdx) {
+                        let text = cells[targetIdx].innerText;
+                        if (text.includes(',')) {
+                            cells[targetIdx].innerText = text.replace(/,/g, '');
+                        }
                     }
-                }
-            });
+                });
+            }
         }
-    }
-}, 500);
+    };
+    window.infRenderTable.isCommaPatched = true;
+}
 
 // ============================================================================
 // [17] 매핑된 버튼 다시 클릭 시 매핑 해제(Unmap) 기능 
@@ -1841,7 +1847,6 @@ document.addEventListener('click', function(e) {
     if (!btn) return;
 
     if (btn.innerText.includes('✓')) {
-        // ★ 핵심: 클릭 이벤트가 다른 곳으로 퍼져나가 재실행되는 것을 3중으로 완벽 차단
         e.preventDefault(); 
         e.stopPropagation(); 
         e.stopImmediatePropagation();
@@ -1856,13 +1861,11 @@ document.addEventListener('click', function(e) {
             if (badge.innerText.includes(targetName)) badge.remove();
         });
         
-        // 버튼을 하얀색 기본 상태로 복구
         btn.innerText = targetName; 
         btn.style.background = '#fff'; 
         btn.style.color = '#333'; 
         btn.style.border = '1px solid #ccc';
         
-        // ★ 추가: 마법사 시스템을 '대기(idle)' 상태로 강제 초기화하여 재작동 방지
         if (window.infState && window.infState.wizard) {
             window.infState.wizard.activeTarget = '';
             window.infState.wizard.phase = 'idle'; 
@@ -1874,18 +1877,15 @@ document.addEventListener('click', function(e) {
 // [18] ★ 초간단 명세서 행 즉시 삭제 (Ctrl + 마이너스) - 정렬/부분합 완벽 지원
 // ============================================================================
 document.addEventListener('keydown', function(e) {
-    // Ctrl(또는 Mac의 Cmd) + '-' (마이너스) 키를 눌렀을 때
     if ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_' || e.code === 'Minus' || e.code === 'NumpadSubtract')) {
-        e.preventDefault(); // 브라우저 화면 축소 방지
+        e.preventDefault(); 
         
-        // 현재 마우스가 올라가 있는(Hover) 행을 타겟으로 잡음
         const activeTr = document.querySelector('.infTbodyGlobal tr:hover');
         if (!activeTr) return;
 
         const tbody = activeTr.closest('tbody');
         if (!tbody) return;
         
-        // 현재 마우스가 위치한 줄이 화면에서 몇 번째인지 파악
         const rowIndex = Array.from(tbody.children).indexOf(activeTr);
 
         if (!window.infState || !window.infState.data) return;
@@ -1893,29 +1893,26 @@ document.addEventListener('keydown', function(e) {
         let activeTab = window.infState.activeTab || Object.keys(window.infState.data)[0];
         if (!activeTab) return;
 
-        // 현재 화면에 표시된 배열에서 삭제할 정확한 데이터 오브젝트(Object)를 콕 집어냄
         const currentData = window.infState.data[activeTab];
         if (!currentData || !currentData[rowIndex]) return;
         
         const targetObj = currentData[rowIndex];
 
-        // ★ 핵심: 번호가 아니라 '데이터 오브젝트 자체'를 추적하여 모든 캐시에서 완벽히 도려냄 (정렬/부분합으로 순서가 섞여도 100% 명중)
         const cacheKeys = ['data', 'rawData', 'displayData', 'filteredData'];
         cacheKeys.forEach(key => {
             if (window.infState[key] && Array.isArray(window.infState[key][activeTab])) {
                 const arr = window.infState[key][activeTab];
-                const exactIdx = arr.indexOf(targetObj); // 정렬 후에도 정확한 원본 위치를 찾아냄
+                const exactIdx = arr.indexOf(targetObj); 
                 if (exactIdx > -1) {
-                    arr.splice(exactIdx, 1); // 해당 데이터 칼같이 삭제
+                    arr.splice(exactIdx, 1); 
                 }
             }
         });
 
-        // 삭제 후 화면 즉시 렌더링 (번호표 알아서 다시 당겨짐)
         if (typeof window.infRenderTable === 'function') {
             window.infRenderTable();
         } else {
-            activeTr.remove(); // 렌더링 함수가 혹시 없더라도 화면에선 즉시 지움
+            activeTr.remove(); 
         }
     }
 });
