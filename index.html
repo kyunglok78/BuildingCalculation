@@ -335,6 +335,44 @@
     </div>
 </div>
 
+<!-- ★ 과거 연동 설정 팝업창 -->
+<div class="modal-overlay" id="pastDataModal" style="display:none; z-index: 1000; justify-content: center; align-items: center;">
+    <div class="modal-content" style="width: 500px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+        <div class="modal-header" style="background:#1C5691; color:white; padding:15px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight:bold;"><i class="fa-solid fa-clock-rotate-left"></i> 과거 평가 데이터 연동 설정</span>
+            <i class="fa-solid fa-xmark modal-close" style="cursor:pointer; font-size:18px;" onclick="document.getElementById('pastDataModal').style.display='none'"></i>
+        </div>
+        <div class="modal-body" style="padding: 25px; background:#f4f5f7;">
+            <p style="font-size:13px; color:#555; margin-bottom:20px; line-height:1.5;">
+                👉 현재 진행 중인 명세서와 과거의 데이터를 매칭하여 <b>구분 값, 감가율</b> 등을 자동으로 불러옵니다.<br>어떤 항목을 기준으로 두 데이터를 짝지을지 선택해 주세요.
+            </p>
+            
+            <div style="background:#fff; padding:15px; border:1px solid #ddd; border-radius:4px; margin-bottom:20px;">
+                <label style="font-weight:bold; font-size:14px; color:#333; display:block; margin-bottom:10px;">🔑 매칭 기준 (Key) 선택</label>
+                <select id="pastMatchKey" class="input-box" style="width:100%; padding:8px; font-weight:bold; border:2px solid #1C5691;">
+                    <option value="자산번호">자산번호 (권장)</option>
+                    <option value="자산명">자산명</option>
+                    <option value="취득일">취득일</option>
+                </select>
+            </div>
+
+            <label style="font-weight:bold; font-size:14px; color:#333; display:block; margin-bottom:10px;">📂 불러올 파일 형식 선택</label>
+            <div style="display:flex; gap:10px;">
+                <!-- 엑셀 파일 선택 -->
+                <button type="button" class="btn-dark" style="flex:1; background:#28a745; padding:12px; font-size:14px; font-weight:bold; border:none;" onclick="document.getElementById('pastExcelUpload').click()">
+                    <i class="fa-solid fa-file-excel"></i> 엑셀(.xlsx) 연동
+                </button>
+                <input type="file" id="pastExcelUpload" accept=".xlsx, .xls, .csv" style="display:none;" onchange="handlePastDataUpload(event, 'excel')">
+                
+                <!-- kbproj 파일 선택 -->
+                <button type="button" class="btn-dark" style="flex:1; background:#FFCC00; color:#333; padding:12px; font-size:14px; font-weight:bold; border:none;" onclick="document.getElementById('pastProjUpload').click()">
+                    <i class="fa-solid fa-bolt"></i> 프로젝트(.kbproj) 연동
+                </button>
+                <input type="file" id="pastProjUpload" accept=".kbproj" style="display:none;" onchange="handlePastDataUpload(event, 'kbproj')">
+            </div>
+        </div>
+    </div>
+</div>
 <!-- ============================================================================ -->
 <!-- [SEC-4] ★ 좌측 네비게이션 사이드바 (One-Stop 통합본) -->
 <!-- ============================================================================ -->
@@ -750,16 +788,30 @@
     </div>
 
     <div class="card" style="margin-bottom: 15px;">
-        <div class="card-header" style="background:#e9ecef; color:#333; display:flex; justify-content:space-between; align-items:center;">
-            <span><i class="fa-solid fa-wand-magic-sparkles"></i> 표 헤더의 버튼을 눌러 순차적으로 진행하세요.</span>
-            <div style="display: flex; gap: 8px;">
-                <input type="file" id="infPastExcelFile" accept=".xlsx, .xls, .csv" style="display: none;" onchange="infLoadPastData(event)">
-                <button type="button" style="background:#2C2C2C; color:#FFCC00; border:1px solid #444; padding:4px 10px; border-radius:3px; font-weight:bold; font-size:12px; cursor:pointer;" onclick="window.openRuleManager()">
-                    <i class="fa-solid fa-sliders"></i> 예외 항목 마스터 데이터 관리
-                </button>
+    <div class="card-header" style="background:#e9ecef; color:#333; display:flex; justify-content:space-between; align-items:center;">
+        <span><i class="fa-solid fa-wand-magic-sparkles"></i> 표 헤더의 버튼을 눌러 순차적으로 진행하세요.</span>
+        <div style="display: flex; gap: 8px; align-items: center;">
+            
+            <!-- 👇 새로 추가된 실시간 검색창 -->
+            <div style="display:flex; align-items:center; background:#fff; border:1px solid #ccc; border-radius:3px; padding:2px 8px;">
+                <i class="fa-solid fa-magnifying-glass" style="color:#666; font-size:12px;"></i>
+                <input type="text" id="infTableSearchInput" placeholder="자산명, 자산번호 검색..." style="border:none; outline:none; padding:4px; font-size:12px; width:160px;" onkeyup="window.filterInfTable()">
             </div>
+
+            <input type="file" id="infPastExcelFile" accept=".xlsx, .xls, .csv" style="display: none;" onchange="infLoadPastData(event)">
+            
+            <!-- 1만원 이하 일괄 제외 버튼 -->
+            <button type="button" style="background:#dc3545; color:#fff; border:1px solid #c82333; padding:4px 10px; border-radius:3px; font-weight:bold; font-size:12px; cursor:pointer;" onclick="window.excludeUnderTenThousand()">
+                <i class="fa-solid fa-coins"></i> 1만원 이하 일괄 제외
+            </button>
+
+            <!-- 예외 항목 마스터 데이터 관리 버튼 -->
+            <button type="button" style="background:#2C2C2C; color:#FFCC00; border:1px solid #444; padding:4px 10px; border-radius:3px; font-weight:bold; font-size:12px; cursor:pointer;" onclick="window.openRuleManager()">
+                <i class="fa-solid fa-sliders"></i> 예외 항목 마스터 데이터 관리
+            </button>
         </div>
     </div>
+</div>
 
     <div id="infTabs2" class="infTabsContainer" style="display: flex; border-bottom: 2px solid #1C5691;"></div>
     <div class="data-table-wrapper infTableContainerWrapper" style="flex:1; border-top: none; overflow-x: auto; overflow-y: auto; background: #fff;">

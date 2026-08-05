@@ -1920,3 +1920,148 @@ document.addEventListener('keydown', function(e) {
 // 더 이상 쓰지 않는 빈 함수 처리 (에러 방지용)
 window.highlightEmptyRows = function() { alert("Ctrl + 마이너스(-) 단축키를 이용해 직접 즉시 삭제해주세요!"); };
 window.bulkDeleteHighlightedRows = function() { alert("Ctrl + 마이너스(-) 단축키를 이용해 직접 즉시 삭제해주세요!"); };
+
+// ============================================================================
+// [19] 과거 연동 마법사 (엑셀 vs 프로젝트 선택 지원)
+// ============================================================================
+
+// 1. 기존 2-1단계 텍스트 클릭 시 모달창 열기 (기존 onclick 덮어쓰기)
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(() => {
+        const step2_1 = document.getElementById('step-2-1');
+        if (step2_1) {
+            step2_1.onclick = function() {
+                document.getElementById('pastDataModal').style.display = 'flex';
+            };
+        }
+    }, 1000);
+});
+
+// 2. 파일 업로드 핸들러
+window.handlePastDataUpload = function(event, type) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const matchKey = document.getElementById('pastMatchKey').value;
+    document.getElementById('pastDataModal').style.display = 'none';
+
+    if (type === 'excel') {
+        // 엑셀 파일 파싱 로직 호출
+        alert(`[엑셀 파일 연동 시작]\n- 기준: ${matchKey}\n- 파일명: ${file.name}\n\n(엑셀 파싱 로직 실행 대기 중)`);
+        // TODO: 여기에 엑셀 데이터 추출 및 매칭 함수 연결
+        
+    } else if (type === 'kbproj') {
+        // .kbproj JSON 파싱 로직 호출
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const projData = JSON.parse(e.target.result);
+                alert(`[프로젝트 파일 연동 시작]\n- 기준: ${matchKey}\n- 데이터 크기: ${Object.keys(projData).length}건\n\n(프로젝트 파싱 로직 실행 대기 중)`);
+                // TODO: 여기에 projData의 infState 데이터를 현재 상태와 매칭하는 함수 연결
+            } catch(err) {
+                alert("프로젝트 파일을 읽는 중 오류가 발생했습니다.");
+            }
+        };
+        reader.readAsText(file);
+    }
+    
+    // 파일 입력기 초기화 (같은 파일 다시 선택 가능하도록)
+    event.target.value = '';
+};
+
+// ============================================================================
+// [20] 1만원 이하 소액 자산 일괄 평가제외 전용 처리기
+// ============================================================================
+window.excludeUnderTenThousand = function() {
+    if (!window.infState || !window.infState.data) return alert("데이터가 존재하지 않습니다.");
+    
+    let activeTab = window.infState.activeTab || Object.keys(window.infState.data)[0];
+    if (!activeTab) return;
+
+    let currentData = window.infState.data[activeTab];
+    let count = 0;
+
+    currentData.forEach(row => {
+        // '취득가액' 값을 가져와서 콤마를 제거하고 숫자로 변환
+        let priceStr = String(row['취득가액'] || '').replace(/,/g, '').trim();
+        if (priceStr === '' || priceStr === '-') return; // 빈 값은 패스
+
+        let price = parseFloat(priceStr);
+        
+        // 텍스트가 아닌 실제 숫자 크기가 10,000 이하인 경우 (0원 포함)
+        if (!isNaN(price) && price <= 10000) {
+            row['_assetClass'] = '평가제외(만원이하)'; 
+            row['구분'] = '평가제외(만원이하)'; // 표에 보여지는 값 강제 변경
+            count++;
+        }
+    });
+
+    // 화면 표 강제 새로고침
+    if (typeof window.infRenderTable === 'function') {
+        window.infRenderTable();
+    }
+
+    if (count > 0) {
+        alert(`🎉 총 ${count}건의 소액 자산이 '평가제외(만원이하)'로 일괄 처리되었습니다!`);
+    } else {
+        alert("취득가액이 10,000원 이하인 데이터가 없습니다.");
+    }
+};
+
+// ============================================================================
+// [21] 표 실시간 검색 기능 (자산번호, 자산명 등)
+// ============================================================================
+window.filterInfTable = function() {
+    const keyword = document.getElementById('infTableSearchInput').value.toLowerCase().trim();
+    // 현재 화면에 활성화된 표의 본문(tbody)을 찾음
+    const tbody = document.querySelector('.page-section.active .infTbodyGlobal') || document.querySelector('.infTbodyGlobal');
+    if (!tbody) return;
+
+    const rows = tbody.querySelectorAll('tr');
+    rows.forEach(tr => {
+        // 각 줄의 전체 텍스트를 가져옴
+        const text = tr.innerText.toLowerCase();
+        // 검색어가 포함되어 있으면 화면에 보여주고, 없으면 숨김
+        if (text.includes(keyword)) {
+            tr.style.display = '';
+        } else {
+            tr.style.display = 'none';
+        }
+    });
+};
+
+// ============================================================================
+// [16] 자산번호 콤마(,) 완벽 제거 (전체 단계 강력 적용판)
+// ============================================================================
+if (typeof window.infRenderTable === 'function') {
+    const originalRender = window.infRenderTable;
+    window.infRenderTable = function() {
+        // 1. 원래 표 그리는 함수 먼저 실행
+        originalRender.apply(this, arguments); 
+        
+        // 2. 화면에 있는 모든 테이블을 뒤져서 자산번호 열의 콤마 삭제 (2.3.1 ~ 2.3.3 전체 적용)
+        document.querySelectorAll('.infTheadGlobal tr').forEach(theadTr => {
+            let assetIdx = -1;
+            theadTr.querySelectorAll('th, td').forEach((th, idx) => {
+                if (th.innerText.includes('자산번호')) assetIdx = idx;
+            });
+
+            if (assetIdx > -1) {
+                const table = theadTr.closest('table');
+                const tbody = table.querySelector('tbody');
+                if (tbody) {
+                    tbody.querySelectorAll('tr').forEach(tr => {
+                        const cells = tr.querySelectorAll('td');
+                        if (cells.length > assetIdx) {
+                            let text = cells[assetIdx].innerText;
+                            if (text.includes(',')) {
+                                cells[assetIdx].innerText = text.replace(/,/g, '');
+                            }
+                        }
+                    });
+                }
+            }
+        });
+    };
+    // 이미 패치되었다는 플래그를 무시하고 덮어씌움으로써 무조건 실행되게 보장
+}
