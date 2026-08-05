@@ -1970,10 +1970,10 @@ window.handlePastDataUpload = function(event, type) {
 };
 
 // ============================================================================
-// [20] 1만원 이하 소액 자산 일괄 평가제외 전용 처리기
+// [20] 1만원 이하 소액 자산 일괄 평가제외 전용 처리기 (알림 숨김 옵션 추가)
 // ============================================================================
-window.excludeUnderTenThousand = function() {
-    if (!window.infState || !window.infState.data) return alert("데이터가 존재하지 않습니다.");
+window.excludeUnderTenThousand = function(silent = false) {
+    if (!window.infState || !window.infState.data) return;
     
     let activeTab = window.infState.activeTab || Object.keys(window.infState.data)[0];
     if (!activeTab) return;
@@ -1982,86 +1982,76 @@ window.excludeUnderTenThousand = function() {
     let count = 0;
 
     currentData.forEach(row => {
-        // '취득가액' 값을 가져와서 콤마를 제거하고 숫자로 변환
         let priceStr = String(row['취득가액'] || '').replace(/,/g, '').trim();
-        if (priceStr === '' || priceStr === '-') return; // 빈 값은 패스
+        if (priceStr === '' || priceStr === '-') return;
 
         let price = parseFloat(priceStr);
-        
-        // 텍스트가 아닌 실제 숫자 크기가 10,000 이하인 경우 (0원 포함)
         if (!isNaN(price) && price <= 10000) {
             row['_assetClass'] = '평가제외(만원이하)'; 
-            row['구분'] = '평가제외(만원이하)'; // 표에 보여지는 값 강제 변경
+            row['구분'] = '평가제외(만원이하)';
             count++;
         }
     });
 
-    // 화면 표 강제 새로고침
-    if (typeof window.infRenderTable === 'function') {
-        window.infRenderTable();
-    }
-
-    if (count > 0) {
-        alert(`🎉 총 ${count}건의 소액 자산이 '평가제외(만원이하)'로 일괄 처리되었습니다!`);
-    } else {
-        alert("취득가액이 10,000원 이하인 데이터가 없습니다.");
-    }
+    if (typeof window.infRenderTable === 'function') window.infRenderTable();
+    if (!silent && count > 0) alert(`🎉 총 ${count}건의 소액 자산이 '평가제외(만원이하)'로 처리되었습니다!`);
 };
 
 // ============================================================================
-// [21] 표 실시간 검색 기능 (자산번호, 자산명 등)
+// [21] 표 실시간 검색 기능 (디바운싱 적용 - 렉 방지 완벽 해결)
 // ============================================================================
+let searchTimeout = null;
 window.filterInfTable = function() {
-    const keyword = document.getElementById('infTableSearchInput').value.toLowerCase().trim();
-    // 현재 화면에 활성화된 표의 본문(tbody)을 찾음
-    const tbody = document.querySelector('.page-section.active .infTbodyGlobal') || document.querySelector('.infTbodyGlobal');
-    if (!tbody) return;
+    clearTimeout(searchTimeout); // 글자를 치는 동안에는 타이머를 계속 초기화
+    
+    // 타자를 멈추고 0.3초가 지나면 딱 1번만 일괄 검색 실행 (프리징 방지)
+    searchTimeout = setTimeout(() => {
+        const keyword = document.getElementById('infTableSearchInput').value.toLowerCase().trim();
+        const tbody = document.querySelector('.page-section.active .infTbodyGlobal') || document.querySelector('.infTbodyGlobal');
+        if (!tbody) return;
 
-    const rows = tbody.querySelectorAll('tr');
-    rows.forEach(tr => {
-        // 각 줄의 전체 텍스트를 가져옴
-        const text = tr.innerText.toLowerCase();
-        // 검색어가 포함되어 있으면 화면에 보여주고, 없으면 숨김
-        if (text.includes(keyword)) {
-            tr.style.display = '';
-        } else {
-            tr.style.display = 'none';
-        }
-    });
+        const rows = tbody.querySelectorAll('tr');
+        rows.forEach(tr => {
+            tr.style.display = tr.innerText.toLowerCase().includes(keyword) ? '' : 'none';
+        });
+    }, 300); 
 };
 
 // ============================================================================
-// [16] 자산번호 콤마(,) 완벽 제거 (전체 단계 강력 적용판)
+// [16] 자산번호 콤마(,) 완벽 제거 (데이터 뿌리 강제 문자열 변환)
 // ============================================================================
 if (typeof window.infRenderTable === 'function') {
     const originalRender = window.infRenderTable;
     window.infRenderTable = function() {
-        // 1. 원래 표 그리는 함수 먼저 실행
-        originalRender.apply(this, arguments); 
-        
-        // 2. 화면에 있는 모든 테이블을 뒤져서 자산번호 열의 콤마 삭제 (2.3.1 ~ 2.3.3 전체 적용)
-        document.querySelectorAll('.infTheadGlobal tr').forEach(theadTr => {
-            let assetIdx = -1;
-            theadTr.querySelectorAll('th, td').forEach((th, idx) => {
-                if (th.innerText.includes('자산번호')) assetIdx = idx;
-            });
-
-            if (assetIdx > -1) {
-                const table = theadTr.closest('table');
-                const tbody = table.querySelector('tbody');
-                if (tbody) {
-                    tbody.querySelectorAll('tr').forEach(tr => {
-                        const cells = tr.querySelectorAll('td');
-                        if (cells.length > assetIdx) {
-                            let text = cells[assetIdx].innerText;
-                            if (text.includes(',')) {
-                                cells[assetIdx].innerText = text.replace(/,/g, '');
-                            }
-                        }
-                    });
-                }
+        // 화면에 그리기 전에, 엑셀에서 숫자로 인식된 자산번호를 무조건 '문자(String)'로 뜯어고침
+        if (window.infState && window.infState.data) {
+            for (let tab in window.infState.data) {
+                window.infState.data[tab].forEach(row => {
+                    if (row['자산번호'] !== undefined && row['자산번호'] !== null) {
+                        row['자산번호'] = String(row['자산번호']).replace(/,/g, '');
+                    }
+                });
             }
-        });
+        }
+        // 문자열로 변환된 안전한 데이터로 표 그리기 실행
+        originalRender.apply(this, arguments); 
     };
-    // 이미 패치되었다는 플래그를 무시하고 덮어씌움으로써 무조건 실행되게 보장
 }
+
+// ============================================================================
+// [22] '평가 제외' 버튼 클릭 시 -> 1만원 이하 자동 제외 연동 
+// ============================================================================
+document.addEventListener('click', function(e) {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+
+    // 표 상단의 '평가 제외' 관련 버튼을 눌렀을 때 감지
+    if (btn.innerText.includes('평가 제외')) {
+        // 원래 시스템의 평가 제외 로직이 도는 시간을 0.1초 준 뒤, 만원 이하 로직을 덮어씌워버림
+        setTimeout(() => {
+            if(typeof window.excludeUnderTenThousand === 'function') {
+                window.excludeUnderTenThousand(true); // true = 매번 뜨는 귀찮은 알림창 끄기
+            }
+        }, 100);
+    }
+});

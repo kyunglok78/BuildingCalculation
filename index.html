@@ -792,7 +792,7 @@
         <span><i class="fa-solid fa-wand-magic-sparkles"></i> 표 헤더의 버튼을 눌러 순차적으로 진행하세요.</span>
         <div style="display: flex; gap: 8px; align-items: center;">
             
-            <!-- 👇 새로 추가된 실시간 검색창 -->
+            <!-- 실시간 검색창 (유지) -->
             <div style="display:flex; align-items:center; background:#fff; border:1px solid #ccc; border-radius:3px; padding:2px 8px;">
                 <i class="fa-solid fa-magnifying-glass" style="color:#666; font-size:12px;"></i>
                 <input type="text" id="infTableSearchInput" placeholder="자산명, 자산번호 검색..." style="border:none; outline:none; padding:4px; font-size:12px; width:160px;" onkeyup="window.filterInfTable()">
@@ -800,12 +800,9 @@
 
             <input type="file" id="infPastExcelFile" accept=".xlsx, .xls, .csv" style="display: none;" onchange="infLoadPastData(event)">
             
-            <!-- 1만원 이하 일괄 제외 버튼 -->
-            <button type="button" style="background:#dc3545; color:#fff; border:1px solid #c82333; padding:4px 10px; border-radius:3px; font-weight:bold; font-size:12px; cursor:pointer;" onclick="window.excludeUnderTenThousand()">
-                <i class="fa-solid fa-coins"></i> 1만원 이하 일괄 제외
-            </button>
+            <!-- 🔴 (여기에 있던 1만원 이하 일괄 제외 빨간 버튼은 삭제했습니다!) -->
 
-            <!-- 예외 항목 마스터 데이터 관리 버튼 -->
+            <!-- 예외 항목 마스터 데이터 관리 버튼 (유지) -->
             <button type="button" style="background:#2C2C2C; color:#FFCC00; border:1px solid #444; padding:4px 10px; border-radius:3px; font-weight:bold; font-size:12px; cursor:pointer;" onclick="window.openRuleManager()">
                 <i class="fa-solid fa-sliders"></i> 예외 항목 마스터 데이터 관리
             </button>
