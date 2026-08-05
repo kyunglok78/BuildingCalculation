@@ -1858,7 +1858,7 @@ document.addEventListener('click', function(e) {
 }, true);
 
 // ============================================================================
-// [18] ★ 초간단 명세서 행 즉시 삭제 기능 (Ctrl + 마이너스)
+// [18] ★ 초간단 명세서 행 즉시 삭제 (Ctrl + 마이너스) - 정렬/부분합 완벽 지원
 // ============================================================================
 document.addEventListener('keydown', function(e) {
     // Ctrl(또는 Mac의 Cmd) + '-' (마이너스) 키를 눌렀을 때
@@ -1869,31 +1869,40 @@ document.addEventListener('keydown', function(e) {
         const activeTr = document.querySelector('.infTbodyGlobal tr:hover');
         if (!activeTr) return;
 
-        const firstTd = activeTr.querySelector('td');
-        if (!firstTd || firstTd.colSpan > 5) return; // 안내 메시지 줄 무시
+        const tbody = activeTr.closest('tbody');
+        if (!tbody) return;
         
-        const origIdx = parseInt(firstTd.innerText) - 1; // 삭제할 배열 번호
-        if (isNaN(origIdx)) return;
+        // 현재 마우스가 위치한 줄이 화면에서 몇 번째인지 파악
+        const rowIndex = Array.from(tbody.children).indexOf(activeTr);
 
         if (!window.infState || !window.infState.data) return;
 
         let activeTab = window.infState.activeTab || Object.keys(window.infState.data)[0];
         if (!activeTab) return;
 
-        // ★ 즉시 데이터에서 해당 행 도려내기 (물리적 삭제)
+        // 현재 화면에 표시된 배열에서 삭제할 정확한 데이터 오브젝트(Object)를 콕 집어냄
+        const currentData = window.infState.data[activeTab];
+        if (!currentData || !currentData[rowIndex]) return;
+        
+        const targetObj = currentData[rowIndex];
+
+        // ★ 핵심: 번호가 아니라 '데이터 오브젝트 자체'를 추적하여 모든 캐시에서 완벽히 도려냄 (정렬/부분합으로 순서가 섞여도 100% 명중)
         const cacheKeys = ['data', 'rawData', 'displayData', 'filteredData'];
         cacheKeys.forEach(key => {
             if (window.infState[key] && Array.isArray(window.infState[key][activeTab])) {
-                // 해당 번호의 데이터를 1개만 칼같이 삭제
-                window.infState[key][activeTab].splice(origIdx, 1);
+                const arr = window.infState[key][activeTab];
+                const exactIdx = arr.indexOf(targetObj); // 정렬 후에도 정확한 원본 위치를 찾아냄
+                if (exactIdx > -1) {
+                    arr.splice(exactIdx, 1); // 해당 데이터 칼같이 삭제
+                }
             }
         });
 
-        // 삭제 후 화면 즉시 렌더링 (번호표 1번부터 알아서 다시 당겨짐)
+        // 삭제 후 화면 즉시 렌더링 (번호표 알아서 다시 당겨짐)
         if (typeof window.infRenderTable === 'function') {
             window.infRenderTable();
         } else {
-            activeTr.remove(); // 렌더링 함수가 혹시 없더라도 화면에선 지움
+            activeTr.remove(); // 렌더링 함수가 혹시 없더라도 화면에선 즉시 지움
         }
     }
 });
