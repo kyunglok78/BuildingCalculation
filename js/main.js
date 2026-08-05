@@ -1841,7 +1841,11 @@ document.addEventListener('click', function(e) {
     if (!btn) return;
 
     if (btn.innerText.includes('✓')) {
-        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+        // ★ 핵심: 클릭 이벤트가 다른 곳으로 퍼져나가 재실행되는 것을 3중으로 완벽 차단
+        e.preventDefault(); 
+        e.stopPropagation(); 
+        e.stopImmediatePropagation();
+
         const targetName = btn.innerText.replace('✓', '').trim();
         
         if (window.infState && window.infState.wizard && window.infState.wizard.mapped) {
@@ -1852,8 +1856,17 @@ document.addEventListener('click', function(e) {
             if (badge.innerText.includes(targetName)) badge.remove();
         });
         
-        btn.innerText = targetName; btn.style.background = '#fff'; btn.style.color = '#333'; btn.style.border = '1px solid #ccc';
-        if (window.infState && window.infState.wizard.activeTarget === targetName) window.infState.wizard.activeTarget = '';
+        // 버튼을 하얀색 기본 상태로 복구
+        btn.innerText = targetName; 
+        btn.style.background = '#fff'; 
+        btn.style.color = '#333'; 
+        btn.style.border = '1px solid #ccc';
+        
+        // ★ 추가: 마법사 시스템을 '대기(idle)' 상태로 강제 초기화하여 재작동 방지
+        if (window.infState && window.infState.wizard) {
+            window.infState.wizard.activeTarget = '';
+            window.infState.wizard.phase = 'idle'; 
+        }
     }
 }, true);
 
