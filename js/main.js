@@ -1804,27 +1804,14 @@ window.resetRowDeletion = function() {
 };
 
 // ============================================================================
-// [16] 스마트 빈 셀 자동 탐지 기능 (DOM 강제 제어 및 무한 동기화 방식)
+// [16] 자산번호 콤마(,) 강제 제거 (텍스트화)
 // ============================================================================
-
-// 1. 초강력 CSS 강제 주입
-if (!document.getElementById('smartDeleteStyle')) {
-    const style = document.createElement('style');
-    style.id = 'smartDeleteStyle';
-    style.innerHTML = `
-        tr.delete-target-row td { background-color: #ffe5e5 !important; transition: background-color 0.1s; }
-        tr.delete-target-row { background-color: #ffe5e5 !important; transition: background-color 0.1s; }
-    `;
-    document.head.appendChild(style);
-}
-
-// 2. ★ [추가] 자산번호 콤마(,) 강제 제거 감시기 (0.5초마다 무조건 텍스트화)
 setInterval(() => {
     const thead = document.querySelector('.infTheadGlobal tr');
     if (!thead) return;
 
     let targetIdx = -1;
-    // '자산번호'라는 글자가 있는 기둥(열)의 번호를 찾음
+    // '자산번호' 열 위치 찾기
     thead.querySelectorAll('th, td').forEach((th, idx) => {
         if (th.innerText.includes('자산번호')) targetIdx = idx;
     });
@@ -1845,161 +1832,6 @@ setInterval(() => {
         }
     }
 }, 500);
-
-// 3. 표 렌더링 가로채기 (다시 그려질 때 붉은색 꼬리표 유지)
-if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isSmartPatched) {
-    const originalRender = window.infRenderTable;
-    window.infRenderTable = function() {
-        originalRender.apply(this, arguments); 
-        
-        const tbody = document.querySelector('.infTbodyGlobal');
-        if(!tbody) return;
-        
-        if (window.infState && window.infState.data) {
-            let activeTab = window.infState.activeTab || Object.keys(window.infState.data)[0];
-            let currentData = activeTab ? window.infState.data[activeTab] : null;
-
-            if (Array.isArray(currentData)) {
-                tbody.querySelectorAll('tr').forEach(tr => {
-                    const firstTd = tr.querySelector('td');
-                    if(!firstTd) return;
-                    const origIdx = parseInt(firstTd.innerText) - 1;
-
-                    if(!isNaN(origIdx) && currentData[origIdx] && currentData[origIdx]._isDeleteTarget) {
-                        tr.classList.add('delete-target-row');
-                        tr.title = "클릭하거나 Delete 키를 누르면 해제됩니다.";
-                    }
-                });
-            }
-        }
-    };
-    window.infRenderTable.isSmartPatched = true;
-}
-
-// 4. 데이터 꼬리표 동기화 헬퍼
-function setDeleteTargetFlag(tr, isTarget) {
-    const firstTd = tr.querySelector('td');
-    if (!firstTd) return;
-    const origIdx = parseInt(firstTd.innerText) - 1;
-    if (isNaN(origIdx)) return;
-
-    if (window.infState) {
-        ['data', 'rawData', 'displayData', 'filteredData'].forEach(key => {
-            let targetObj = window.infState[key];
-            if (targetObj) {
-                Object.keys(targetObj).forEach(sheet => {
-                    let arr = targetObj[sheet];
-                    if (Array.isArray(arr) && arr[origIdx]) {
-                        arr[origIdx]._isDeleteTarget = isTarget;
-                    }
-                });
-            }
-        });
-    }
-}
-
-window.highlightEmptyRows = function() {
-    const targetColName = document.getElementById('emptyCheckTarget').value;
-    if (!targetColName) return alert("먼저 검사할 항목(예: 자산계정, 취득가액 등)을 선택해 주세요.");
-    
-    const thead = document.querySelector('.infTheadGlobal tr');
-    if (!thead) return;
-    
-    let targetCellIndex = -1;
-    ths = thead.querySelectorAll('th, td');
-    ths.forEach((th, idx) => {
-        if (th.innerText.includes(targetColName)) targetCellIndex = idx;
-    });
-
-    if (targetCellIndex === -1) return alert(`현재 테이블에서 '${targetColName}' 항목의 열을 찾을 수 없습니다.`);
-    
-    const tbody = document.querySelector('.infTbodyGlobal');
-    if (!tbody) return;
-
-    let highlightCount = 0;
-    const rows = tbody.querySelectorAll('tr');
-    
-    rows.forEach(tr => {
-        const cells = tr.querySelectorAll('td');
-        if (cells.length <= targetCellIndex) return;
-        
-        const cellText = cells[targetCellIndex].innerText.replace(/\s/g, ''); 
-        
-        if (cellText === '' || cellText === '-' || cellText === 'null' || cellText === '0' || cellText === '0.00' || cellText === 'NaN') {
-            if (!tr.classList.contains('delete-target-row')) {
-                tr.classList.add('delete-target-row');
-                tr.title = "클릭하거나 Delete 키를 누르면 해제됩니다.";
-                highlightCount++;
-            }
-            setDeleteTargetFlag(tr, true);
-        }
-    });
-    
-    if (highlightCount > 0) alert(`🚨 [${targetColName}] 열 기준, 총 ${highlightCount}개의 빈 행이 붉은색으로 지정되었습니다!`);
-    else alert(`해당 열에는 비어있는 칸이 없습니다! (데이터 정상)`);
-};
-
-window.bulkDeleteHighlightedRows = function() {
-    const highlightedRows = document.querySelectorAll('.infTbodyGlobal tr.delete-target-row');
-    if (highlightedRows.length === 0) {
-        return alert("삭제할 붉은색 행이 없습니다.\n스캔을 하거나 표의 행을 클릭/Delete키로 지정해 주세요.");
-    }
-    
-    if (!confirm(`정말 붉은색으로 표시된 ${highlightedRows.length}개의 행을 일괄 삭제하시겠습니까?`)) return;
-
-    // 1. 화면에 있는 지워질 줄 번호 추출
-    let indicesToDelete = [];
-    highlightedRows.forEach(tr => {
-        const firstTd = tr.querySelector('td');
-        if (firstTd) {
-            const origIdx = parseInt(firstTd.innerText) - 1;
-            if (!isNaN(origIdx)) indicesToDelete.push(origIdx);
-        }
-    });
-
-    // 2. 뒤에서부터 지워야 배열이 안 꼬임
-    indicesToDelete.sort((a, b) => b - a);
-
-    // 3. 내부에 숨은 모든 캐시 데이터를 칼같이 도려냄
-    if (window.infState) {
-        const cacheKeys = ['data', 'rawData', 'displayData', 'filteredData'];
-        cacheKeys.forEach(key => {
-            if (window.infState[key]) {
-                Object.keys(window.infState[key]).forEach(sheet => {
-                    let arr = window.infState[key][sheet];
-                    if (Array.isArray(arr)) {
-                        indicesToDelete.forEach(idx => {
-                            if (idx >= 0 && idx < arr.length) arr.splice(idx, 1);
-                        });
-                    }
-                });
-            }
-        });
-    }
-    
-    // 4. ★ 화면(DOM)에서 강제 즉시 삭제 및 줄 번호 물리적 재정렬! (좀비 현상 완벽 방지)
-    highlightedRows.forEach(tr => tr.remove());
-    
-    const tbody = document.querySelector('.infTbodyGlobal');
-    if (tbody) {
-        tbody.querySelectorAll('tr').forEach((tr, newIndex) => {
-            const firstTd = tr.querySelector('td');
-            if (firstTd && !isNaN(parseInt(firstTd.innerText))) {
-                firstTd.innerText = newIndex + 1; // 1번부터 차례대로 번호표 다시 부여
-            }
-        });
-    }
-
-    // 5. 혹시 모를 시스템 렌더링 호출
-    if (typeof window.infRenderTable === 'function') {
-        try { window.infRenderTable(); } catch(e) {}
-    }
-    
-    alert(`🗑️ 총 ${highlightedRows.length}개의 행이 완벽하게 일괄 삭제되었습니다!`);
-    
-    const btnReset = document.getElementById('btnResetRowDelete');
-    if (btnReset) btnReset.style.display = 'inline-block';
-};
 
 // ============================================================================
 // [17] 매핑된 버튼 다시 클릭 시 매핑 해제(Unmap) 기능 
@@ -2026,44 +1858,46 @@ document.addEventListener('click', function(e) {
 }, true);
 
 // ============================================================================
-// [18] ★ 명세서 표 수동 삭제 토글 기능 (마우스 클릭 & Delete 키 동시 지원)
+// [18] ★ 초간단 명세서 행 즉시 삭제 기능 (Ctrl + 마이너스)
 // ============================================================================
-
-function toggleVisualDeleteState(tr) {
-    const firstTd = tr.querySelector('td');
-    if (!firstTd || firstTd.colSpan > 5) return; 
-
-    if (tr.classList.contains('delete-target-row')) {
-        tr.classList.remove('delete-target-row');
-        tr.title = "";
-        setDeleteTargetFlag(tr, false);
-    } else {
-        tr.classList.add('delete-target-row');
-        tr.title = "클릭하거나 Delete 키를 누르면 해제됩니다.";
-        setDeleteTargetFlag(tr, true);
-    }
-}
-
-// 마우스 클릭 이벤트 (시스템 간섭 원천 차단)
-document.addEventListener('click', function(e) {
-    const tbody = e.target.closest('.infTbodyGlobal');
-    if (!tbody) return;
-    if (['INPUT', 'SELECT', 'BUTTON'].includes(e.target.tagName)) return;
-    
-    const tr = e.target.closest('tr');
-    if (!tr) return;
-
-    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-    toggleVisualDeleteState(tr);
-}, true); 
-
-// Delete 단축키 이벤트
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'Delete') {
+    // Ctrl(또는 Mac의 Cmd) + '-' (마이너스) 키를 눌렀을 때
+    if ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_' || e.code === 'Minus' || e.code === 'NumpadSubtract')) {
+        e.preventDefault(); // 브라우저 화면 축소 방지
+        
+        // 현재 마우스가 올라가 있는(Hover) 행을 타겟으로 잡음
         const activeTr = document.querySelector('.infTbodyGlobal tr:hover');
         if (!activeTr) return;
 
-        e.preventDefault();
-        toggleVisualDeleteState(activeTr);
+        const firstTd = activeTr.querySelector('td');
+        if (!firstTd || firstTd.colSpan > 5) return; // 안내 메시지 줄 무시
+        
+        const origIdx = parseInt(firstTd.innerText) - 1; // 삭제할 배열 번호
+        if (isNaN(origIdx)) return;
+
+        if (!window.infState || !window.infState.data) return;
+
+        let activeTab = window.infState.activeTab || Object.keys(window.infState.data)[0];
+        if (!activeTab) return;
+
+        // ★ 즉시 데이터에서 해당 행 도려내기 (물리적 삭제)
+        const cacheKeys = ['data', 'rawData', 'displayData', 'filteredData'];
+        cacheKeys.forEach(key => {
+            if (window.infState[key] && Array.isArray(window.infState[key][activeTab])) {
+                // 해당 번호의 데이터를 1개만 칼같이 삭제
+                window.infState[key][activeTab].splice(origIdx, 1);
+            }
+        });
+
+        // 삭제 후 화면 즉시 렌더링 (번호표 1번부터 알아서 다시 당겨짐)
+        if (typeof window.infRenderTable === 'function') {
+            window.infRenderTable();
+        } else {
+            activeTr.remove(); // 렌더링 함수가 혹시 없더라도 화면에선 지움
+        }
     }
 });
+
+// 더 이상 쓰지 않는 빈 함수 처리 (에러 방지용)
+window.highlightEmptyRows = function() { alert("Ctrl + 마이너스(-) 단축키를 이용해 직접 즉시 삭제해주세요!"); };
+window.bulkDeleteHighlightedRows = function() { alert("Ctrl + 마이너스(-) 단축키를 이용해 직접 즉시 삭제해주세요!"); };
