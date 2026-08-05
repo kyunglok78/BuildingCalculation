@@ -1804,7 +1804,7 @@ window.resetRowDeletion = function() {
 };
 
 // ============================================================================
-// [16] 스마트 빈 셀 자동 탐지 기능 (DOM 최우선 강제 적용 방식)
+// [16] 스마트 빈 셀 자동 탐지 기능 (DOM 강제 제어 및 무한 동기화 방식)
 // ============================================================================
 
 // 1. 초강력 CSS 강제 주입
@@ -1818,68 +1818,83 @@ if (!document.getElementById('smartDeleteStyle')) {
     document.head.appendChild(style);
 }
 
-// 2. 표 렌더링 가로채기 (다시 그려질 때 붉은색 유지 & ★자산번호 콤마 제거)
+// 2. ★ [추가] 자산번호 콤마(,) 강제 제거 감시기 (0.5초마다 무조건 텍스트화)
+setInterval(() => {
+    const thead = document.querySelector('.infTheadGlobal tr');
+    if (!thead) return;
+
+    let targetIdx = -1;
+    // '자산번호'라는 글자가 있는 기둥(열)의 번호를 찾음
+    thead.querySelectorAll('th, td').forEach((th, idx) => {
+        if (th.innerText.includes('자산번호')) targetIdx = idx;
+    });
+
+    if (targetIdx > -1) {
+        const tbody = document.querySelector('.infTbodyGlobal');
+        if (tbody) {
+            tbody.querySelectorAll('tr').forEach(tr => {
+                const cells = tr.querySelectorAll('td');
+                if (cells.length > targetIdx) {
+                    let text = cells[targetIdx].innerText;
+                    // 콤마가 있으면 가차없이 텍스트 형태로 지워버림
+                    if (text.includes(',')) {
+                        cells[targetIdx].innerText = text.replace(/,/g, '');
+                    }
+                }
+            });
+        }
+    }
+}, 500);
+
+// 3. 표 렌더링 가로채기 (다시 그려질 때 붉은색 꼬리표 유지)
 if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isSmartPatched) {
     const originalRender = window.infRenderTable;
     window.infRenderTable = function() {
         originalRender.apply(this, arguments); 
         
-        const thead = document.querySelector('.infTheadGlobal tr');
         const tbody = document.querySelector('.infTbodyGlobal');
         if(!tbody) return;
-
-        // ★ 추가: '자산번호' 열이 몇 번째인지 찾기
-        let assetNumIdx = -1;
-        if (thead) {
-            thead.querySelectorAll('th, td').forEach((th, idx) => {
-                if (th.innerText.includes('자산번호')) assetNumIdx = idx;
-            });
-        }
         
-        let currentData = null;
         if (window.infState && window.infState.data) {
             let activeTab = window.infState.activeTab || Object.keys(window.infState.data)[0];
-            currentData = activeTab ? window.infState.data[activeTab] : null;
+            let currentData = activeTab ? window.infState.data[activeTab] : null;
+
+            if (Array.isArray(currentData)) {
+                tbody.querySelectorAll('tr').forEach(tr => {
+                    const firstTd = tr.querySelector('td');
+                    if(!firstTd) return;
+                    const origIdx = parseInt(firstTd.innerText) - 1;
+
+                    if(!isNaN(origIdx) && currentData[origIdx] && currentData[origIdx]._isDeleteTarget) {
+                        tr.classList.add('delete-target-row');
+                        tr.title = "클릭하거나 Delete 키를 누르면 해제됩니다.";
+                    }
+                });
+            }
         }
-
-        tbody.querySelectorAll('tr').forEach(tr => {
-            const cells = tr.querySelectorAll('td');
-            if (cells.length === 0) return;
-
-            // ★ 추가: 자산번호 열의 콤마(,) 텍스트 강제 제거
-            if (assetNumIdx > -1 && cells.length > assetNumIdx) {
-                let targetCell = cells[assetNumIdx];
-                if (targetCell.innerText.includes(',')) {
-                    targetCell.innerText = targetCell.innerText.replace(/,/g, '');
-                }
-            }
-
-            // 붉은색(삭제 대기) 유지 로직
-            const firstTd = cells[0];
-            if(!firstTd) return;
-            const origIdx = parseInt(firstTd.innerText) - 1;
-
-            if(currentData && Array.isArray(currentData) && !isNaN(origIdx) && currentData[origIdx] && currentData[origIdx]._isDeleteTarget) {
-                tr.classList.add('delete-target-row');
-                tr.title = "클릭하거나 Delete 키를 누르면 해제됩니다.";
-            }
-        });
     };
     window.infRenderTable.isSmartPatched = true;
 }
 
-// 3. 데이터 꼬리표 동기화 헬퍼 함수
+// 4. 데이터 꼬리표 동기화 헬퍼
 function setDeleteTargetFlag(tr, isTarget) {
     const firstTd = tr.querySelector('td');
     if (!firstTd) return;
     const origIdx = parseInt(firstTd.innerText) - 1;
     if (isNaN(origIdx)) return;
 
-    if (window.infState && window.infState.data) {
-        let activeTab = window.infState.activeTab || Object.keys(window.infState.data)[0];
-        if (activeTab && window.infState.data[activeTab] && window.infState.data[activeTab][origIdx]) {
-            window.infState.data[activeTab][origIdx]._isDeleteTarget = isTarget;
-        }
+    if (window.infState) {
+        ['data', 'rawData', 'displayData', 'filteredData'].forEach(key => {
+            let targetObj = window.infState[key];
+            if (targetObj) {
+                Object.keys(targetObj).forEach(sheet => {
+                    let arr = targetObj[sheet];
+                    if (Array.isArray(arr) && arr[origIdx]) {
+                        arr[origIdx]._isDeleteTarget = isTarget;
+                    }
+                });
+            }
+        });
     }
 }
 
@@ -1891,7 +1906,7 @@ window.highlightEmptyRows = function() {
     if (!thead) return;
     
     let targetCellIndex = -1;
-    const ths = thead.querySelectorAll('th, td');
+    ths = thead.querySelectorAll('th, td');
     ths.forEach((th, idx) => {
         if (th.innerText.includes(targetColName)) targetCellIndex = idx;
     });
@@ -1910,7 +1925,7 @@ window.highlightEmptyRows = function() {
         
         const cellText = cells[targetCellIndex].innerText.replace(/\s/g, ''); 
         
-        if (cellText === '' || cellText === '-' || cellText === 'null' || cellText === 'undefined' || cellText === '0' || cellText === '0.00' || cellText === 'NaN') {
+        if (cellText === '' || cellText === '-' || cellText === 'null' || cellText === '0' || cellText === '0.00' || cellText === 'NaN') {
             if (!tr.classList.contains('delete-target-row')) {
                 tr.classList.add('delete-target-row');
                 tr.title = "클릭하거나 Delete 키를 누르면 해제됩니다.";
@@ -1920,11 +1935,8 @@ window.highlightEmptyRows = function() {
         }
     });
     
-    if (highlightCount > 0) {
-        alert(`🚨 [${targetColName}] 열 기준, 총 ${highlightCount}개의 빈 행이 붉은색으로 지정되었습니다.\n표 안의 행을 마우스로 클릭하거나 키보드 [Delete] 키를 눌러 직접 더하거나 뺄 수 있습니다!`);
-    } else {
-        alert(`해당 열에는 비어있는 칸이 없습니다! (데이터 정상)`);
-    }
+    if (highlightCount > 0) alert(`🚨 [${targetColName}] 열 기준, 총 ${highlightCount}개의 빈 행이 붉은색으로 지정되었습니다!`);
+    else alert(`해당 열에는 비어있는 칸이 없습니다! (데이터 정상)`);
 };
 
 window.bulkDeleteHighlightedRows = function() {
@@ -1933,8 +1945,9 @@ window.bulkDeleteHighlightedRows = function() {
         return alert("삭제할 붉은색 행이 없습니다.\n스캔을 하거나 표의 행을 클릭/Delete키로 지정해 주세요.");
     }
     
-    if (!confirm(`정말 붉은색으로 표시된 ${highlightedRows.length}개의 행을 일괄 삭제하시겠습니까?\n(이 작업은 취소할 수 없습니다.)`)) return;
+    if (!confirm(`정말 붉은색으로 표시된 ${highlightedRows.length}개의 행을 일괄 삭제하시겠습니까?`)) return;
 
+    // 1. 화면에 있는 지워질 줄 번호 추출
     let indicesToDelete = [];
     highlightedRows.forEach(tr => {
         const firstTd = tr.querySelector('td');
@@ -1944,27 +1957,42 @@ window.bulkDeleteHighlightedRows = function() {
         }
     });
 
+    // 2. 뒤에서부터 지워야 배열이 안 꼬임
     indicesToDelete.sort((a, b) => b - a);
 
-    if (window.infState && window.infState.data) {
-        let activeTab = window.infState.activeTab || Object.keys(window.infState.data)[0];
-        if (activeTab) {
-            const cacheKeys = ['data', 'rawData', 'displayData', 'filteredData'];
-            cacheKeys.forEach(key => {
-                if (window.infState[key] && Array.isArray(window.infState[key][activeTab])) {
-                    let arr = window.infState[key][activeTab];
-                    indicesToDelete.forEach(idx => {
-                        if (idx >= 0 && idx < arr.length) arr.splice(idx, 1);
-                    });
-                }
-            });
-        }
+    // 3. 내부에 숨은 모든 캐시 데이터를 칼같이 도려냄
+    if (window.infState) {
+        const cacheKeys = ['data', 'rawData', 'displayData', 'filteredData'];
+        cacheKeys.forEach(key => {
+            if (window.infState[key]) {
+                Object.keys(window.infState[key]).forEach(sheet => {
+                    let arr = window.infState[key][sheet];
+                    if (Array.isArray(arr)) {
+                        indicesToDelete.forEach(idx => {
+                            if (idx >= 0 && idx < arr.length) arr.splice(idx, 1);
+                        });
+                    }
+                });
+            }
+        });
     }
     
+    // 4. ★ 화면(DOM)에서 강제 즉시 삭제 및 줄 번호 물리적 재정렬! (좀비 현상 완벽 방지)
+    highlightedRows.forEach(tr => tr.remove());
+    
+    const tbody = document.querySelector('.infTbodyGlobal');
+    if (tbody) {
+        tbody.querySelectorAll('tr').forEach((tr, newIndex) => {
+            const firstTd = tr.querySelector('td');
+            if (firstTd && !isNaN(parseInt(firstTd.innerText))) {
+                firstTd.innerText = newIndex + 1; // 1번부터 차례대로 번호표 다시 부여
+            }
+        });
+    }
+
+    // 5. 혹시 모를 시스템 렌더링 호출
     if (typeof window.infRenderTable === 'function') {
-        window.infRenderTable();
-    } else {
-        highlightedRows.forEach(tr => tr.remove());
+        try { window.infRenderTable(); } catch(e) {}
     }
     
     alert(`🗑️ 총 ${highlightedRows.length}개의 행이 완벽하게 일괄 삭제되었습니다!`);
@@ -1998,7 +2026,7 @@ document.addEventListener('click', function(e) {
 }, true);
 
 // ============================================================================
-// [18] ★ 명세서 표 수동 삭제 토글 기능 (마우스 클릭 & Delete 키 동시 완벽 지원)
+// [18] ★ 명세서 표 수동 삭제 토글 기능 (마우스 클릭 & Delete 키 동시 지원)
 // ============================================================================
 
 function toggleVisualDeleteState(tr) {
@@ -2016,6 +2044,7 @@ function toggleVisualDeleteState(tr) {
     }
 }
 
+// 마우스 클릭 이벤트 (시스템 간섭 원천 차단)
 document.addEventListener('click', function(e) {
     const tbody = e.target.closest('.infTbodyGlobal');
     if (!tbody) return;
@@ -2028,6 +2057,7 @@ document.addEventListener('click', function(e) {
     toggleVisualDeleteState(tr);
 }, true); 
 
+// Delete 단축키 이벤트
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Delete') {
         const activeTr = document.querySelector('.infTbodyGlobal tr:hover');
