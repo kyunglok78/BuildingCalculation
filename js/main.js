@@ -1807,32 +1807,42 @@ window.resetRowDeletion = function() {
 // [16] 스마트 빈 셀 자동 탐지 기능 (데이터 오브젝트 직접 타겟팅 방식)
 // ============================================================================
 
-// 1. 기존 시스템의 색상 초기화 방해를 막기 위한 초강력 CSS 강제 주입
+// 1. 초강력 CSS 강제 주입 (기존 시스템의 색상 덮어쓰기 방어)
 if (!document.getElementById('smartDeleteStyle')) {
     const style = document.createElement('style');
     style.id = 'smartDeleteStyle';
     style.innerHTML = `
-        tr.delete-target-row td { background-color: #ffe5e5 !important; transition: background-color 0.2s; }
-        tr.delete-target-row { background-color: #ffe5e5 !important; transition: background-color 0.2s; }
+        tr.delete-target-row td { background-color: #ffe5e5 !important; transition: background-color 0.1s; }
+        tr.delete-target-row { background-color: #ffe5e5 !important; transition: background-color 0.1s; }
     `;
     document.head.appendChild(style);
 }
 
-// 2. 표가 다시 그려져도 붉은색이 유지되도록 기존 렌더링 함수 가로채기(Patch)
+// 2. 표 렌더링 가로채기(Patch) - 다시 그려져도 붉은색 유지
 if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isSmartPatched) {
     const originalRender = window.infRenderTable;
     window.infRenderTable = function() {
         originalRender.apply(this, arguments); 
         
-        if(!window.infState || !window.infState.data || !window.infState.activeTab) return;
-        const currentData = window.infState.data[window.infState.activeTab];
+        if(!window.infState || !window.infState.data) return;
         const tbody = document.querySelector('.infTbodyGlobal');
-        if(!tbody || !currentData) return;
+        if(!tbody) return;
         
-        const rows = tbody.querySelectorAll('tr');
-        rows.forEach((tr, index) => {
-            // 화면의 줄 순서(index)와 현재 화면용 데이터 배열 순서가 일치함을 이용
-            if(currentData[index] && currentData[index]._isDeleteTarget) {
+        // 탭 상태 강제 탐색
+        let currentData = window.infState.data[window.infState.activeTab];
+        if (!currentData || !Array.isArray(currentData)) {
+            for(let k of Object.keys(window.infState.data)) {
+                if(Array.isArray(window.infState.data[k])) { currentData = window.infState.data[k]; break; }
+            }
+        }
+        if(!currentData) return;
+
+        tbody.querySelectorAll('tr').forEach(tr => {
+            const firstTd = tr.querySelector('td');
+            if(!firstTd) return;
+            const origIdx = parseInt(firstTd.innerText) - 1;
+            
+            if(!isNaN(origIdx) && currentData[origIdx] && currentData[origIdx]._isDeleteTarget) {
                 tr.classList.add('delete-target-row');
                 tr.title = "클릭하거나 Delete 키를 누르면 해제됩니다.";
             }
@@ -1859,22 +1869,30 @@ window.highlightEmptyRows = function() {
     const tbody = document.querySelector('.infTbodyGlobal');
     if (!tbody) return;
     
-    const activeTab = window.infState.activeTab;
-    const currentData = window.infState.data[activeTab];
+    let currentData = window.infState.data[window.infState.activeTab];
+    if (!currentData || !Array.isArray(currentData)) {
+        for(let k of Object.keys(window.infState.data)) {
+            if(Array.isArray(window.infState.data[k])) { currentData = window.infState.data[k]; break; }
+        }
+    }
     if (!currentData) return;
 
     let highlightCount = 0;
     const rows = tbody.querySelectorAll('tr');
     
-    rows.forEach((tr, index) => {
+    rows.forEach(tr => {
         const cells = tr.querySelectorAll('td');
         if (cells.length <= targetCellIndex) return;
         
         const cellText = cells[targetCellIndex].innerText.replace(/\s/g, ''); 
+        const firstTd = cells[0];
+        if (!firstTd) return;
+        
+        const origIdx = parseInt(firstTd.innerText) - 1;
         
         if (cellText === '' || cellText === '-' || cellText === 'null' || cellText === 'undefined' || cellText === '0' || cellText === '0.00' || cellText === 'NaN') {
-            if (currentData[index]) {
-                currentData[index]._isDeleteTarget = true;
+            if (!isNaN(origIdx) && currentData[origIdx]) {
+                currentData[origIdx]._isDeleteTarget = true;
                 if (!tr.classList.contains('delete-target-row')) {
                     tr.classList.add('delete-target-row');
                     tr.title = "클릭하거나 Delete 키를 누르면 해제됩니다.";
@@ -1892,27 +1910,34 @@ window.highlightEmptyRows = function() {
 };
 
 window.bulkDeleteHighlightedRows = function() {
-    const activeTab = window.infState.activeTab;
-    if (!window.infState || !window.infState.data || !window.infState.data[activeTab]) {
-        return alert("데이터를 찾을 수 없습니다.");
+    let activeTab = window.infState.activeTab;
+    let currentData = window.infState.data[activeTab];
+    
+    if (!currentData || !Array.isArray(currentData)) {
+        const keys = Object.keys(window.infState.data);
+        for(let k of keys) {
+            if(Array.isArray(window.infState.data[k])) {
+                currentData = window.infState.data[k];
+                activeTab = k;
+                window.infState.activeTab = k;
+                break;
+            }
+        }
     }
 
-    const currentData = window.infState.data[activeTab];
+    if (!currentData) return alert("데이터를 찾을 수 없습니다.");
+
     const targetCount = currentData.filter(item => item && item._isDeleteTarget).length;
 
-    if (targetCount === 0) {
-        return alert("삭제할 붉은색 행이 없습니다.\n스캔을 하거나 표의 행을 클릭/Delete키로 지정해 주세요.");
-    }
-    
+    if (targetCount === 0) return alert("삭제할 붉은색 행이 없습니다.\n스캔을 하거나 표의 행을 클릭/Delete키로 지정해 주세요.");
     if (!confirm(`정말 붉은색으로 표시된 ${targetCount}개의 행을 일괄 삭제하시겠습니까?\n(이 작업은 취소할 수 없습니다.)`)) return;
     
-    // ★ 핵심: 인덱스가 아닌 데이터 꼬리표(_isDeleteTarget)를 기준으로 역순 삭제!
+    // 배열 꼬임 방지를 위한 역순 데이터 파괴
     const cacheKeys = ['data', 'rawData', 'displayData', 'filteredData'];
     cacheKeys.forEach(key => {
         if (window.infState[key] && window.infState[key][activeTab]) {
             let arr = window.infState[key][activeTab];
             if (Array.isArray(arr)) {
-                // 배열이 당겨지므로 무조건 뒤에서부터 삭제해야 안전합니다.
                 for (let i = arr.length - 1; i >= 0; i--) {
                     if (arr[i] && arr[i]._isDeleteTarget) {
                         arr.splice(i, 1);
@@ -1922,12 +1947,8 @@ window.bulkDeleteHighlightedRows = function() {
         }
     });
     
-    // 화면 강제 갱신
-    if (typeof window.infRenderTable === 'function') {
-        window.infRenderTable();
-    }
-    
-    alert(`🗑️ 총 ${targetCount}개의 행이 데이터 꼬임 없이 완벽하게 일괄 삭제되었습니다!`);
+    if (typeof window.infRenderTable === 'function') window.infRenderTable();
+    alert(`🗑️ 총 ${targetCount}개의 행이 완벽하게 일괄 삭제되었습니다!`);
     
     const btnReset = document.getElementById('btnResetRowDelete');
     if (btnReset) btnReset.style.display = 'inline-block';
@@ -1941,35 +1962,16 @@ document.addEventListener('click', function(e) {
     if (!btn) return;
 
     if (btn.innerText.includes('✓')) {
-        e.preventDefault();
-        e.stopPropagation(); 
-        e.stopImmediatePropagation();
-
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
         const targetName = btn.innerText.replace('✓', '').trim();
-
         if (window.infState && window.infState.wizard && window.infState.wizard.mapped) {
             delete window.infState.wizard.mapped[targetName];
         }
-
-        const ths = document.querySelectorAll('.infTheadGlobal th, .infTheadGlobal td');
-        ths.forEach(th => {
-            const badges = th.querySelectorAll('span');
-            badges.forEach(badge => {
-                if (badge.innerText.includes(targetName)) {
-                    badge.remove();
-                }
-            });
+        document.querySelectorAll('.infTheadGlobal th span, .infTheadGlobal td span').forEach(badge => {
+            if (badge.innerText.includes(targetName)) badge.remove();
         });
-
-        btn.innerText = targetName;
-        btn.style.background = '#fff';
-        btn.style.color = '#333';
-        btn.style.border = '1px solid #ccc';
-        btn.style.boxShadow = 'none';
-
-        if (window.infState && window.infState.wizard.activeTarget === targetName) {
-            window.infState.wizard.activeTarget = '';
-        }
+        btn.innerText = targetName; btn.style.background = '#fff'; btn.style.color = '#333'; btn.style.border = '1px solid #ccc';
+        if (window.infState && window.infState.wizard.activeTarget === targetName) window.infState.wizard.activeTarget = '';
     }
 }, true);
 
@@ -1977,18 +1979,32 @@ document.addEventListener('click', function(e) {
 // [18] ★ 명세서 표 수동 삭제 토글 기능 (마우스 클릭 & Delete 키 동시 지원 완벽판)
 // ============================================================================
 
-// 공통 토글 함수 (마우스 클릭과 Delete 키에서 함께 사용)
 function toggleRowDeleteState(tr) {
-    const tbody = tr.closest('tbody');
-    const rowIndex = Array.from(tbody.children).indexOf(tr); // 현재 화면의 배열 인덱스
+    const firstTd = tr.querySelector('td');
+    if (!firstTd || firstTd.colSpan > 5) return;
     
-    if (!window.infState || !window.infState.data || !window.infState.activeTab) return;
-    const currentData = window.infState.data[window.infState.activeTab];
-    if (!currentData || !currentData[rowIndex]) return;
+    const origIdx = parseInt(firstTd.innerText) - 1;
+    if (isNaN(origIdx)) return;
+    
+    if (!window.infState || !window.infState.data) return;
+    
+    let activeTab = window.infState.activeTab;
+    let currentData = window.infState.data[activeTab];
+    
+    if (!currentData || !Array.isArray(currentData)) {
+        for(let k of Object.keys(window.infState.data)) {
+            if (Array.isArray(window.infState.data[k])) {
+                currentData = window.infState.data[k];
+                window.infState.activeTab = k;
+                break;
+            }
+        }
+    }
 
-    const targetObj = currentData[rowIndex];
+    if (!currentData || !currentData[origIdx]) return;
 
-    // 데이터 토글
+    const targetObj = currentData[origIdx];
+
     if (targetObj._isDeleteTarget) {
         targetObj._isDeleteTarget = false;
         tr.classList.remove('delete-target-row');
@@ -2000,40 +2016,26 @@ function toggleRowDeleteState(tr) {
     }
 }
 
-// 1. 마우스 클릭 이벤트
+// 1. 마우스 클릭 이벤트 (기존 시스템 완벽 차단)
 document.addEventListener('click', function(e) {
     const tbody = e.target.closest('.infTbodyGlobal');
     if (!tbody) return;
-
     if (['INPUT', 'SELECT', 'BUTTON'].includes(e.target.tagName)) return;
-
+    
     const tr = e.target.closest('tr');
     if (!tr) return;
 
-    const firstTd = tr.querySelector('td');
-    if (!firstTd || firstTd.colSpan > 5) return; // 빈 데이터 안내 메시지 줄 제외
-
-    // 기존 시스템 개입 완벽 차단
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
-
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
     toggleRowDeleteState(tr);
-}, true); // 캡처 단계에서 가로채기
+}, true); 
 
 // 2. 키보드 Delete 키 이벤트
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Delete') {
-        // 마우스가 현재 올라가 있는 행(Hover) 타겟팅
         const activeTr = document.querySelector('.infTbodyGlobal tr:hover');
         if (!activeTr) return;
 
-        const firstTd = activeTr.querySelector('td');
-        if (!firstTd || firstTd.colSpan > 5) return;
-
-        // 브라우저 기본 동작 방지
         e.preventDefault();
-
         toggleRowDeleteState(activeTr);
     }
 });
