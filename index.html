@@ -707,14 +707,16 @@
 
             <div id="infWizardArea" style="background:#f0fdf4; border:1px solid #bbf7d0; padding:15px; border-radius:4px; display:none; flex-direction:column; gap:12px;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-size:15px; font-weight:bold; color:#166534;" id="infWizardText">🎯 아래 버튼 중 하나를 선택하고, 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭해 매칭하세요!</span>
-                    <button type="button" class="btn-yellow" id="btnStartWizard" onclick="infStartWizard()">열 매핑 마법사 시작</button>
-                    <!-- ★ 열 매핑 완료 버튼 클릭 시 -> 스마트 삭제 패널 표출 -->
-                    <button type="button" class="btn-yellow" id="btnFinishMapping" onclick="infFinishMapping(); document.getElementById('smartDeletePanel').style.display='flex';" style="display:none; background:#1C5691; color:white; border:none;">열 매핑 완료 및 행 지우기로 전환 ▶</button>
-                </div>
+                <span style="font-size:15px; font-weight:bold; color:#166534;" id="infWizardText">🎯 아래 버튼 중 하나를 선택하고, 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭해 매칭하세요!</span>
+        
+                 <button type="button" class="btn-yellow" id="btnStartWizard" onclick="infStartWizard()">열 매핑 마법사 시작</button>
+        
+                 <!-- ★ 복구된 열 매핑 완료 버튼 (스마트 삭제 패널 호출 제거됨) -->
+                <button type="button" class="btn-yellow" id="btnFinishMapping" onclick="infFinishMapping();" style="display:none; background:#1C5691; color:white; border:none;">열 매핑 완료 ▶</button>
+           </div>
                 <div id="infMappingButtons" style="display:none; gap:10px; flex-wrap:wrap; padding-top:10px; border-top:1px dashed #a7f3d0;"></div>
-            </div>
-        </div>
+       </div>
+       </div>
     </div>
     
     <div id="infTabs1" class="infTabsContainer" style="display: flex; border-bottom: 2px solid #1C5691;"></div>
