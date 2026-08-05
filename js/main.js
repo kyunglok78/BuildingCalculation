@@ -1804,7 +1804,7 @@ window.resetRowDeletion = function() {
 };
 
 // ============================================================================
-// [16] 스마트 빈 셀 자동 탐지 기능 (영구 데이터 저장 및 절대 지워지지 않는 색상 적용)
+// [16] 스마트 빈 셀 자동 탐지 기능 (데이터 오브젝트 직접 타겟팅 방식)
 // ============================================================================
 
 // 1. 기존 시스템의 색상 초기화 방해를 막기 위한 초강력 CSS 강제 주입
@@ -1812,8 +1812,8 @@ if (!document.getElementById('smartDeleteStyle')) {
     const style = document.createElement('style');
     style.id = 'smartDeleteStyle';
     style.innerHTML = `
-        tr.delete-target-row td { background-color: #ffe5e5 !important; }
-        tr.delete-target-row { background-color: #ffe5e5 !important; }
+        tr.delete-target-row td { background-color: #ffe5e5 !important; transition: background-color 0.2s; }
+        tr.delete-target-row { background-color: #ffe5e5 !important; transition: background-color 0.2s; }
     `;
     document.head.appendChild(style);
 }
@@ -1824,23 +1824,17 @@ if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isSmar
     window.infRenderTable = function() {
         originalRender.apply(this, arguments); 
         
-        if(!window.infState || !window.infState.data) return;
+        if(!window.infState || !window.infState.data || !window.infState.activeTab) return;
+        const currentData = window.infState.data[window.infState.activeTab];
         const tbody = document.querySelector('.infTbodyGlobal');
-        if(!tbody) return;
+        if(!tbody || !currentData) return;
         
-        tbody.querySelectorAll('tr').forEach(tr => {
-            const td = tr.querySelector('td');
-            if(!td) return;
-            const origIdx = parseInt(td.innerText) - 1;
-            
-            let isTarget = false;
-            Object.values(window.infState.data).forEach(arr => {
-                if (Array.isArray(arr) && arr[origIdx] && arr[origIdx]._isDeleteTarget) isTarget = true;
-            });
-            
-            if(isTarget) {
+        const rows = tbody.querySelectorAll('tr');
+        rows.forEach((tr, index) => {
+            // 화면의 줄 순서(index)와 현재 화면용 데이터 배열 순서가 일치함을 이용
+            if(currentData[index] && currentData[index]._isDeleteTarget) {
                 tr.classList.add('delete-target-row');
-                tr.title = "클릭하면 지우기 대상에서 제외(해제)됩니다.";
+                tr.title = "클릭하거나 Delete 키를 누르면 해제됩니다.";
             }
         });
     };
@@ -1865,88 +1859,75 @@ window.highlightEmptyRows = function() {
     const tbody = document.querySelector('.infTbodyGlobal');
     if (!tbody) return;
     
+    const activeTab = window.infState.activeTab;
+    const currentData = window.infState.data[activeTab];
+    if (!currentData) return;
+
     let highlightCount = 0;
     const rows = tbody.querySelectorAll('tr');
     
-    rows.forEach(tr => {
+    rows.forEach((tr, index) => {
         const cells = tr.querySelectorAll('td');
         if (cells.length <= targetCellIndex) return;
         
         const cellText = cells[targetCellIndex].innerText.replace(/\s/g, ''); 
-        const firstTd = cells[0];
-        if (!firstTd) return;
-        const origIdx = parseInt(firstTd.innerText) - 1;
         
         if (cellText === '' || cellText === '-' || cellText === 'null' || cellText === 'undefined' || cellText === '0' || cellText === '0.00' || cellText === 'NaN') {
-            if (window.infState && window.infState.data) {
-                Object.values(window.infState.data).forEach(arr => {
-                    if (Array.isArray(arr) && arr[origIdx]) arr[origIdx]._isDeleteTarget = true;
-                });
-            }
-            if (!tr.classList.contains('delete-target-row')) {
-                tr.classList.add('delete-target-row');
-                tr.title = "클릭하면 지우기 대상에서 제외(해제)됩니다.";
-                highlightCount++;
+            if (currentData[index]) {
+                currentData[index]._isDeleteTarget = true;
+                if (!tr.classList.contains('delete-target-row')) {
+                    tr.classList.add('delete-target-row');
+                    tr.title = "클릭하거나 Delete 키를 누르면 해제됩니다.";
+                    highlightCount++;
+                }
             }
         }
     });
     
     if (highlightCount > 0) {
-        alert(`🚨 [${targetColName}] 열 기준, 총 ${highlightCount}개의 빈 행이 자동 탐지되었습니다.\n\n수동으로 표 안의 아무 행이나 '클릭'하여 붉은색을 추가하거나 뺄 수 있습니다!`);
+        alert(`🚨 [${targetColName}] 열 기준, 총 ${highlightCount}개의 빈 행이 자동 탐지되었습니다.\n\n표 안의 줄을 '클릭'하거나 마우스를 올리고 'Delete' 키를 누르면 수동으로 추가/해제가 가능합니다!`);
     } else {
         alert(`해당 열에는 비어있는 칸이 없습니다! (데이터 정상)`);
     }
 };
 
 window.bulkDeleteHighlightedRows = function() {
-    // ★ 1. 오직 '화면에 붉은색으로 칠해진 줄'을 기준으로만 삭제 대상을 수집합니다.
-    const highlightedRows = document.querySelectorAll('.infTbodyGlobal tr.delete-target-row');
-    if (highlightedRows.length === 0) {
-        return alert("삭제할 붉은색 행이 없습니다.\n먼저 스캔을 하거나 표의 행을 클릭해 붉은색으로 지정해 주세요.");
+    const activeTab = window.infState.activeTab;
+    if (!window.infState || !window.infState.data || !window.infState.data[activeTab]) {
+        return alert("데이터를 찾을 수 없습니다.");
+    }
+
+    const currentData = window.infState.data[activeTab];
+    const targetCount = currentData.filter(item => item && item._isDeleteTarget).length;
+
+    if (targetCount === 0) {
+        return alert("삭제할 붉은색 행이 없습니다.\n스캔을 하거나 표의 행을 클릭/Delete키로 지정해 주세요.");
     }
     
-    if (!confirm(`정말 붉은색으로 표시된 ${highlightedRows.length}개의 행을 일괄 삭제하시겠습니까?\n(이 작업은 취소할 수 없습니다.)`)) return;
+    if (!confirm(`정말 붉은색으로 표시된 ${targetCount}개의 행을 일괄 삭제하시겠습니까?\n(이 작업은 취소할 수 없습니다.)`)) return;
     
-    // 삭제할 고유 인덱스 번호 추출
-    let indicesToDelete = [];
-    highlightedRows.forEach(tr => {
-        const td = tr.querySelector('td');
-        if (td) {
-            const origIdx = parseInt(td.innerText) - 1;
-            if (!isNaN(origIdx)) indicesToDelete.push(origIdx);
+    // ★ 핵심: 인덱스가 아닌 데이터 꼬리표(_isDeleteTarget)를 기준으로 역순 삭제!
+    const cacheKeys = ['data', 'rawData', 'displayData', 'filteredData'];
+    cacheKeys.forEach(key => {
+        if (window.infState[key] && window.infState[key][activeTab]) {
+            let arr = window.infState[key][activeTab];
+            if (Array.isArray(arr)) {
+                // 배열이 당겨지므로 무조건 뒤에서부터 삭제해야 안전합니다.
+                for (let i = arr.length - 1; i >= 0; i--) {
+                    if (arr[i] && arr[i]._isDeleteTarget) {
+                        arr.splice(i, 1);
+                    }
+                }
+            }
         }
     });
     
-    // 번호가 큰 것(뒤)부터 지워야 배열 순서가 안 꼬입니다.
-    indicesToDelete.sort((a, b) => b - a);
-    
-    // ★ 2. 가장 원초적이고 확실한 삭제 방식 (기존 배열에서 해당 줄만 직접 도려냄)
-    if (window.infState) {
-        const cacheKeys = ['data', 'rawData', 'displayData', 'filteredData'];
-        cacheKeys.forEach(key => {
-            if (window.infState[key]) {
-                Object.keys(window.infState[key]).forEach(subKey => {
-                    let arr = window.infState[key][subKey];
-                    if (Array.isArray(arr)) {
-                        indicesToDelete.forEach(idx => {
-                            if (idx >= 0 && idx < arr.length) {
-                                arr.splice(idx, 1); // 해당 인덱스 1개 칼같이 삭제!
-                            }
-                        });
-                    }
-                });
-            }
-        });
-    }
-    
-    // 3. 화면 갱신
+    // 화면 강제 갱신
     if (typeof window.infRenderTable === 'function') {
         window.infRenderTable();
-    } else {
-        highlightedRows.forEach(tr => tr.remove());
     }
     
-    alert(`🗑️ 총 ${indicesToDelete.length}개의 행이 찌꺼기 하나 없이 완벽하게 삭제되었습니다!`);
+    alert(`🗑️ 총 ${targetCount}개의 행이 데이터 꼬임 없이 완벽하게 일괄 삭제되었습니다!`);
     
     const btnReset = document.getElementById('btnResetRowDelete');
     if (btnReset) btnReset.style.display = 'inline-block';
@@ -1993,10 +1974,33 @@ document.addEventListener('click', function(e) {
 }, true);
 
 // ============================================================================
-// [18] ★ 명세서 표 수동 삭제 토글 기능 (마우스 클릭 + Ctrl/Delete/Backspace 3중 단축키)
+// [18] ★ 명세서 표 수동 삭제 토글 기능 (마우스 클릭 & Delete 키 동시 지원 완벽판)
 // ============================================================================
 
-// [마우스 클릭]
+// 공통 토글 함수 (마우스 클릭과 Delete 키에서 함께 사용)
+function toggleRowDeleteState(tr) {
+    const tbody = tr.closest('tbody');
+    const rowIndex = Array.from(tbody.children).indexOf(tr); // 현재 화면의 배열 인덱스
+    
+    if (!window.infState || !window.infState.data || !window.infState.activeTab) return;
+    const currentData = window.infState.data[window.infState.activeTab];
+    if (!currentData || !currentData[rowIndex]) return;
+
+    const targetObj = currentData[rowIndex];
+
+    // 데이터 토글
+    if (targetObj._isDeleteTarget) {
+        targetObj._isDeleteTarget = false;
+        tr.classList.remove('delete-target-row');
+        tr.title = "";
+    } else {
+        targetObj._isDeleteTarget = true;
+        tr.classList.add('delete-target-row');
+        tr.title = "클릭하거나 Delete 키를 누르면 해제됩니다.";
+    }
+}
+
+// 1. 마우스 클릭 이벤트
 document.addEventListener('click', function(e) {
     const tbody = e.target.closest('.infTbodyGlobal');
     if (!tbody) return;
@@ -2007,72 +2011,29 @@ document.addEventListener('click', function(e) {
     if (!tr) return;
 
     const firstTd = tr.querySelector('td');
-    if (!firstTd || firstTd.colSpan > 5) return;
+    if (!firstTd || firstTd.colSpan > 5) return; // 빈 데이터 안내 메시지 줄 제외
 
+    // 기존 시스템 개입 완벽 차단
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
 
-    const origIdx = parseInt(firstTd.innerText) - 1;
-    if (isNaN(origIdx)) return;
-    
-    if (tr.classList.contains('delete-target-row')) {
-        tr.classList.remove('delete-target-row');
-        tr.style.removeProperty('background-color');
-        tr.title = "";
-        if (window.infState && window.infState.data) {
-            Object.values(window.infState.data).forEach(arr => {
-                if (Array.isArray(arr) && arr[origIdx]) arr[origIdx]._isDeleteTarget = false;
-            });
-        }
-    } else {
-        tr.classList.add('delete-target-row');
-        tr.style.setProperty('background-color', '#ffe5e5', 'important');
-        tr.title = "클릭하면 지우기 대상에서 제외(해제)됩니다.";
-        if (window.infState && window.infState.data) {
-            Object.values(window.infState.data).forEach(arr => {
-                if (Array.isArray(arr) && arr[origIdx]) arr[origIdx]._isDeleteTarget = true;
-            });
-        }
-    }
-}, true);
+    toggleRowDeleteState(tr);
+}, true); // 캡처 단계에서 가로채기
 
-// [키보드 단축키] (마우스를 올린 행(Hover)을 타겟으로 함)
+// 2. 키보드 Delete 키 이벤트
 document.addEventListener('keydown', function(e) {
-    // Ctrl + 마이너스(-) OR Delete 키 OR Backspace 키 모두 지원!
-    const isCtrlMinus = (e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_' || e.code === 'Minus' || e.code === 'NumpadSubtract');
-    const isDeleteOrBack = e.key === 'Delete' || e.key === 'Backspace';
-
-    if (isCtrlMinus || isDeleteOrBack) {
-        if (isCtrlMinus) e.preventDefault(); // 브라우저 축소(Zoom Out) 방지 시도
-
+    if (e.key === 'Delete') {
+        // 마우스가 현재 올라가 있는 행(Hover) 타겟팅
         const activeTr = document.querySelector('.infTbodyGlobal tr:hover');
         if (!activeTr) return;
 
         const firstTd = activeTr.querySelector('td');
         if (!firstTd || firstTd.colSpan > 5) return;
 
-        const origIdx = parseInt(firstTd.innerText) - 1;
-        if (isNaN(origIdx)) return;
+        // 브라우저 기본 동작 방지
+        e.preventDefault();
 
-        if (activeTr.classList.contains('delete-target-row')) {
-            activeTr.classList.remove('delete-target-row');
-            activeTr.style.removeProperty('background-color');
-            activeTr.title = "";
-            if (window.infState && window.infState.data) {
-                Object.values(window.infState.data).forEach(arr => {
-                    if (Array.isArray(arr) && arr[origIdx]) arr[origIdx]._isDeleteTarget = false;
-                });
-            }
-        } else {
-            activeTr.classList.add('delete-target-row');
-            activeTr.style.setProperty('background-color', '#ffe5e5', 'important');
-            activeTr.title = "클릭하면 지우기 대상에서 제외(해제)됩니다.";
-            if (window.infState && window.infState.data) {
-                Object.values(window.infState.data).forEach(arr => {
-                    if (Array.isArray(arr) && arr[origIdx]) arr[origIdx]._isDeleteTarget = true;
-                });
-            }
-        }
+        toggleRowDeleteState(activeTr);
     }
 });
