@@ -1216,90 +1216,63 @@ window.resetRowDeletion = function() {
 };
 
 // ============================================================================
-// [15] 자산번호 데이터 원천 텍스트 변환 (메모리 박제) & 중앙 정렬
+// [15] 자산번호 원천 텍스트 변환 (렉 제로 & 콤마 영구 차단) 및 중앙 정렬
 // ============================================================================
-
-// 1. 화면 렌더링 전 메모리(Data)를 강제로 문자열(String)로 변환
 if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isDataPatched) {
     const originalRender = window.infRenderTable;
     window.infRenderTable = function() {
         
-        // 표를 그리기 전에 내부 데이터를 완전히 텍스트로 세탁합니다. (2.3.1 ~ 2.3.3 전체 적용)
+        // 1. 메모리 데이터 조작: 시스템이 숫자로 인식하지 못하도록 '투명 글자' 삽입
         if (window.infState && window.infState.data) {
             for (let tab in window.infState.data) {
                 window.infState.data[tab].forEach(row => {
                     ['자산번호', '신자산번호'].forEach(key => {
                         if (row[key] !== undefined && row[key] !== null) {
-                            // 숫자를 텍스트로 바꾸고, 콤마와 공백을 완전히 제거하여 박제
-                            row[key] = String(row[key]).replace(/,/g, '').trim();
+                            // 콤마를 제거한 뒤 눈에 보이지 않는 공백(\u200B)을 붙여 완벽한 문자로 위장
+                            let safeStr = String(row[key]).replace(/,/g, '').replace(/\u200B/g, '').trim();
+                            row[key] = safeStr + '\u200B'; 
                         }
                     });
                 });
             }
         }
 
-        // 세탁된 텍스트 데이터로 원래 표 그리기 실행
+        // 2. 원래 표 그리기 실행 (이제 데이터가 텍스트라 시스템이 알아서 콤마를 안 찍음)
         originalRender.apply(this, arguments);
         
-        // 렌더링 직후 DOM 중앙 정렬 함수 호출
-        cleanAssetNumbers(); 
+        // 3. 표가 다 그려진 후 딱 1번만 가운데 정렬 실행 (CCTV 철거 -> 렉 완전 해소)
+        const thead = document.querySelector('.infTheadGlobal tr');
+        const tbody = document.querySelector('.infTbodyGlobal');
+        if (thead && tbody) {
+            let assetColIdxs = [];
+            thead.querySelectorAll('th, td').forEach((th, idx) => {
+                if (th.innerText.replace(/\s/g, '').includes('자산번호')) assetColIdxs.push(idx);
+            });
+
+            if (assetColIdxs.length > 0) {
+                // DOM 렌더링 속도 향상을 위해 잠깐 숨김
+                tbody.style.display = 'none';
+                tbody.querySelectorAll('tr').forEach(tr => {
+                    const cells = tr.querySelectorAll('td');
+                    assetColIdxs.forEach(idx => {
+                        if (cells[idx]) {
+                            // 텍스트 가운데 정렬 적용 및 혹시 모를 콤마 2차 제거
+                            cells[idx].style.textAlign = 'center'; 
+                            if (cells[idx].innerText.includes(',')) {
+                                cells[idx].innerText = cells[idx].innerText.replace(/,/g, '');
+                            }
+                        }
+                    });
+                });
+                tbody.style.display = '';
+            }
+        }
     };
     window.infRenderTable.isDataPatched = true;
 }
 
-// 2. DOM 실시간 감시 카메라 및 중앙 정렬 적용
-const tableObserver = new MutationObserver((mutations) => {
-    let shouldClean = false;
-    for (let m of mutations) {
-        if (m.addedNodes.length > 0 || m.type === 'characterData') {
-            shouldClean = true; break;
-        }
-    }
-    if (shouldClean) cleanAssetNumbers();
-});
-
-function cleanAssetNumbers() {
-    const thead = document.querySelector('.infTheadGlobal');
-    const tbody = document.querySelector('.infTbodyGlobal');
-    if (!thead || !tbody) return;
-
-    let assetColIdxs = [];
-    const headers = thead.querySelectorAll('tr:last-child th, tr:last-child td');
-    headers.forEach((th, idx) => {
-        // '자산번호' 열의 위치를 추적
-        if (th.innerText.replace(/\s/g, '').includes('자산번호')) assetColIdxs.push(idx);
-    });
-
-    if (assetColIdxs.length === 0) return;
-
-    tableObserver.disconnect(); // 무한루프 방지
-
-    tbody.querySelectorAll('tr').forEach(tr => {
-        const cells = tr.querySelectorAll('td');
-        assetColIdxs.forEach(idx => {
-            if (cells[idx]) {
-                let text = cells[idx].innerText;
-                // 혹시라도 남아있는 콤마 2차 제거 및 텍스트 가운데 정렬 적용
-                if (text.includes(',')) cells[idx].innerText = text.replace(/,/g, '');
-                cells[idx].style.textAlign = 'center'; 
-            }
-        });
-    });
-
-    // 정렬 완료 후 다시 감시 모드 돌입
-    tableObserver.observe(tbody, { childList: true, subtree: true, characterData: true });
-}
-
-// 3. 1초마다 감시 카메라 설치 여부 확인 및 [Delete] 안내 문구 강제 교체
+// 4. [Delete] -> [Ctrl] + [-] 텍스트 실시간 강제 교체 (가벼운 주기 검사)
 setInterval(() => {
-    // A. 표 감시 카메라 설치 확인
-    const tbody = document.querySelector('.infTbodyGlobal');
-    if (tbody && !tbody.dataset.observed) {
-        tableObserver.observe(tbody, { childList: true, subtree: true, characterData: true });
-        tbody.dataset.observed = 'true';
-    }
-
-    // B. [Delete] -> [Ctrl] + [-] 텍스트 실시간 강제 교체
     const step1Panel = document.getElementById('infStep1Panel');
     if (step1Panel && step1Panel.innerHTML.includes('[Delete] 키로 지우시고')) {
         step1Panel.innerHTML = step1Panel.innerHTML.replace(/\[Delete\] 키로 지우시고/g, "<b style='color:#dc3545;'>[Ctrl] + [-] (마이너스) 키</b>로 지우시고");
