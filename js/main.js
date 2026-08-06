@@ -1216,61 +1216,68 @@ window.resetRowDeletion = function() {
 };
 
 // ============================================================================
-// [15] 물가보정 렌더링 엔진 덮어쓰기 (자산번호 콤마 영구 삭제 & 가운데 정렬)
+// [15] 자산번호 콤마 영구 삭제 & 중앙 정렬 (실시간 감시 카메라 방식)
 // ============================================================================
-if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isCommaPatched) {
-    const originalRender = window.infRenderTable;
-    window.infRenderTable = function() {
-        
-        // 1. 메모리상의 원본 데이터를 무조건 문자로 뜯어고침 (콤마 찍힐 확률 0%)
-        if (window.infState && window.infState.data) {
-            for (let tab in window.infState.data) {
-                window.infState.data[tab].forEach(row => {
-                    ['자산번호', '신자산번호'].forEach(key => {
-                        if (row[key] !== undefined && row[key] !== null) {
-                            row[key] = String(row[key]).replace(/,/g, '');
-                        }
-                    });
-                });
-            }
+const tableObserver = new MutationObserver((mutations) => {
+    let shouldClean = false;
+    for (let m of mutations) {
+        if (m.addedNodes.length > 0 || m.type === 'characterData') {
+            shouldClean = true; break;
         }
-        
-        // 표를 그리는 동안 화면을 숨겨서 렉(Reflow) 완벽 방지
-        const tbody = document.querySelector('.infTbodyGlobal');
-        if (tbody) tbody.style.display = 'none';
+    }
+    if (shouldClean) cleanAssetNumbers();
+});
 
-        // 2. 원래 표 그리는 함수 실행
-        originalRender.apply(this, arguments); 
+function cleanAssetNumbers() {
+    const thead = document.querySelector('.infTheadGlobal');
+    const tbody = document.querySelector('.infTbodyGlobal');
+    if (!thead || !tbody) return;
 
-        // 3. 다 그려진 표에서 '자산번호' 열 찾아 가운데 정렬
-        const newTbody = document.querySelector('.infTbodyGlobal');
-        const thead = document.querySelector('.infTheadGlobal tr');
-        if (thead && newTbody) {
-            let assetIdxs = [];
-            thead.querySelectorAll('th, td').forEach((cell, idx) => {
-                if (cell.innerText.includes('자산번호')) assetIdxs.push(idx);
-            });
+    let assetColIdxs = [];
+    const headers = thead.querySelectorAll('tr:last-child th, tr:last-child td');
+    headers.forEach((th, idx) => {
+        // '자산번호' 또는 '신자산번호' 열의 위치를 정확히 추적
+        if (th.innerText.replace(/\s/g, '').includes('자산번호')) assetColIdxs.push(idx);
+    });
 
-            if (assetIdxs.length > 0) {
-                newTbody.querySelectorAll('tr').forEach(tr => {
-                    const cells = tr.querySelectorAll('td');
-                    assetIdxs.forEach(idx => {
-                        if (cells.length > idx) {
-                            cells[idx].style.textAlign = 'center'; 
-                            cells[idx].innerText = cells[idx].innerText.replace(/,/g, ''); // 최종 안전장치
-                        }
-                    });
-                });
+    if (assetColIdxs.length === 0) return;
+
+    tableObserver.disconnect(); // 콤마 지울 때 무한루프 도는 것 방지
+
+    tbody.querySelectorAll('tr').forEach(tr => {
+        const cells = tr.querySelectorAll('td');
+        assetColIdxs.forEach(idx => {
+            if (cells[idx]) {
+                let text = cells[idx].innerText;
+                // 콤마가 발견되면 즉시 도려냄 (문자열 강제 박제)
+                if (text.includes(',')) cells[idx].innerText = text.replace(/,/g, '');
+                cells[idx].style.textAlign = 'center'; // 가운데 정렬
             }
-        }
-        // 숨겼던 표 다시 노출
-        if (newTbody) newTbody.style.display = '';
-    };
-    window.infRenderTable.isCommaPatched = true;
+        });
+    });
+
+    // 콤마 제거 완료 후 다시 감시 모드 돌입
+    tableObserver.observe(tbody, { childList: true, subtree: true, characterData: true });
 }
 
+// 1초마다 감시 카메라 설치 여부 확인 및 [Delete] 안내 문구 강제 교체
+setInterval(() => {
+    // A. 표 감시 카메라 설치
+    const tbody = document.querySelector('.infTbodyGlobal');
+    if (tbody && !tbody.dataset.observed) {
+        tableObserver.observe(tbody, { childList: true, subtree: true, characterData: true });
+        tbody.dataset.observed = 'true';
+    }
+
+    // B. [Delete] -> [Ctrl] + [-] 텍스트 실시간 강제 교체
+    const step1Panel = document.getElementById('infStep1Panel');
+    if (step1Panel && step1Panel.innerHTML.includes('[Delete] 키로 지우시고')) {
+        step1Panel.innerHTML = step1Panel.innerHTML.replace(/\[Delete\] 키로 지우시고/g, "<b style='color:#dc3545;'>[Ctrl] + [-] (마이너스) 키</b>로 지우시고");
+    }
+}, 1000);
+
 // ============================================================================
-// [16] 전역 클릭 이벤트 제어기 (렉 방지, 튕김 방지, 자동 연동)
+// [16] 전역 클릭 이벤트 제어기 (화면 깜빡임 제거, 튕김 방지, 자동 연동)
 // ============================================================================
 document.addEventListener('click', function(e) {
     // 1. 평가제외 버튼 누르면 1만원 이하 로직 자동 실행
@@ -1279,29 +1286,18 @@ document.addEventListener('click', function(e) {
         setTimeout(() => { if(typeof window.excludeUnderTenThousand === 'function') window.excludeUnderTenThousand(true); }, 100);
     }
     
-    // 2. 열(기둥) 매핑 시 버벅거림(렉) 제거
-    const cell = e.target.closest('.infTheadGlobal th, .infTheadGlobal td');
-    if (cell && window.infState && window.infState.wizard && window.infState.wizard.phase === 'mapping') {
-        const tbody = document.querySelector('.infTbodyGlobal');
-        if (tbody) {
-            tbody.style.display = 'none'; 
-            setTimeout(() => { tbody.style.display = ''; }, 10);
-        }
-    }
+    // (※ 기존에 있던 표 숨김(display='none') 깜빡임 코드는 완전히 삭제했습니다!)
     
-    // 3. 매핑 해제 시 오류 방지 및 완벽 초기화 (하얀색 버튼 복구)
+    // 2. 매핑 해제 시 오류 방지 및 완벽 초기화 (하얀색 버튼 복구)
     const btnMap = e.target.closest('#infMappingButtons button');
     if (btnMap && btnMap.innerText.includes('✓')) {
-        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); // ★ 화면 강제 튕김 100% 차단
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); // 화면 강제 튕김 100% 차단
 
         const targetName = btnMap.innerText.replace('✓', '').trim();
         if (window.infState && window.infState.wizard && window.infState.wizard.mapped) {
             delete window.infState.wizard.mapped[targetName];
         }
         
-        const tbody = document.querySelector('.infTbodyGlobal');
-        if (tbody) tbody.style.display = 'none';
-
         document.querySelectorAll('.infTheadGlobal th, .infTheadGlobal td').forEach((c, colIndex) => {
             const badge = c.querySelector('span');
             if (badge && badge.innerText.includes(targetName)) {
@@ -1311,8 +1307,6 @@ document.addEventListener('click', function(e) {
             }
         });
 
-        if (tbody) tbody.style.display = '';
-        
         btnMap.innerText = targetName; 
         btnMap.style.cssText = 'background: #ffffff !important; color: #333 !important; border: 1px solid #ccc !important; font-weight: normal !important; box-shadow: none !important; opacity: 1 !important; cursor: pointer;';
         
@@ -1330,7 +1324,7 @@ document.addEventListener('click', function(e) {
     }
 }, true);
 
-// 4. 시스템 멋대로 다음 단계 넘어가는 현상(Auto-Proceed) 원천 차단
+// 3. 시스템 멋대로 다음 단계 넘어가는 현상(Auto-Proceed) 원천 차단
 if (typeof window.infFinishMapping === 'function' && !window.infFinishMapping.isPatched) {
     const origFinish = window.infFinishMapping;
     window.infFinishMapping = function(force) {
