@@ -1804,74 +1804,113 @@ window.resetRowDeletion = function() {
 };
 
 // ============================================================================
-// [16] 자산번호 콤마(,) 강제 제거 (무한반복 타이머 삭제 -> 렌더링 시 1회만 동작 최적화)
+// [16] 자산번호 데이터 강제 문자열 변환(콤마 원천차단) 및 가운데 정렬
 // ============================================================================
-if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isCommaPatched) {
+if (typeof window.infRenderTable === 'function') {
     const originalRender = window.infRenderTable;
     window.infRenderTable = function() {
-        // 원래 표 그리는 함수 먼저 실행
-        originalRender.apply(this, arguments); 
-        
-        // 다 그린 직후에 자산번호 기둥(열) 찾아서 콤마 딱 한 번만 제거
-        const thead = document.querySelector('.infTheadGlobal tr');
-        if (!thead) return;
-
-        let targetIdx = -1;
-        thead.querySelectorAll('th, td').forEach((th, idx) => {
-            if (th.innerText.includes('자산번호')) targetIdx = idx;
-        });
-
-        if (targetIdx > -1) {
-            const tbody = document.querySelector('.infTbodyGlobal');
-            if (tbody) {
-                tbody.querySelectorAll('tr').forEach(tr => {
-                    const cells = tr.querySelectorAll('td');
-                    if (cells.length > targetIdx) {
-                        let text = cells[targetIdx].innerText;
-                        if (text.includes(',')) {
-                            cells[targetIdx].innerText = text.replace(/,/g, '');
-                        }
+        // 1. 표를 그리기 전에 데이터 뿌리(메모리)를 문자열로 강제 변환
+        if (window.infState && window.infState.data) {
+            for (let tab in window.infState.data) {
+                window.infState.data[tab].forEach(row => {
+                    if (row['자산번호'] !== undefined && row['자산번호'] !== null) {
+                        // 숫자로 인식된 콤마를 영구 삭제하고 문자로 박제
+                        row['자산번호'] = String(row['자산번호']).replace(/,/g, '');
                     }
                 });
             }
         }
+        
+        // 2. 문자열로 안전해진 데이터로 원래 표 그리기 실행
+        originalRender.apply(this, arguments); 
+        
+        // 3. 다 그려진 표에서 '자산번호' 기둥을 찾아 가운데 정렬 적용
+        const thead = document.querySelector('.infTheadGlobal tr');
+        if (thead) {
+            let assetIdx = -1;
+            thead.querySelectorAll('th, td').forEach((cell, idx) => {
+                if (cell.innerText.includes('자산번호')) assetIdx = idx;
+            });
+
+            if (assetIdx > -1) {
+                const tbody = document.querySelector('.infTbodyGlobal');
+                if (tbody) {
+                    tbody.querySelectorAll('tr').forEach(tr => {
+                        const cells = tr.querySelectorAll('td');
+                        if (cells.length > assetIdx) {
+                            cells[assetIdx].style.textAlign = 'center'; // 가운데 정렬 적용
+                            cells[assetIdx].innerText = cells[assetIdx].innerText.replace(/,/g, ''); // 2차 안전장치
+                        }
+                    });
+                }
+            }
+        }
     };
-    window.infRenderTable.isCommaPatched = true;
 }
 
 // ============================================================================
-// [17] 매핑된 버튼 다시 클릭 시 매핑 해제(Unmap) 기능 
+// [17] 매핑된 버튼 클릭 시 "다음 단계 튕김 방지" 및 완벽 초기화 복구
 // ============================================================================
 document.addEventListener('click', function(e) {
     const btn = e.target.closest('#infMappingButtons button');
     if (!btn) return;
 
+    // ★ 체크(✓)가 있는 버튼을 누른 경우에만 동작
     if (btn.innerText.includes('✓')) {
+        // [핵심] 다른 이벤트(다음 단계로 넘어가기 등)가 터지지 못하게 그 자리에서 강력 차단
         e.preventDefault(); 
         e.stopPropagation(); 
         e.stopImmediatePropagation();
 
         const targetName = btn.innerText.replace('✓', '').trim();
         
+        // 1. 내부 시스템에서 매핑 연결고리 완전 삭제
         if (window.infState && window.infState.wizard && window.infState.wizard.mapped) {
             delete window.infState.wizard.mapped[targetName];
         }
         
-        document.querySelectorAll('.infTheadGlobal th span, .infTheadGlobal td span').forEach(badge => {
-            if (badge.innerText.includes(targetName)) badge.remove();
+        // 2. 엑셀 표(DOM)에서 뱃지와 파란색 배경 지우기
+        document.querySelectorAll('.infTheadGlobal th, .infTheadGlobal td').forEach((cell, colIndex) => {
+            const badge = cell.querySelector('span');
+            if (badge && badge.innerText.includes(targetName)) {
+                badge.remove(); // 뱃지 삭제
+                const table = cell.closest('table');
+                if (table) {
+                    table.querySelectorAll(`tr td:nth-child(${colIndex + 1})`).forEach(td => {
+                        td.style.background = ''; // 파란 기둥 초기화
+                    });
+                }
+            }
         });
         
+        // 3. 누른 버튼을 최초의 [새하얀 버튼]으로 강제 복구
         btn.innerText = targetName; 
-        btn.style.background = '#fff'; 
-        btn.style.color = '#333'; 
-        btn.style.border = '1px solid #ccc';
+        btn.style.cssText = 'background: #ffffff !important; color: #333 !important; border: 1px solid #ccc !important; font-weight: normal !important; box-shadow: none !important; opacity: 1 !important; cursor: pointer;';
         
+        // 4. 주변의 흐려진 미매핑 버튼들도 모두 하얗게 복구
+        document.querySelectorAll('#infMappingButtons button').forEach(b => {
+            if (!b.innerText.includes('✓')) {
+                b.style.cssText = 'background: #ffffff !important; color: #333 !important; border: 1px solid #ccc !important; opacity: 1 !important; cursor: pointer;';
+            }
+        });
+
+        // 5. 마법사 상태를 아무것도 안 한 '대기(idle)' 상태로 강제 조정
         if (window.infState && window.infState.wizard) {
             window.infState.wizard.activeTarget = '';
             window.infState.wizard.phase = 'idle'; 
         }
+
+        // 6. 아직 매핑이 다 안 끝났으므로 '열 매핑 완료' 우측 버튼 숨기기
+        const finishBtn = document.getElementById('btnFinishMapping');
+        if (finishBtn) finishBtn.style.display = 'none';
+        
+        // 7. 상단 안내 텍스트 초기화
+        const textEl = document.getElementById('infWizardText');
+        if (textEl) {
+            textEl.innerHTML = '🎯 아래 버튼 중 하나를 선택하고, 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭해 매칭하세요!';
+        }
     }
-}, true);
+}, true); // true 옵션(캡처링)으로 시스템의 다른 오작동보다 무조건 먼저 가로챔
 
 // ============================================================================
 // [18] ★ 초간단 명세서 행 즉시 삭제 (Ctrl + 마이너스) - 정렬/부분합 완벽 지원
