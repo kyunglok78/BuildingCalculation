@@ -18,7 +18,7 @@ window.DEPRECIATION_DB = [
 ];
 
 // ============================================================================
-// [1] 전역 상태 관리
+// [1] 전역 상태 관리 및 초기화
 // ============================================================================
 window.kbState = {
     evalData: { title: {}, floor: {}, kfpa: {} }, 
@@ -45,7 +45,6 @@ window.onload = function() {
         }
     });
 
-    // ★ 2.1.1 대장 불러오기 메뉴 클릭 시 백지 현상 방지 (강제 다시 그리기)
     const ledgerMenu = document.getElementById('nav-sec-2-1-1');
     if (ledgerMenu) {
         ledgerMenu.addEventListener('click', () => {
@@ -60,7 +59,6 @@ window.onload = function() {
             }, 100);
         });
     }
-
     runGroupedRenderTest(); 
 };
 
@@ -74,7 +72,7 @@ function formatArea(num) {
 }
 
 // ============================================================================
-// [3] 사업장별 탭(Tab) 생성
+// [3] 평가 데이터 UI (탭 및 테이블 렌더링)
 // ============================================================================
 function renderEvalTabsAndTable(mode, tbodyId, tabContainerId) {
     const dataObj = window.kbState.evalData[mode];
@@ -114,9 +112,6 @@ function renderEvalTabsAndTable(mode, tbodyId, tabContainerId) {
     renderEvalTableGrouped(tbody, dataObj[currentSite], mode, currentSite);
 }
 
-// ============================================================================
-// [4] 하이브리드 UI 렌더링 엔진 (구조코드/감가율 항시입력창 탑재)
-// ============================================================================
 function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
     let grandTotalArea = 0, grandTotalReco = 0, grandTotalCur = 0;
     const groups = Array.isArray(groupedData) ? groupedData : Object.values(groupedData);
@@ -152,418 +147,6 @@ function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
                         style="cursor:pointer; padding:3px 6px; background:#1C5691; color:white; border:none; border-radius:3px;" title="단가표 검색">🔍</button>
                 </div>`;
 
-            const depInputHtml = `
-                <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
-                    <input type="number" step="0.01" value="${depRate}" style="width:50px; text-align:center; border:1px solid #ccc; padding:3px; font-weight:bold; color:#0056b3;" 
-                        onchange="applyDeprToRecord(this.value, '${mode}', '${siteName}', ${gIdx}, ${rIdx})">
-                    <button type="button" onclick="openDeprModal('${mode}', '${siteName}', ${gIdx}, ${rIdx})" 
-                        style="cursor:pointer; padding:3px 6px; background:#28A745; color:white; border:none; border-radius:3px;" title="표준 감가율 검색">🔍</button>
-                </div>`;
-
-            const trashIcon = (rIdx === 0) 
-                ? `<i class="fa-solid fa-trash-can" onclick="event.stopPropagation(); deleteEvalItem('${mode}', '${siteName}', ${gIdx})" style="color:#dc3545; margin-left:8px; cursor:pointer;" title="이 동 전체 삭제"></i>` 
-                : '';
-            const dongDisp = `${dongName} ${trashIcon}`;
-
-            const trArch = document.createElement('tr');
-            trArch.style.backgroundColor = '#ffffff';
-            
-            trArch.innerHTML = `
-                <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '일련번호', 'text')">${seq}</td>
-                <td style="color:#0056b3; font-weight:bold; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '동명칭', 'text')">${dongDisp}</td>
-                <td style="color:#0056b3;">건축공사비</td>
-                <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '용도', 'text')">${usage}</td>
-                <td style="text-align:right; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '연면적', 'number')">${formatArea(area)}</td>
-                <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '구조', 'text')">${strct}</td>
-                <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '준공연도', 'number')">${buildYear}</td>
-                <td>${codeInputHtml}</td>
-                <td style="text-align:right; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '단가', 'number')">${formatPrice(unitPrice)}</td>
-                <td style="text-align:right; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '노무비', 'number')">${formatPrice(laborCost)}</td>
-                <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '물가지수', 'number')">${priceIdx.toFixed(4)}</td>
-                <td style="text-align:right; color:#0056b3;">${formatPrice(recoArch)}</td>
-                <td>${depInputHtml}</td>
-                <td>${remainRate.toFixed(2)}%</td>
-                <td style="text-align:right; color:#0056b3;">${formatPrice(curArch)}</td>
-            `;
-            tbody.appendChild(trArch);
-        });
-
-        // ★ [핵심 버그 수정] JavaScript에서 0은 false로 인식되므로, 값이 명시적으로 있는지 확인!
-        const accRate = parseFloat(group['부속비율'] !== undefined && group['부속비율'] !== "" ? group['부속비율'] : 20.0);
-        
-        const recoSub = parseFloat(group['재조달_부속'] || 0);
-        const curSub = parseFloat(group['현재_부속'] || 0);
-        const recoTotal = parseFloat(group['재조달_합계'] || 0);
-        const curTotal = parseFloat(group['현재_합계'] || 0);
-        const mainDongName = group['동명칭'] || '-';
-
-        grandTotalArea += groupArea; grandTotalReco += recoTotal; grandTotalCur += curTotal;
-
-        const trSub = document.createElement('tr');
-        trSub.style.backgroundColor = '#f8f9fa';
-        trSub.innerHTML = `
-            <td colspan="2"></td><td>부속설비</td><td>[${mainDongName}] 일괄부속</td><td colspan="6"></td>
-            <td style="font-weight:bold; color:#0056b3; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, 0, '부속비율', 'number', 'group')">${accRate.toFixed(1)}%</td>
-            <td style="text-align:right;">${formatPrice(recoSub)}</td><td colspan="2"></td><td style="text-align:right;">${formatPrice(curSub)}</td>
-        `;
-        tbody.appendChild(trSub);
-
-        const trTotal = document.createElement('tr');
-        trTotal.style.backgroundColor = '#e2e8f0'; trTotal.style.fontWeight = 'bold';
-        trTotal.innerHTML = `
-            <td colspan="2"></td><td>[${mainDongName}] 소계</td><td></td><td style="text-align:right;">${formatArea(groupArea)}</td><td colspan="6"></td>
-            <td style="text-align:right;">${formatPrice(recoTotal)}</td><td colspan="2"></td><td style="text-align:right;">${formatPrice(curTotal)}</td>
-        `;
-        tbody.appendChild(trTotal);
-    });
-
-    const trGrandTotal = document.createElement('tr');
-    trGrandTotal.style.backgroundColor = '#cbd5e1'; trGrandTotal.style.fontWeight = 'bold';
-    trGrandTotal.innerHTML = `
-        <td colspan="4" style="text-align:center;">사업장 합계</td><td style="text-align:right;">${formatArea(grandTotalArea)}</td><td colspan="6"></td>
-        <td style="text-align:right;">${formatPrice(grandTotalReco)}</td><td colspan="2"></td><td style="text-align:right;">${formatPrice(grandTotalCur)}</td>
-    `;
-    tbody.appendChild(trGrandTotal);
-}
-
-// ============================================================================
-// [5] 기타 부가 헬퍼 (수동항목 추가 / 대장연동 / 삭제 / 정렬)
-// ============================================================================
-function addManualItem(mode) {
-    const currentSite = window.kbState.activeSite[mode];
-    if (!currentSite) return alert("선택된 사업장 탭이 없습니다.");
-
-    const newGroup = {
-        동명칭: "신규 추가항목", 부속비율: 20.0, 재조달_부속: 0, 현재_부속: 0, 재조달_합계: 0, 현재_합계: 0,
-        records: [{
-            일련번호: "수동", 동명칭: "신규 추가항목", 용도: "직접 입력", 연면적: 0, 구조명: "직접 입력", 
-            준공연도: new Date().getFullYear(), 구조코드: "-", 단가: 0, 노무비: 0, 물가지수: 1.0, 
-            감가율: 1.78, 재조달_건축: 0, 잔가율: 100, 현재_건축: 0
-        }]
-    };
-    const targetData = window.kbState.evalData[mode][currentSite];
-    if (Array.isArray(targetData)) targetData.push(newGroup);
-    else {
-        let key = "신규 추가항목", cnt = 1;
-        while (targetData[key]) key = `신규 추가항목(${cnt++})`;
-        newGroup.동명칭 = key; newGroup.records[0].동명칭 = key; targetData[key] = newGroup;
-    }
-    renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
-}
-
-function runGroupedRenderTest() {
-    renderEvalTabsAndTable('title', 'tbodyTitleEval', 'tabsTitleEval');
-    renderEvalTabsAndTable('floor', 'tbodyFloorEval', 'tabsFloorEval');
-    renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
-}
-
-window.syncTitleData = function() {
-    const fetchedData = window.kbState.fetchedData;
-    if (!fetchedData || Object.keys(fetchedData).length === 0) {
-        alert("연동할 수 없습니다. 먼저 [건축물대장 조회시작]을 완료해 주세요."); return;
-    }
-    if (Object.keys(window.kbState.evalData.title || {}).length > 0) {
-        if (!confirm("기존에 작업 중이던 표제부 평가 데이터가 초기화됩니다. 계속하시겠습니까?")) return;
-    }
-    const newTitleData = {};
-    Object.keys(fetchedData).forEach(siteName => {
-        const siteData = fetchedData[siteName];
-        const dfTitle = siteData["title"] || siteData["표제부 상세"] || [];
-        const dfRecap = siteData["recap"] || siteData["총괄표제부 정보"] || [];
-        let fallbackYear = 2000;
-        if (dfRecap.length > 0 && dfRecap[0]["useAprDay"]) {
-            const aprDate = String(dfRecap[0]["useAprDay"]).replace(/[-/]/g, "").trim();
-            if (aprDate.length >= 4 && !isNaN(aprDate.substring(0, 4))) fallbackYear = parseInt(aprDate.substring(0, 4));
-        }
-        const siteRecords = [];
-        dfTitle.forEach((row, idx) => {
-            let dongNm = (row["dongNm"] || "").trim(); if (!dongNm || dongNm === "-" || dongNm === "nan") dongNm = "본동";
-            const area = isNaN(parseFloat(String(row["totArea"] || "0").replace(/,/g, "").trim())) ? 0.0 : parseFloat(String(row["totArea"] || "0").replace(/,/g, "").trim());
-            const strct = (row["strctCdNm"] || "-").trim(); const purps = (row["mainPurpsCdNm"] || "-").trim();
-            let buildYear = fallbackYear;
-            const rowAprDate = String(row["useAprDay"] || "").replace(/[-/]/g, "").trim();
-            if (rowAprDate.length >= 4 && !isNaN(rowAprDate.substring(0, 4))) buildYear = parseInt(rowAprDate.substring(0, 4));
-            
-            const autoRatio = (area <= 300 && area > 0) ? 0.0 : 20.0;
-
-            siteRecords.push({
-                "동명칭": dongNm, "부속비율": autoRatio, "재조달_부속": 0, "재조달_합계": 0, "현재_부속": 0, "현재_합계": 0,
-                "records": [{
-                    "일련번호": String(idx + 1), "동명칭": dongNm, "용도": purps, "연면적": area, "구조명": strct,
-                    "준공연도": buildYear, "구조코드": "-", "단가": 0.0, "노무비": 0.0, "물가지수": 1.0,
-                    "감가율": 1.78, "재조달_건축": 0, "잔가율": 100.0, "현재_건축": 0
-                }]
-            });
-        });
-        if (siteRecords.length > 0) newTitleData[siteName] = siteRecords;
-    });
-    window.kbState.evalData.title = newTitleData;
-    window.kbState.activeSite.title = Object.keys(newTitleData)[0] || null;
-    renderEvalTabsAndTable('title', 'tbodyTitleEval', 'tabsTitleEval');
-    alert("표제부 데이터 연동이 완료되었습니다.\n(연면적 300㎡ 이하 건물은 부속비율이 0%로 자동 세팅되었습니다.)");
-}
-
-window.syncFloorData = function() {
-    const fetchedData = window.kbState.fetchedData;
-    if (!fetchedData || Object.keys(fetchedData).length === 0) {
-        alert("연동할 수 없습니다. 먼저 [건축물대장 조회시작]을 완료해 주세요."); return;
-    }
-    if (Object.keys(window.kbState.evalData.floor || {}).length > 0) {
-        if (!confirm("기존에 작업 중이던 층별 평가 데이터가 초기화됩니다. 계속하시겠습니까?")) return;
-    }
-    
-    const newFloorData = {};
-    Object.keys(fetchedData).forEach(siteName => {
-        const siteData = fetchedData[siteName];
-        const dfFloor = siteData["floor"] || siteData["층별 개요"] || [];
-        const dfRecap = siteData["recap"] || siteData["총괄표제부 정보"] || [];
-        let fallbackYear = 2000;
-        if (dfRecap.length > 0 && dfRecap[0]["useAprDay"]) {
-            const aprDate = String(dfRecap[0]["useAprDay"]).replace(/[-/]/g, "").trim();
-            if (aprDate.length >= 4 && !isNaN(aprDate.substring(0, 4))) fallbackYear = parseInt(aprDate.substring(0, 4));
-        }
-        
-        const floorAreaMap = {};
-        dfFloor.forEach(row => {
-            let d = (row["dongNm"] || "").trim();
-            if (!d || d === "-" || d === "nan") d = "본동";
-            const a = isNaN(parseFloat(String(row["area"] || "0").replace(/,/g, "").trim())) ? 0.0 : parseFloat(String(row["area"] || "0").replace(/,/g, "").trim());
-            floorAreaMap[d] = (floorAreaMap[d] || 0) + a;
-        });
-
-        const titleRecords = window.kbState.evalData.title[siteName] || [];
-        const siteGroups = {}; 
-        
-        dfFloor.forEach((row, idx) => {
-            let dongNm = (row["dongNm"] || "").trim(); 
-            if (!dongNm || dongNm === "-" || dongNm === "nan") dongNm = "본동";
-            const area = isNaN(parseFloat(String(row["area"] || "0").replace(/,/g, "").trim())) ? 0.0 : parseFloat(String(row["area"] || "0").replace(/,/g, "").trim());
-            const strct = (row["strctCdNm"] || "-").trim(); 
-            const flrGb = (row["flrGbCdNm"] || "").trim();
-            const flrNo = (row["flrNoNm"] || "").trim();
-            const etcPurps = (row["etcPurps"] || "-").trim();
-            const flrText = flrNo ? `${flrGb} ${flrNo}층` : "";
-            const purps = flrText ? `[${flrText}] ${etcPurps}` : etcPurps;
-            
-            let buildYear = fallbackYear;
-            const rowAprDate = String(row["useAprDay"] || "").replace(/[-/]/g, "").trim();
-            if (rowAprDate.length >= 4 && !isNaN(rowAprDate.substring(0, 4))) buildYear = parseInt(rowAprDate.substring(0, 4));
-            
-            const record = {
-                "일련번호": String(idx + 1), "동명칭": dongNm, "용도": purps, "연면적": area, "구조명": strct,
-                "준공연도": buildYear, "구조코드": "-", "단가": 0.0, "노무비": 0.0, "물가지수": 1.0,
-                "감가율": 1.78, "재조달_건축": 0, "잔가율": 100.0, "현재_건축": 0
-            };
-            
-            let inheritedRatio = (floorAreaMap[dongNm] <= 300 && floorAreaMap[dongNm] > 0) ? 0.0 : 20.0; 
-            
-            const tGroup = titleRecords.find(g => g.동명칭 === dongNm);
-            if (tGroup) {
-                const tReq = tGroup.records[0];
-                record["구조코드"] = tReq["구조코드"]; record["단가"] = tReq["단가"];
-                record["노무비"] = tReq["노무비"]; record["물가지수"] = tReq["물가지수"];
-                record["감가율"] = tReq["감가율"]; record["준공연도"] = tReq["준공연도"]; 
-                if (tGroup["부속비율"] !== undefined) inheritedRatio = tGroup["부속비율"]; 
-            }
-            
-            if (!siteGroups[dongNm]) {
-                siteGroups[dongNm] = {
-                    "동명칭": dongNm, "부속비율": inheritedRatio, "재조달_부속": 0, "재조달_합계": 0, "현재_부속": 0, "현재_합계": 0,
-                    "records": []
-                };
-            }
-            siteGroups[dongNm].records.push(record);
-        });
-        if (Object.keys(siteGroups).length > 0) newFloorData[siteName] = Object.values(siteGroups);
-    });
-    
-    window.kbState.evalData.floor = newFloorData;
-    window.kbState.activeSite.floor = Object.keys(newFloorData)[0] || null;
-    Object.keys(newFloorData).forEach(siteName => recalculateValuation('floor', siteName));
-    renderEvalTabsAndTable('floor', 'tbodyFloorEval', 'tabsFloorEval');
-    alert("✅ 층별 데이터 연동 완료!\n\n(총면적 300㎡ 이하 건물은 부속비율 0%가 자동 적용되었습니다.)");
-};
-
-window.deleteEvalItem = function(mode, siteName, gIdx) {
-    const siteData = window.kbState.evalData[mode][siteName];
-    const targetName = Array.isArray(siteData) ? (siteData[gIdx].동명칭 || "선택항목") : Object.keys(siteData)[gIdx];
-    if (!confirm(`[${targetName}] 평가 데이터를 완전히 삭제하시겠습니까?`)) return;
-    if (Array.isArray(siteData)) siteData.splice(gIdx, 1);
-    else delete siteData[Object.keys(siteData)[gIdx]]; 
-    recalculateValuation(mode, siteName);
-    renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
-};
-
-window.sortEvalData = function(mode, thElement) {
-    const siteName = window.kbState.activeSite[mode]; if (!siteName) return;
-    const targetData = window.kbState.evalData[mode][siteName]; if (!targetData) return;
-    const isRev = !!window.kbState.sortRev[mode][siteName];
-    window.kbState.sortRev[mode][siteName] = !isRev;
-    const sortLogic = (a, b) => !isRev ? a.localeCompare(b, undefined, {numeric: true}) : b.localeCompare(a, undefined, {numeric: true});
-    if (Array.isArray(targetData)) targetData.sort((a, b) => sortLogic(a.동명칭 || "", b.동명칭 || ""));
-    else {
-        const sortedKeys = Object.keys(targetData).sort(sortLogic);
-        const newData = {}; sortedKeys.forEach(k => newData[k] = targetData[k]);
-        window.kbState.evalData[mode][siteName] = newData;
-    }
-    thElement.closest('tr').querySelectorAll('th').forEach(th => {
-        if(th.innerText.includes('동명칭')) th.innerText = !isRev ? '동명칭 ▲' : '동명칭 ▼';
-    });
-    renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
-};
-
-// ============================================================================
-// [6] 셀 인라인 편집 및 가액 재계산
-// ============================================================================
-window.editCell = function(tdElement, mode, siteName, gIdx, rIdx, field, inputType, level = 'record') {
-    if (tdElement.querySelector('input')) return;
-    let targetObj; const siteData = window.kbState.evalData[mode][siteName];
-    if (Array.isArray(siteData)) targetObj = level === 'group' ? siteData[gIdx] : siteData[gIdx].records[rIdx];
-    else targetObj = level === 'group' ? siteData[Object.keys(siteData)[gIdx]] : siteData[Object.keys(siteData)[gIdx]].records[rIdx];
-
-    const input = document.createElement('input');
-    input.type = 'text'; input.value = targetObj[field] || (inputType === 'number' ? 0 : '');
-    input.style.width = '90%'; input.style.textAlign = 'center'; input.style.border = '2px solid #1C5691'; input.style.padding = '3px'; input.style.fontWeight = 'bold';
-    tdElement.innerHTML = ''; tdElement.appendChild(input); input.focus(); input.select();
-
-    const saveValue = () => {
-        let newVal = input.value.replace(/,/g, '').replace(/%/g, '').trim();
-        if (inputType === 'number') newVal = isNaN(parseFloat(newVal)) ? 0 : parseFloat(newVal);
-        targetObj[field] = newVal;
-        if (field === '노무비') {
-            if(window.applyAutoPriceIndex) window.applyAutoPriceIndex(targetObj);
-        }
-        recalculateValuation(mode, siteName);
-        renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
-    };
-    input.addEventListener('blur', saveValue);
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { input.removeEventListener('blur', saveValue); saveValue(); } });
-};
-
-
-window.recalculateValuation = function(mode, siteName) {
-    const evalYearInput = document.getElementById('evalYear');
-    const evalYear = parseInt(evalYearInput ? evalYearInput.value : new Date().getFullYear());
-    const siteData = window.kbState.evalData[mode][siteName];
-    if(!siteData) return;
-    const groups = Array.isArray(siteData) ? siteData : Object.values(siteData);
-
-    groups.forEach(group => {
-        let totRecoArch = 0, totCurArch = 0;
-        let sumArea = 0, sumWeight = 0;
-        let configAreas = {}; // ★ 추가: 구조/연도별 면적 합계를 추적하기 위한 객체
-
-        // 1. 가중평균 산출 데이터 수집 및 면적 비중 계산
-        group.records.forEach(r => {
-            const area = parseFloat(r.연면적) || 0;
-            const yearlyDepr = parseFloat(r.감가율) || 1.78;
-            const buildYear = parseInt(r.준공연도) || evalYear;
-            const elapsed = Math.max(0, evalYear - buildYear);
-            
-            // 구조와 연도를 결합한 고유 키 생성
-            const configKey = `${yearlyDepr}_${buildYear}`;
-            configAreas[configKey] = (configAreas[configKey] || 0) + area;
-
-            // 70% 상한 제한 없이 순수 감가율 누적
-            let totalDepr = elapsed * yearlyDepr;
-
-            // 가중치 산출 시 총감가율(%)을 100으로 나눔
-            const weight = (totalDepr / 100.0) * area; 
-
-            sumArea += area;
-            sumWeight += weight;
-        });
-
-        // ★ 추가: 그룹 내에서 가장 면적이 넓은 '주건물'의 면적 찾기
-        let maxConfigArea = 0;
-        for (let key in configAreas) {
-            if (configAreas[key] > maxConfigArea) {
-                maxConfigArea = configAreas[key];
-            }
-        }
-
-        // ★ 추가: 주건물을 제외한 나머지(증개축/타구조) 부분의 면적 비중 산출
-        const minorAreaRatio = sumArea > 0 ? (sumArea - maxConfigArea) / sumArea : 0;
-
-        // 2. 상태 저장 
-        // ★ 핵심 룰 적용: 구조가 2개 이상이더라도, 타 구조 면적이 20%를 '초과'할 때만 복합구조 버튼 노출!
-        group.isComplex = (Object.keys(configAreas).length > 1 && sumArea > 0 && minorAreaRatio > 0.20);
-        
-        // 가중평균 산출 (화면 표출용)
-        group.avgTotalDepr = sumArea > 0 ? (sumWeight / sumArea) * 100.0 : 0;
-
-        // 3. 재조달 및 현재가액 재계산
-        group.records.forEach(r => {
-            const compConstCost = (r.연면적 || 0) * (r.단가 || 0) * (r.물가지수 || 1.0);
-            r.재조달_건축 = Math.floor(compConstCost / 1000) * 1000;
-            const elapsed = Math.max(0, evalYear - (r.준공연도 || evalYear));
-            
-            // 복합구조 일괄 적용이 켜져있다면, 덮어씌우기
-            if (group.complexApplied) {
-                let appliedResidual = 100.0 - group.complexRate;
-                if (appliedResidual < 30) appliedResidual = 30; // 최종 하한선 방어
-                r.잔가율 = appliedResidual;
-            } else {
-                let residualRatio = 100.0 - (elapsed * (r.감가율 || 1.78));
-                if (residualRatio < 30.0) residualRatio = 30.0; // 최종 하한선 방어
-                r.잔가율 = residualRatio;
-            }
-            
-            r.현재_건축 = Math.floor((r.재조달_건축 * (r.잔가율 / 100.0)) / 1000) * 1000;
-            totRecoArch += r.재조달_건축; 
-            totCurArch += r.현재_건축;
-        });
-
-        // 4. 부속설비 산출
-        const accRate = parseFloat(group.부속비율 !== undefined && group.부속비율 !== "" ? group.부속비율 : 20.0) / 100.0;
-        group.재조달_부속 = Math.floor((totRecoArch * accRate) / 1000) * 1000;
-        
-        // 부속설비의 잔가율은 복합구조 적용시 해당 잔가율, 미적용시 첫번째 항목 기준
-        const repResidualRatio = group.complexApplied ? (Math.max(30, 100.0 - group.complexRate) / 100.0) : (group.records.length > 0 ? (group.records[0].잔가율 / 100.0) : 1.0);
-        
-        group.현재_부속 = Math.floor((group.재조달_부속 * repResidualRatio) / 1000) * 1000;
-        group.재조달_합계 = totRecoArch + group.재조달_부속;
-        group.현재_합계 = totCurArch + group.현재_부속;
-    });
-};
-
-
-function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
-    let grandTotalArea = 0, grandTotalReco = 0, grandTotalCur = 0;
-    const groups = Array.isArray(groupedData) ? groupedData : Object.values(groupedData);
-
-    groups.forEach((group, gIdx) => {
-        let groupArea = 0;
-        const records = group.records || group.데이터리스트 || [group]; 
-
-        records.forEach((record, rIdx) => {
-            const seq = record['일련번호'] || '-';
-            const dongName = record['동명칭'] || '-';
-            const usage = record['용도'] || '-';
-            const area = parseFloat(record['연면적'] || 0);
-            const strct = record['구조'] || record['구조명'] || '-';
-            const buildYear = record['준공연도'] || '-'; 
-            const strctCode = record['구조코드'] || '-';
-            const unitPrice = parseFloat(record['단가'] || 0);
-            const laborCost = parseFloat(record['노무비'] || 0);
-            const priceIdx = parseFloat(record['물가지수'] || 1.0);
-            const recoArch = parseFloat(record['재조달_건축'] || 0);
-            const depRate = parseFloat(record['감가율'] || 1.78);
-            const remainRate = parseFloat(record['잔가율'] || 100);
-            const curArch = parseFloat(record['현재_건축'] || 0);
-
-            groupArea += area;
-
-            const codeVal = (strctCode !== "nan" && strctCode !== "-") ? strctCode : "";
-            const codeInputHtml = `
-                <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
-                    <input type="text" value="${codeVal}" style="width:80px; text-align:center; border:1px solid #ccc; padding:3px; font-weight:bold;" 
-                        onchange="applyCodeToRecord(this.value, '${mode}', '${siteName}', ${gIdx}, ${rIdx})">
-                    <button type="button" onclick="openCodeModal('${mode}', '${siteName}', ${gIdx}, ${rIdx}, this.previousElementSibling.value)" 
-                        style="cursor:pointer; padding:3px 6px; background:#1C5691; color:white; border:none; border-radius:3px;" title="단가표 검색">🔍</button>
-                </div>`;
-
- // ★ 일괄적용 시, 테이블 셀에 감가율/잔가율이 명확하게 들어가도록 수정!
             const depInputHtml = group.complexApplied 
                 ? `<div style="color:#d32f2f; font-weight:bold; font-size:12px; background:#fff3f3; padding:4px; border-radius:3px; border:1px solid #f5c6cb;" title="가중평균 총감가율 적용됨">
                     총 ${group.complexRate.toFixed(2)}%
@@ -582,10 +165,7 @@ function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
             const trArch = document.createElement('tr');
             trArch.style.backgroundColor = '#ffffff';
             
-            // ★ 일괄적용 시 잔가율 수치도 붉은색으로 명확하게 렌더링
-            const dispRemainRate = group.complexApplied 
-                ? `<span style="color:#d32f2f; font-weight:bold; font-size:13px;">${remainRate.toFixed(2)}%</span>` 
-                : `${remainRate.toFixed(2)}%`;
+            const dispRemainRate = group.complexApplied ? `<span style="color:#d32f2f; font-weight:bold; font-size:13px;">${remainRate.toFixed(2)}%</span>` : `${remainRate.toFixed(2)}%`;
 
             trArch.innerHTML = `
                 <td style="cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, ${rIdx}, '일련번호', 'text')">${seq}</td>
@@ -616,7 +196,6 @@ function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
 
         grandTotalArea += groupArea; grandTotalReco += recoTotal; grandTotalCur += curTotal;
 
-        // ★ 조건부 노출 로직 (일괄 적용 버튼)
         let complexHtml = '';
         if (group.complexApplied) {
             complexHtml = `
@@ -638,12 +217,7 @@ function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
             <td colspan="2"></td><td>부속설비</td><td>[${mainDongName}] 일괄부속</td><td colspan="6"></td>
             <td style="font-weight:bold; color:#0056b3; cursor:pointer;" ondblclick="editCell(this, '${mode}', '${siteName}', ${gIdx}, 0, '부속비율', 'number', 'group')">${accRate.toFixed(1)}%</td>
             <td style="text-align:right;">${formatPrice(recoSub)}</td>
-            
-            <!-- ★ 복합구조 버튼 위치 지정 -->
-            <td colspan="2" style="text-align:center; vertical-align:middle;">
-                ${complexHtml}
-            </td>
-            
+            <td colspan="2" style="text-align:center; vertical-align:middle;">${complexHtml}</td>
             <td style="text-align:right;">${formatPrice(curSub)}</td>
         `;
         tbody.appendChild(trSub);
@@ -667,13 +241,243 @@ function renderEvalTableGrouped(tbody, groupedData, mode, siteName) {
 }
 
 // ============================================================================
-// [7] 단가/물가/구조코드 연동 로직
+// [4] 가액 재계산 엔진 (복합구조 지원)
+// ============================================================================
+window.recalculateValuation = function(mode, siteName) {
+    const evalYearInput = document.getElementById('evalYear');
+    const evalYear = parseInt(evalYearInput ? evalYearInput.value : new Date().getFullYear());
+    const siteData = window.kbState.evalData[mode][siteName];
+    if(!siteData) return;
+    const groups = Array.isArray(siteData) ? siteData : Object.values(siteData);
+
+    groups.forEach(group => {
+        let totRecoArch = 0, totCurArch = 0, sumArea = 0, sumWeight = 0;
+        let configAreas = {}; 
+
+        group.records.forEach(r => {
+            const area = parseFloat(r.연면적) || 0;
+            const yearlyDepr = parseFloat(r.감가율) || 1.78;
+            const buildYear = parseInt(r.준공연도) || evalYear;
+            const elapsed = Math.max(0, evalYear - buildYear);
+            
+            const configKey = `${yearlyDepr}_${buildYear}`;
+            configAreas[configKey] = (configAreas[configKey] || 0) + area;
+
+            let totalDepr = elapsed * yearlyDepr;
+            const weight = (totalDepr / 100.0) * area; 
+
+            sumArea += area; sumWeight += weight;
+        });
+
+        let maxConfigArea = 0;
+        for (let key in configAreas) if (configAreas[key] > maxConfigArea) maxConfigArea = configAreas[key];
+        const minorAreaRatio = sumArea > 0 ? (sumArea - maxConfigArea) / sumArea : 0;
+
+        group.isComplex = (Object.keys(configAreas).length > 1 && sumArea > 0 && minorAreaRatio > 0.20);
+        group.avgTotalDepr = sumArea > 0 ? (sumWeight / sumArea) * 100.0 : 0;
+
+        group.records.forEach(r => {
+            const compConstCost = (r.연면적 || 0) * (r.단가 || 0) * (r.물가지수 || 1.0);
+            r.재조달_건축 = Math.floor(compConstCost / 1000) * 1000;
+            const elapsed = Math.max(0, evalYear - (r.준공연도 || evalYear));
+            
+            if (group.complexApplied) {
+                let appliedResidual = 100.0 - group.complexRate;
+                if (appliedResidual < 30) appliedResidual = 30; 
+                r.잔가율 = appliedResidual;
+            } else {
+                let residualRatio = 100.0 - (elapsed * (r.감가율 || 1.78));
+                if (residualRatio < 30.0) residualRatio = 30.0; 
+                r.잔가율 = residualRatio;
+            }
+            
+            r.현재_건축 = Math.floor((r.재조달_건축 * (r.잔가율 / 100.0)) / 1000) * 1000;
+            totRecoArch += r.재조달_건축; totCurArch += r.현재_건축;
+        });
+
+        const accRate = parseFloat(group.부속비율 !== undefined && group.부속비율 !== "" ? group.부속비율 : 20.0) / 100.0;
+        group.재조달_부속 = Math.floor((totRecoArch * accRate) / 1000) * 1000;
+        const repResidualRatio = group.complexApplied ? (Math.max(30, 100.0 - group.complexRate) / 100.0) : (group.records.length > 0 ? (group.records[0].잔가율 / 100.0) : 1.0);
+        group.현재_부속 = Math.floor((group.재조달_부속 * repResidualRatio) / 1000) * 1000;
+        group.재조달_합계 = totRecoArch + group.재조달_부속;
+        group.현재_합계 = totCurArch + group.현재_부속;
+    });
+};
+
+// ============================================================================
+// [5] 인라인 편집 및 대장 데이터 연동
+// ============================================================================
+window.editCell = function(tdElement, mode, siteName, gIdx, rIdx, field, inputType, level = 'record') {
+    if (tdElement.querySelector('input')) return;
+    let targetObj; const siteData = window.kbState.evalData[mode][siteName];
+    if (Array.isArray(siteData)) targetObj = level === 'group' ? siteData[gIdx] : siteData[gIdx].records[rIdx];
+    else targetObj = level === 'group' ? siteData[Object.keys(siteData)[gIdx]] : siteData[Object.keys(siteData)[gIdx]].records[rIdx];
+
+    const input = document.createElement('input');
+    input.type = 'text'; input.value = targetObj[field] || (inputType === 'number' ? 0 : '');
+    input.style.width = '90%'; input.style.textAlign = 'center'; input.style.border = '2px solid #1C5691'; input.style.padding = '3px'; input.style.fontWeight = 'bold';
+    tdElement.innerHTML = ''; tdElement.appendChild(input); input.focus(); input.select();
+
+    const saveValue = () => {
+        let newVal = input.value.replace(/,/g, '').replace(/%/g, '').trim();
+        if (inputType === 'number') newVal = isNaN(parseFloat(newVal)) ? 0 : parseFloat(newVal);
+        targetObj[field] = newVal;
+        if (field === '노무비' && window.applyAutoPriceIndex) window.applyAutoPriceIndex(targetObj);
+        recalculateValuation(mode, siteName);
+        renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
+    };
+    input.addEventListener('blur', saveValue);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { input.removeEventListener('blur', saveValue); saveValue(); } });
+};
+
+function addManualItem(mode) {
+    const currentSite = window.kbState.activeSite[mode];
+    if (!currentSite) return alert("선택된 사업장 탭이 없습니다.");
+
+    const newGroup = {
+        동명칭: "신규 추가항목", 부속비율: 20.0, 재조달_부속: 0, 현재_부속: 0, 재조달_합계: 0, 현재_합계: 0,
+        records: [{ 일련번호: "수동", 동명칭: "신규 추가항목", 용도: "직접 입력", 연면적: 0, 구조명: "직접 입력", 준공연도: new Date().getFullYear(), 구조코드: "-", 단가: 0, 노무비: 0, 물가지수: 1.0, 감가율: 1.78, 재조달_건축: 0, 잔가율: 100, 현재_건축: 0 }]
+    };
+    const targetData = window.kbState.evalData[mode][currentSite];
+    if (Array.isArray(targetData)) targetData.push(newGroup);
+    else {
+        let key = "신규 추가항목", cnt = 1;
+        while (targetData[key]) key = `신규 추가항목(${cnt++})`;
+        newGroup.동명칭 = key; newGroup.records[0].동명칭 = key; targetData[key] = newGroup;
+    }
+    renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
+}
+
+function runGroupedRenderTest() {
+    renderEvalTabsAndTable('title', 'tbodyTitleEval', 'tabsTitleEval');
+    renderEvalTabsAndTable('floor', 'tbodyFloorEval', 'tabsFloorEval');
+    renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
+}
+
+window.syncTitleData = function() {
+    const fetchedData = window.kbState.fetchedData;
+    if (!fetchedData || Object.keys(fetchedData).length === 0) return alert("연동할 수 없습니다. 먼저 [건축물대장 조회시작]을 완료해 주세요.");
+    if (Object.keys(window.kbState.evalData.title || {}).length > 0 && !confirm("기존에 작업 중이던 표제부 평가 데이터가 초기화됩니다. 계속하시겠습니까?")) return;
+    
+    const newTitleData = {};
+    Object.keys(fetchedData).forEach(siteName => {
+        const siteData = fetchedData[siteName];
+        const dfTitle = siteData["title"] || siteData["표제부 상세"] || [];
+        const dfRecap = siteData["recap"] || siteData["총괄표제부 정보"] || [];
+        let fallbackYear = 2000;
+        if (dfRecap.length > 0 && dfRecap[0]["useAprDay"]) {
+            const aprDate = String(dfRecap[0]["useAprDay"]).replace(/[-/]/g, "").trim();
+            if (aprDate.length >= 4 && !isNaN(aprDate.substring(0, 4))) fallbackYear = parseInt(aprDate.substring(0, 4));
+        }
+        const siteRecords = [];
+        dfTitle.forEach((row, idx) => {
+            let dongNm = (row["dongNm"] || "").trim(); if (!dongNm || dongNm === "-" || dongNm === "nan") dongNm = "본동";
+            const area = isNaN(parseFloat(String(row["totArea"] || "0").replace(/,/g, "").trim())) ? 0.0 : parseFloat(String(row["totArea"] || "0").replace(/,/g, "").trim());
+            const strct = (row["strctCdNm"] || "-").trim(); const purps = (row["mainPurpsCdNm"] || "-").trim();
+            let buildYear = fallbackYear;
+            const rowAprDate = String(row["useAprDay"] || "").replace(/[-/]/g, "").trim();
+            if (rowAprDate.length >= 4 && !isNaN(rowAprDate.substring(0, 4))) buildYear = parseInt(rowAprDate.substring(0, 4));
+            
+            siteRecords.push({
+                "동명칭": dongNm, "부속비율": (area <= 300 && area > 0) ? 0.0 : 20.0, "재조달_부속": 0, "재조달_합계": 0, "현재_부속": 0, "현재_합계": 0,
+                "records": [{ "일련번호": String(idx + 1), "동명칭": dongNm, "용도": purps, "연면적": area, "구조명": strct, "준공연도": buildYear, "구조코드": "-", "단가": 0.0, "노무비": 0.0, "물가지수": 1.0, "감가율": 1.78, "재조달_건축": 0, "잔가율": 100.0, "현재_건축": 0 }]
+            });
+        });
+        if (siteRecords.length > 0) newTitleData[siteName] = siteRecords;
+    });
+    window.kbState.evalData.title = newTitleData; window.kbState.activeSite.title = Object.keys(newTitleData)[0] || null;
+    renderEvalTabsAndTable('title', 'tbodyTitleEval', 'tabsTitleEval');
+    alert("표제부 데이터 연동이 완료되었습니다.\n(연면적 300㎡ 이하 건물은 부속비율이 0%로 자동 세팅되었습니다.)");
+}
+
+window.syncFloorData = function() {
+    const fetchedData = window.kbState.fetchedData;
+    if (!fetchedData || Object.keys(fetchedData).length === 0) return alert("연동할 수 없습니다. 먼저 [건축물대장 조회시작]을 완료해 주세요.");
+    if (Object.keys(window.kbState.evalData.floor || {}).length > 0 && !confirm("기존에 작업 중이던 층별 평가 데이터가 초기화됩니다. 계속하시겠습니까?")) return;
+    
+    const newFloorData = {};
+    Object.keys(fetchedData).forEach(siteName => {
+        const siteData = fetchedData[siteName];
+        const dfFloor = siteData["floor"] || siteData["층별 개요"] || [];
+        const dfRecap = siteData["recap"] || siteData["총괄표제부 정보"] || [];
+        let fallbackYear = 2000;
+        if (dfRecap.length > 0 && dfRecap[0]["useAprDay"]) {
+            const aprDate = String(dfRecap[0]["useAprDay"]).replace(/[-/]/g, "").trim();
+            if (aprDate.length >= 4 && !isNaN(aprDate.substring(0, 4))) fallbackYear = parseInt(aprDate.substring(0, 4));
+        }
+        
+        const floorAreaMap = {};
+        dfFloor.forEach(row => {
+            let d = (row["dongNm"] || "").trim(); if (!d || d === "-" || d === "nan") d = "본동";
+            floorAreaMap[d] = (floorAreaMap[d] || 0) + (isNaN(parseFloat(String(row["area"] || "0").replace(/,/g, "").trim())) ? 0.0 : parseFloat(String(row["area"] || "0").replace(/,/g, "").trim()));
+        });
+
+        const titleRecords = window.kbState.evalData.title[siteName] || [];
+        const siteGroups = {}; 
+        
+        dfFloor.forEach((row, idx) => {
+            let dongNm = (row["dongNm"] || "").trim(); if (!dongNm || dongNm === "-" || dongNm === "nan") dongNm = "본동";
+            const area = isNaN(parseFloat(String(row["area"] || "0").replace(/,/g, "").trim())) ? 0.0 : parseFloat(String(row["area"] || "0").replace(/,/g, "").trim());
+            const flrText = (row["flrNoNm"] || "").trim() ? `${(row["flrGbCdNm"] || "").trim()} ${(row["flrNoNm"] || "").trim()}층` : "";
+            const purps = flrText ? `[${flrText}] ${(row["etcPurps"] || "-").trim()}` : (row["etcPurps"] || "-").trim();
+            
+            let buildYear = fallbackYear;
+            const rowAprDate = String(row["useAprDay"] || "").replace(/[-/]/g, "").trim();
+            if (rowAprDate.length >= 4 && !isNaN(rowAprDate.substring(0, 4))) buildYear = parseInt(rowAprDate.substring(0, 4));
+            
+            const record = { "일련번호": String(idx + 1), "동명칭": dongNm, "용도": purps, "연면적": area, "구조명": (row["strctCdNm"] || "-").trim(), "준공연도": buildYear, "구조코드": "-", "단가": 0.0, "노무비": 0.0, "물가지수": 1.0, "감가율": 1.78, "재조달_건축": 0, "잔가율": 100.0, "현재_건축": 0 };
+            let inheritedRatio = (floorAreaMap[dongNm] <= 300 && floorAreaMap[dongNm] > 0) ? 0.0 : 20.0; 
+            
+            const tGroup = titleRecords.find(g => g.동명칭 === dongNm);
+            if (tGroup) {
+                const tReq = tGroup.records[0];
+                record["구조코드"] = tReq["구조코드"]; record["단가"] = tReq["단가"]; record["노무비"] = tReq["노무비"]; record["물가지수"] = tReq["물가지수"]; record["감가율"] = tReq["감가율"]; record["준공연도"] = tReq["준공연도"]; 
+                if (tGroup["부속비율"] !== undefined) inheritedRatio = tGroup["부속비율"]; 
+            }
+            
+            if (!siteGroups[dongNm]) siteGroups[dongNm] = { "동명칭": dongNm, "부속비율": inheritedRatio, "재조달_부속": 0, "재조달_합계": 0, "현재_부속": 0, "현재_합계": 0, "records": [] };
+            siteGroups[dongNm].records.push(record);
+        });
+        if (Object.keys(siteGroups).length > 0) newFloorData[siteName] = Object.values(siteGroups);
+    });
+    
+    window.kbState.evalData.floor = newFloorData; window.kbState.activeSite.floor = Object.keys(newFloorData)[0] || null;
+    Object.keys(newFloorData).forEach(siteName => recalculateValuation('floor', siteName));
+    renderEvalTabsAndTable('floor', 'tbodyFloorEval', 'tabsFloorEval');
+    alert("✅ 층별 데이터 연동 완료!\n\n(총면적 300㎡ 이하 건물은 부속비율 0%가 자동 적용되었습니다.)");
+};
+
+window.deleteEvalItem = function(mode, siteName, gIdx) {
+    const siteData = window.kbState.evalData[mode][siteName];
+    const targetName = Array.isArray(siteData) ? (siteData[gIdx].동명칭 || "선택항목") : Object.keys(siteData)[gIdx];
+    if (!confirm(`[${targetName}] 평가 데이터를 완전히 삭제하시겠습니까?`)) return;
+    if (Array.isArray(siteData)) siteData.splice(gIdx, 1); else delete siteData[Object.keys(siteData)[gIdx]]; 
+    recalculateValuation(mode, siteName); renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
+};
+
+window.sortEvalData = function(mode, thElement) {
+    const siteName = window.kbState.activeSite[mode]; if (!siteName) return;
+    const targetData = window.kbState.evalData[mode][siteName]; if (!targetData) return;
+    const isRev = !!window.kbState.sortRev[mode][siteName];
+    window.kbState.sortRev[mode][siteName] = !isRev;
+    const sortLogic = (a, b) => !isRev ? a.localeCompare(b, undefined, {numeric: true}) : b.localeCompare(a, undefined, {numeric: true});
+    if (Array.isArray(targetData)) targetData.sort((a, b) => sortLogic(a.동명칭 || "", b.동명칭 || ""));
+    else {
+        const sortedKeys = Object.keys(targetData).sort(sortLogic);
+        const newData = {}; sortedKeys.forEach(k => newData[k] = targetData[k]);
+        window.kbState.evalData[mode][siteName] = newData;
+    }
+    thElement.closest('tr').querySelectorAll('th').forEach(th => { if(th.innerText.includes('동명칭')) th.innerText = !isRev ? '동명칭 ▲' : '동명칭 ▼'; });
+    renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
+};
+
+// ============================================================================
+// [6] 구조코드, 신축단가표, 물가지수 엑셀 연동 로직
 // ============================================================================
 window.loadCostExcel = function(event) {
     const file = event.target.files[0];
     if(!file) return;
     document.getElementById('unitCostPath').value = file.name;
-    
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
@@ -738,8 +542,7 @@ window.applyCodeToRecord = function(code, mode, siteName, gIdx, rIdx, skipRender
                 return allText.includes(String(code).toLowerCase()) || (cleanCode && allText.replace(/-/g, "").includes(cleanCode));
             });
             if(matched) { 
-                record['단가'] = matched['단가']; 
-                record['노무비'] = matched['노무비']; 
+                record['단가'] = matched['단가']; record['노무비'] = matched['노무비']; 
                 record['구조명'] = (matched['구조'] && matched['구조'] !== "-") ? matched['구조'] : matched['중분류'];
                 if(window.applyAutoPriceIndex) window.applyAutoPriceIndex(record); 
             }
@@ -852,7 +655,7 @@ window.retroactiveApplyPriceIndex = function() {
 };
 
 // ============================================================================
-// [8] 감가율 연동 
+// [7] 표준 감가율 모달 연동
 // ============================================================================
 window.applyDeprToRecord = function(rate, mode, siteName, gIdx, rIdx, skipRender=false) {
     const siteData = window.kbState.evalData[mode][siteName];
@@ -905,22 +708,19 @@ window.batchApplyRatio = function(mode, siteName) {
 };
 
 // ============================================================================
-// [10] ★ 프로젝트 저장 및 불러오기 (건물평가 + 물가보정 통합 저장 완벽 지원)
+// [8] 프로젝트 파일 통합 저장 및 복구 (.kbproj)
 // ============================================================================
-
 window.saveProject = function() {
     try {
         const hasEvalData = Object.keys(window.kbState.evalData.title).length > 0 || 
                             Object.keys(window.kbState.evalData.floor).length > 0 || 
                             Object.keys(window.kbState.evalData.kfpa).length > 0;
-        
         const hasTempKfpa = Object.keys(window.tempKfpaDataStore || {}).length > 0;
         const hasCostData = window.kbState.costData && window.kbState.costData.length > 0;
         const hasInfData = window.infState && window.infState.data && Object.keys(window.infState.data).length > 0;
                             
         if (Object.keys(window.kbState.fetchedData).length === 0 && !hasEvalData && !hasTempKfpa && !hasCostData && !hasInfData) {
-            alert("저장할 데이터가 존재하지 않습니다. 대장 조회, 엑셀 업로드 등을 먼저 진행해 주세요.");
-            return;
+            alert("저장할 데이터가 존재하지 않습니다. 대장 조회, 엑셀 업로드 등을 먼저 진행해 주세요."); return;
         }
 
         const contractorInputs = document.querySelectorAll('.contractor-sync');
@@ -943,27 +743,17 @@ window.saveProject = function() {
         const sidebarStates = {};
         document.querySelectorAll('.sidebar .menu-item').forEach(menu => {
             const badge = menu.querySelector('.status-badge');
-            sidebarStates[menu.id] = {
-                className: menu.className,
-                badgeHtml: badge ? badge.outerHTML : ''
-            };
+            sidebarStates[menu.id] = { className: menu.className, badgeHtml: badge ? badge.outerHTML : '' };
         });
 
         const projectData = {
-            version: "2.1", 
-            contractor: contractorName,
-            evalYear: evalYear,
-            locations: locations, 
+            version: "2.1", contractor: contractorName, evalYear: evalYear, locations: locations, 
             sidebarStates: sidebarStates, 
             unitCostPath: document.getElementById('unitCostPath') ? document.getElementById('unitCostPath').value : "",
             priceIndexPath: document.getElementById('priceIndexPath') ? document.getElementById('priceIndexPath').value : "",
-            tempKfpaDataStore: window.tempKfpaDataStore || {},
-            targetKfpaSite: window.targetKfpaSite || "",
-            targetKfpaAddress: window.targetKfpaAddress || "",
-            kbState: window.kbState,
-            inflationSheets: window.kbState.inflationSheets || null,
-            indexData: window.kbState.indexData || null,
-            infState: window.infState || null 
+            tempKfpaDataStore: window.tempKfpaDataStore || {}, targetKfpaSite: window.targetKfpaSite || "", targetKfpaAddress: window.targetKfpaAddress || "",
+            kbState: window.kbState, inflationSheets: window.kbState.inflationSheets || null,
+            indexData: window.kbState.indexData || null, infState: window.infState || null 
         };
 
         const jsonString = JSON.stringify(projectData);
@@ -971,21 +761,13 @@ window.saveProject = function() {
 
         const blob = new Blob([jsonString], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        
+        const a = document.createElement('a'); a.href = url;
         const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, "");
         a.download = `${contractorName || '통합가액평가'}_저장파일_${dateStr}.kbproj`;
-        a.click();
-        URL.revokeObjectURL(url);
-    } catch (e) {
-        alert("저장 중 오류가 발생했습니다. 화면이 정상적인 상태인지 확인해주세요.\n(" + e.message + ")");
-    }
+        a.click(); URL.revokeObjectURL(url);
+    } catch (e) { alert("저장 중 오류가 발생했습니다. 화면이 정상적인 상태인지 확인해주세요.\n(" + e.message + ")"); }
 };
 
-// ============================================================================
-// [10-2] 프로젝트 불러오기 기능 (버그 수정 및 안전한 복원)
-// ============================================================================
 window.loadProject = function(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -994,29 +776,23 @@ window.loadProject = function(event) {
     reader.onload = function(e) {
         try {
             const projectData = JSON.parse(e.target.result, function(key, value) {
-                if (value === null || String(value).toLowerCase() === "null" || String(value).toLowerCase() === "nan") {
-                    return "";
-                }
+                if (value === null || String(value).toLowerCase() === "null" || String(value).toLowerCase() === "nan") return "";
                 return value;
             });
             
-            // 1. 상태 변수 복원
             if (projectData.kbState) window.kbState = projectData.kbState;
             if (projectData.inflationSheets) window.kbState.inflationSheets = projectData.inflationSheets;
             if (projectData.indexData) window.kbState.indexData = projectData.indexData;
             
-            if (projectData.tempKfpaDataStore) window.tempKfpaDataStore = projectData.tempKfpaDataStore;
-            else window.tempKfpaDataStore = {};
+            if (projectData.tempKfpaDataStore) window.tempKfpaDataStore = projectData.tempKfpaDataStore; else window.tempKfpaDataStore = {};
             if (projectData.targetKfpaSite) window.targetKfpaSite = projectData.targetKfpaSite;
             if (projectData.targetKfpaAddress) window.targetKfpaAddress = projectData.targetKfpaAddress;
 
-            // 2. 기본 정보 텍스트 복원
             if (projectData.contractor) document.querySelectorAll('.contractor-sync').forEach(el => el.value = projectData.contractor);
             if (projectData.evalYear) { const y = document.getElementById('evalYear'); if(y) y.value = projectData.evalYear; }
             if (projectData.unitCostPath) { const u = document.getElementById('unitCostPath'); if(u) u.value = projectData.unitCostPath; }
             if (projectData.priceIndexPath) { const p = document.getElementById('priceIndexPath'); if(p) p.value = projectData.priceIndexPath; }
 
-            // 3. 소재지 테이블 복원
             const tbody = document.getElementById('locationTbody');
             if (tbody) {
                 tbody.innerHTML = ''; 
@@ -1041,7 +817,6 @@ window.loadProject = function(event) {
                 } 
             }
 
-            // 4. 물가보정(명세서) 데이터 최우선 복원
             if (projectData.infState) {
                 window.infState = projectData.infState;
                 if (window.infState.data) {
@@ -1051,15 +826,10 @@ window.loadProject = function(event) {
                     }
                 }
                 const modeRadios = document.querySelectorAll('input[name="infMode"]');
-                if(modeRadios.length > 0) {
-                    modeRadios.forEach(r => r.checked = (r.value === window.infState.mode));
-                }
-                if (!window.infState.mappingRules) {
-                    window.infState.mappingRules = JSON.parse(localStorage.getItem('kb_mapping_rules_v3')) || window.initialRules;
-                }
+                if(modeRadios.length > 0) modeRadios.forEach(r => r.checked = (r.value === window.infState.mode));
+                if (!window.infState.mappingRules) window.infState.mappingRules = JSON.parse(localStorage.getItem('kb_mapping_rules_v3')) || window.initialRules;
             }
 
-            // 5. 사이드바 메뉴 뱃지 상태 복원
             if (projectData.sidebarStates) {
                 for (const [menuId, state] of Object.entries(projectData.sidebarStates)) {
                     const menu = document.getElementById(menuId);
@@ -1077,42 +847,25 @@ window.loadProject = function(event) {
             }
 
             alert("✅ 가액평가 데이터가 복구되었습니다. 화면을 초기화합니다.");
-            
-            // 페이지 렌더링
             if (typeof runGroupedRenderTest === 'function') runGroupedRenderTest();
             if (typeof window.infInitTabs === 'function' && window.infState && window.infState.tabs && window.infState.tabs.length > 0) {
-                window.infInitTabs();
-                if (typeof window.infRenderTable === 'function') window.infRenderTable();
+                window.infInitTabs(); if (typeof window.infRenderTable === 'function') window.infRenderTable();
             }
-
-            setTimeout(() => {
-                if (typeof switchSection === 'function') switchSection('sec-1-1');
-            }, 100);
-
-        } catch (err) {
-            console.error("불러오기 오류:", err);
-            alert("⚠️ 파일 형식이 잘못되었거나 손상된 파일입니다.\n(에러 상세: " + err.message + ")");
-        }
+            setTimeout(() => { if (typeof switchSection === 'function') switchSection('sec-1-1'); }, 100);
+        } catch (err) { alert("⚠️ 파일 형식이 잘못되었거나 손상된 파일입니다.\n(에러 상세: " + err.message + ")"); }
     };
     reader.readAsText(file);
 };
 
-
 // ============================================================================
-// [11] ★ 화협(KFPA) 다중 사업장 바구니 보존 및 일괄 확정 로직 
+// [9] 화협(KFPA) 다중 사업장 바구니 보존 및 일괄 확정 로직 
 // ============================================================================
-window.targetKfpaSite = "";
-window.targetKfpaAddress = "";
-
-if (typeof window.tempKfpaDataStore === 'undefined') {
-    window.tempKfpaDataStore = {};
-}
+window.targetKfpaSite = ""; window.targetKfpaAddress = "";
+if (typeof window.tempKfpaDataStore === 'undefined') window.tempKfpaDataStore = {};
 
 window.initKfpaScreen = function() {
-    const tabsContainer = document.getElementById('slide6Tabs');
-    const infoPanel = document.getElementById('kfpaActiveInfoPanel');
-    if(!tabsContainer) return;
-    tabsContainer.innerHTML = '';
+    const tabsContainer = document.getElementById('slide6Tabs'); const infoPanel = document.getElementById('kfpaActiveInfoPanel');
+    if(!tabsContainer) return; tabsContainer.innerHTML = '';
     
     const locations = [];
     document.querySelectorAll('#locationTbody tr').forEach(row => {
@@ -1124,514 +877,262 @@ window.initKfpaScreen = function() {
 
     if(locations.length === 0) {
         tabsContainer.innerHTML = '<div style="padding: 15px; color: #dc3545; font-weight: bold;">등록된 사업장이 없거나 화협자료평가 체크가 해제되어 있습니다. (1.1 일반정보 확인)</div>';
-        infoPanel.style.display = 'none';
-        switchSection('sec-2-2-1'); 
-        return;
+        infoPanel.style.display = 'none'; switchSection('sec-2-2-1'); return;
     }
 
-    infoPanel.style.display = 'block';
-    let isFirst = true;
-
+    infoPanel.style.display = 'block'; let isFirst = true;
     locations.forEach(loc => {
-        const tabBtn = document.createElement('div');
-        tabBtn.innerText = loc.name;
+        const tabBtn = document.createElement('div'); tabBtn.innerText = loc.name;
         tabBtn.style.cssText = `padding:10px 20px; cursor:pointer; font-weight:${isFirst ? 'bold' : 'normal'}; border:1px solid ${isFirst ? '#1C5691' : '#e2e8f0'}; border-bottom:none; border-radius:4px 4px 0 0; margin-right:5px; background:${isFirst ? '#1C5691' : '#f1f5f9'}; color:${isFirst ? '#ffffff' : '#94a3b8'};`;
-        
         tabBtn.onclick = () => {
             Array.from(tabsContainer.children).forEach(c => { c.style.background = '#f1f5f9'; c.style.color = '#94a3b8'; c.style.fontWeight = 'normal'; c.style.borderColor = '#e2e8f0'; });
             tabBtn.style.background = '#1C5691'; tabBtn.style.color = '#ffffff'; tabBtn.style.fontWeight = 'bold'; tabBtn.style.borderColor = '#1C5691';
-            
-            document.getElementById('kfpaPreviewSite').value = loc.name;
-            document.getElementById('kfpaPreviewAddress').value = loc.addr;
-            window.targetKfpaSite = loc.name;
-            window.targetKfpaAddress = loc.addr;
-            
+            document.getElementById('kfpaPreviewSite').value = loc.name; document.getElementById('kfpaPreviewAddress').value = loc.addr;
+            window.targetKfpaSite = loc.name; window.targetKfpaAddress = loc.addr;
             if (typeof window.tempKfpaDataStore === 'undefined') window.tempKfpaDataStore = {};
             renderKfpaPreview(loc.name);
         };
         tabsContainer.appendChild(tabBtn);
-
-        if (window.targetKfpaSite === loc.name) {
-            tabBtn.click();
-            isFirst = false;
-        } else if (isFirst && !window.targetKfpaSite) {
-            tabBtn.click();
-            isFirst = false;
-        }
+        if (window.targetKfpaSite === loc.name || (isFirst && !window.targetKfpaSite)) { tabBtn.click(); isFirst = false; }
     });
-    
     if (isFirst && tabsContainer.firstChild) tabsContainer.firstChild.click();
     switchSection('sec-2-2-1'); 
 };
 
 window.renderKfpaPreview = function(siteName) {
-    const tbody = document.getElementById('previewKfpaTbody');
-    const btnConfirm = document.getElementById('btnConfirmKfpa');
+    const tbody = document.getElementById('previewKfpaTbody'); const btnConfirm = document.getElementById('btnConfirmKfpa');
     const records = window.tempKfpaDataStore[siteName];
 
     if(!records || records.length === 0) {
         tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 60px; color:#999; font-size:14px;"><i class="fa-regular fa-folder-open" style="font-size:30px; margin-bottom:10px; display:block;"></i>우측 상단의 <b>[해당 사업장 화협 엑셀 첨부]</b>를 눌러 데이터를 업로드해주세요.</td></tr>`;
-        if(btnConfirm) btnConfirm.style.display = 'none';
-        return;
+        if(btnConfirm) btnConfirm.style.display = 'none'; return;
     }
-
-    tbody.innerHTML = '';
-    let grandTotalArea = 0;
-
-    // 일련번호 앞자리를 기준으로 그룹핑
-    const groups = {};
+    tbody.innerHTML = ''; let grandTotalArea = 0; const groups = {};
     records.forEach((r, origIdx) => {
-        r._origIdx = origIdx; 
-        const gk = r.groupKey || "기타";
+        r._origIdx = origIdx; const gk = r.groupKey || "기타";
         if(!groups[gk]) groups[gk] = { items: [], subtotal: null };
-        
-        if(r.isSubtotal) groups[gk].subtotal = r;
-        else groups[gk].items.push(r);
+        if(r.isSubtotal) groups[gk].subtotal = r; else groups[gk].items.push(r);
     });
 
     Object.keys(groups).forEach(gk => {
-        const group = groups[gk];
-        let calcSum = 0;
-
+        const group = groups[gk]; let calcSum = 0;
         group.items.forEach(r => {
-            calcSum += (parseFloat(r.연면적) || 0);
-            grandTotalArea += (parseFloat(r.연면적) || 0);
-            
-            // ★ 평소에 보여질 콤마(,)가 포함된 예쁜 숫자 포맷
+            calcSum += (parseFloat(r.연면적) || 0); grandTotalArea += (parseFloat(r.연면적) || 0);
             const displayArea = Number(r.연면적).toLocaleString('ko-KR', {minimumFractionDigits:2, maximumFractionDigits:2});
-
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td style="font-weight:bold;">${r.일련번호}</td>
-                <td>${r.동번호}</td>
-                <td style="font-weight:bold; color:#1C5691;">${r.동명칭}</td>
-                <td>${r.준공연도}</td>
-                <td>${r.층수}</td>
-                <td>${r.구조명}</td>
-                
-                <!-- ★ [디자인 개선] 평소엔 텍스트처럼 투명하게, 클릭 시 입력칸으로 변신 -->
+                <td style="font-weight:bold;">${r.일련번호}</td><td>${r.동번호}</td><td style="font-weight:bold; color:#1C5691;">${r.동명칭}</td>
+                <td>${r.준공연도}</td><td>${r.층수}</td><td>${r.구조명}</td>
                 <td style="text-align:right; padding: 0; position: relative;">
-                    <input type="text" value="${displayArea}" 
-                        style="width: 100%; box-sizing: border-box; text-align: right; border: 1px solid transparent; background: transparent; font-family: inherit; font-size: inherit; color: #333; outline: none; cursor: pointer; padding: 8px 10px; transition: 0.2s;"
-                        onfocus="this.style.borderBottom='2px solid #1C5691'; this.style.background='#fff'; this.value='${r.연면적}'; this.select();"
-                        onblur="this.style.borderBottom='1px solid transparent'; this.style.background='transparent';"
-                        onmouseover="if(document.activeElement !== this) this.style.background='#f1f5f9';"
-                        onmouseout="if(document.activeElement !== this) this.style.background='transparent';"
-                        onchange="window.updateKfpaArea('${siteName}', ${r._origIdx}, this.value)"
-                        title="클릭하여 면적 수정 (수정 후 엔터)">
-                </td>
-                
-                <td style="text-align:left;">${r.용도}</td>
+                    <input type="text" value="${displayArea}" style="width: 100%; box-sizing: border-box; text-align: right; border: 1px solid transparent; background: transparent; font-family: inherit; font-size: inherit; color: #333; outline: none; cursor: pointer; padding: 8px 10px; transition: 0.2s;" onfocus="this.style.borderBottom='2px solid #1C5691'; this.style.background='#fff'; this.value='${r.연면적}'; this.select();" onblur="this.style.borderBottom='1px solid transparent'; this.style.background='transparent';" onmouseover="if(document.activeElement !== this) this.style.background='#f1f5f9';" onmouseout="if(document.activeElement !== this) this.style.background='transparent';" onchange="window.updateKfpaArea('${siteName}', ${r._origIdx}, this.value)" title="클릭하여 면적 수정 (수정 후 엔터)">
+                </td><td style="text-align:left;">${r.용도}</td>
             `;
             tbody.appendChild(tr);
         });
-
         if (group.subtotal || group.items.length > 0) {
             const officialSum = group.subtotal ? (parseFloat(group.subtotal.연면적) || 0) : calcSum;
-            const diff = Math.abs(calcSum - officialSum);
-            const isMismatch = group.subtotal && diff > 0.01; 
-
-            const trSub = document.createElement('tr');
-            trSub.style.background = isMismatch ? '#ffe5e5' : '#e9ecef';
-            trSub.style.fontWeight = 'bold';
-            
+            const diff = Math.abs(calcSum - officialSum); const isMismatch = group.subtotal && diff > 0.01; 
+            const trSub = document.createElement('tr'); trSub.style.background = isMismatch ? '#ffe5e5' : '#e9ecef'; trSub.style.fontWeight = 'bold';
             const warningMsg = isMismatch ? `<span style="color:#d32f2f; font-size:13px; font-weight:bold; animation: blink 1.5s infinite;"><i class="fa-solid fa-triangle-exclamation"></i> 동면적을 확인하세요! (엑셀 원본 합계: ${officialSum.toLocaleString('ko-KR')}㎡ / 차이: ${diff.toFixed(2)}㎡)</span>` : '';
-            
-            trSub.innerHTML = `
-                <td></td><td></td>
-                <td colspan="4" style="color:${isMismatch ? '#d32f2f' : '#1C5691'}; text-align:center;">동면적합계</td>
-                <td style="text-align:right; color:${isMismatch ? '#d32f2f' : '#1C5691'}; font-size:14px; padding-right: 10px;">
-                    ${calcSum.toLocaleString('ko-KR', {minimumFractionDigits:2, maximumFractionDigits:2})}
-                </td>
-                <td style="text-align:left;">${warningMsg}</td>
-            `;
+            trSub.innerHTML = `<td></td><td></td><td colspan="4" style="color:${isMismatch ? '#d32f2f' : '#1C5691'}; text-align:center;">동면적합계</td><td style="text-align:right; color:${isMismatch ? '#d32f2f' : '#1C5691'}; font-size:14px; padding-right: 10px;">${calcSum.toLocaleString('ko-KR', {minimumFractionDigits:2, maximumFractionDigits:2})}</td><td style="text-align:left;">${warningMsg}</td>`;
             tbody.appendChild(trSub);
         }
     });
 
-    const totalTr = document.createElement('tr');
-    totalTr.style.background = '#cbd5e1'; totalTr.style.fontWeight = 'bold';
+    const totalTr = document.createElement('tr'); totalTr.style.background = '#cbd5e1'; totalTr.style.fontWeight = 'bold';
     totalTr.innerHTML = `<td colspan="6" style="text-align:center; color:#333;">${siteName} 사업장 총면적 합계</td><td style="text-align:right; color:#d32f2f; font-size:14px; padding-right: 10px;">${grandTotalArea.toLocaleString('ko-KR', {minimumFractionDigits:2, maximumFractionDigits:2})}</td><td></td>`;
     tbody.appendChild(totalTr);
-
     if(btnConfirm) btnConfirm.style.display = 'inline-block';
 };
 
-// 깜빡이는 경고 효과용 CSS
 if (!document.getElementById('kfpaWarningStyle')) {
-    const style = document.createElement('style');
-    style.id = 'kfpaWarningStyle';
-    style.innerHTML = `@keyframes blink { 50% { opacity: 0.5; } }`;
-    document.head.appendChild(style);
+    const style = document.createElement('style'); style.id = 'kfpaWarningStyle'; style.innerHTML = `@keyframes blink { 50% { opacity: 0.5; } }`; document.head.appendChild(style);
 }
 
 window.loadKfpaExcel = function(event) {
-    const file = event.target.files[0];
-    if(!file) return;
-    const siteName = window.targetKfpaSite;
-    if(!siteName) { alert("선택된 사업장 탭이 없습니다."); event.target.value = ''; return; }
+    const file = event.target.files[0]; if(!file) return;
+    const siteName = window.targetKfpaSite; if(!siteName) { alert("선택된 사업장 탭이 없습니다."); event.target.value = ''; return; }
 
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, {type: 'array'});
-            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, {defval: ""});
-            
+            const data = new Uint8Array(e.target.result); const workbook = XLSX.read(data, {type: 'array'});
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]]; const jsonData = XLSX.utils.sheet_to_json(worksheet, {defval: ""});
             if(jsonData.length === 0) return alert("엑셀 파일에 데이터가 없습니다.");
 
-            const headers = Object.keys(jsonData[0]);
-            const getCol = (keywords) => headers.find(h => keywords.some(k => String(h).includes(k)));
-
+            const headers = Object.keys(jsonData[0]); const getCol = (keywords) => headers.find(h => keywords.some(k => String(h).includes(k)));
             const colSerial = getCol(["일련번호"]); const colDongNo = getCol(["동번호"]); const colDongNm = getCol(["동명", "건물명"]);
             const colYear = getCol(["준공"]); const colFloor = getCol(["층", "층수"]); const colStrct = getCol(["건물구조", "구조코드", "구조"]);
             const colArea = getCol(["면적"]); const colPurps = getCol(["용도", "특기사항"]);
 
             if(!colArea) return alert("면적 데이터를 찾을 수 없습니다. 화협 양식을 확인해주세요.");
 
-            const records = [];
-            let lastDongNo = "-"; let lastDongNm = "본동";
-            let lastGroupKey = "1"; // ★ 추가: 소계를 위한 앞자리 그룹 추적
-
+            const records = []; let lastDongNo = "-"; let lastDongNm = "본동"; let lastGroupKey = "1"; 
             jsonData.forEach((row, idx) => {
-                let serial = String(row[colSerial] || "").trim();
-                let dNo = String(row[colDongNo] || "").trim();
-                let dNm = String(row[colDongNm] || "").trim();
+                let serial = String(row[colSerial] || "").trim(); let dNo = String(row[colDongNo] || "").trim(); let dNm = String(row[colDongNm] || "").trim();
                 let isSubtotal = dNm.includes("합계") || dNm.includes("소계") || serial.includes("합계");
-
-                // ★ 추가: 그룹 키 설정 (소계는 직전 일련번호 그룹에 종속됨)
                 let groupKey = serial.includes('-') ? serial.split('-')[0] : serial;
-                if (serial && !isSubtotal) {
-                    lastGroupKey = groupKey;
-                } else if (isSubtotal) {
-                    groupKey = lastGroupKey;
-                }
+                if (serial && !isSubtotal) lastGroupKey = groupKey; else if (isSubtotal) groupKey = lastGroupKey;
 
                 if(dNo && dNo !== "-" && dNo !== "undefined") lastDongNo = dNo;
                 if(dNm && dNm !== "-" && dNm !== "undefined" && !isSubtotal) lastDongNm = dNm;
-
                 if((!serial || serial === "-" || serial === "undefined") && !isSubtotal) return;
 
                 let strctCode = String(row[colStrct] || "").trim(); let purps = String(row[colPurps] || "-").trim();
                 let floorStr = String(row[colFloor] || "").trim();
-                let area = parseFloat(String(row[colArea] || "0").replace(/,/g, ''));
-                if(isNaN(area)) area = 0.0;
+                let area = parseFloat(String(row[colArea] || "0").replace(/,/g, '')); if(isNaN(area)) area = 0.0;
 
-                let buildYear = new Date().getFullYear();
-                let yearStr = String(row[colYear] || "").replace(/[^0-9]/g, '');
+                let buildYear = new Date().getFullYear(); let yearStr = String(row[colYear] || "").replace(/[^0-9]/g, '');
                 if(yearStr.length >= 4) buildYear = parseInt(yearStr.substring(0, 4));
 
-                // ★ 수정: 면적이 0이라도 공식 합계(isSubtotal) 행이면 데이터에 포함시켜 검증에 사용
                 if(area > 0 || isSubtotal) {
-                    records.push({
-                        "일련번호": serial, "동번호": lastDongNo, "층수": floorStr,
-                        "동명칭": isSubtotal ? dNm : lastDongNm, "용도": purps, "연면적": area,
-                        "구조명": strctCode, "구조코드": strctCode, "준공연도": buildYear,
-                        "isSubtotal": isSubtotal, "groupKey": groupKey, 
-                        "단가": 0.0, "노무비": 0.0, "물가지수": 1.0, "감가율": 1.78, "재조달_건축": 0, "잔가율": 100.0, "현재_건축": 0
-                    });
+                    records.push({ "일련번호": serial, "동번호": lastDongNo, "층수": floorStr, "동명칭": isSubtotal ? dNm : lastDongNm, "용도": purps, "연면적": area, "구조명": strctCode, "구조코드": strctCode, "준공연도": buildYear, "isSubtotal": isSubtotal, "groupKey": groupKey, "단가": 0.0, "노무비": 0.0, "물가지수": 1.0, "감가율": 1.78, "재조달_건축": 0, "잔가율": 100.0, "현재_건축": 0 });
                 }
             });
 
             if(records.length === 0) return alert("유효한 화협 데이터(일련번호 및 면적 존재)를 찾을 수 없습니다.");
-
             if (typeof window.tempKfpaDataStore === 'undefined') window.tempKfpaDataStore = {};
-            window.tempKfpaDataStore[siteName] = records;
-            renderKfpaPreview(siteName); 
+            window.tempKfpaDataStore[siteName] = records; renderKfpaPreview(siteName); 
             alert(`✅ [${siteName}] 화협 엑셀 로드 완료!\n동면적 합계에 빨간색 경고가 뜬 항목이 있는지 확인 후 수정해주세요.`);
-
         } catch (err) { alert("파일 파싱 중 오류 발생: " + err); }
     };
-    reader.readAsArrayBuffer(file);
-    event.target.value = ''; 
+    reader.readAsArrayBuffer(file); event.target.value = ''; 
 };
 
 window.confirmAllKfpaData = function() {
-    if(!window.tempKfpaDataStore) return alert("반영할 데이터가 전혀 없습니다. 엑셀 파일을 먼저 업로드해주세요.");
-    
+    if(!window.tempKfpaDataStore || Object.keys(window.tempKfpaDataStore).length === 0) return alert("반영할 데이터가 전혀 없습니다. 엑셀 파일을 먼저 업로드해주세요.");
     const sites = Object.keys(window.tempKfpaDataStore);
-    if(sites.length === 0) return alert("반영할 데이터가 전혀 없습니다. 엑셀 파일을 먼저 업로드해주세요.");
-
     if(!window.kbState.evalData.kfpa) window.kbState.evalData.kfpa = {};
     
     sites.forEach(siteName => {
         const records = window.tempKfpaDataStore[siteName].filter(r => !r.isSubtotal); 
         const titleRecords = window.kbState.evalData.title[siteName] || [];
-        const siteGroups = {};
+        const siteGroups = {}; const groupAreaMap = {};
         
-        // ★ [핵심 수정 1] 일련번호의 '하이픈(-) 앞자리'를 뽑아내어 그룹 총면적을 합산합니다!
-        const groupAreaMap = {};
         records.forEach(r => {
-            const fullSeq = r.일련번호 || r.동명칭 || "";
-            // 하이픈이 있으면 앞자리 추출 (예: '1-24' -> '1'), 없으면 전체 사용
-            const groupKey = fullSeq.includes('-') ? fullSeq.split('-')[0] : fullSeq;
+            const fullSeq = r.일련번호 || r.동명칭 || ""; const groupKey = fullSeq.includes('-') ? fullSeq.split('-')[0] : fullSeq;
             groupAreaMap[groupKey] = (groupAreaMap[groupKey] || 0) + (parseFloat(r.연면적) || 0);
         });
         
         records.forEach(r => {
             let evalRecord = JSON.parse(JSON.stringify(r));
-
             if (evalRecord.구조코드 && evalRecord.구조코드 !== "-" && window.kbState.costData && window.kbState.costData.length > 0) {
                 const cleanCode = String(evalRecord.구조코드).replace(/-/g, "");
-                const matched = window.kbState.costData.find(row => {
-                    const allText = Object.values(row).map(v => String(v || "")).join(" ").toLowerCase();
-                    return allText.includes(String(evalRecord.구조코드).toLowerCase()) || (cleanCode && allText.replace(/-/g, "").includes(cleanCode));
-                });
-                if (matched) {
-                    evalRecord.구조명 = (matched['구조'] && matched['구조'] !== "-") ? matched['구조'] : matched['중분류'];
-                    evalRecord.단가 = matched['단가'];
-                    evalRecord.노무비 = matched['노무비'];
-                    if (window.applyAutoPriceIndex) window.applyAutoPriceIndex(evalRecord);
-                }
+                const matched = window.kbState.costData.find(row => { const allText = Object.values(row).map(v => String(v || "")).join(" ").toLowerCase(); return allText.includes(String(evalRecord.구조코드).toLowerCase()) || (cleanCode && allText.replace(/-/g, "").includes(cleanCode)); });
+                if (matched) { evalRecord.구조명 = (matched['구조'] && matched['구조'] !== "-") ? matched['구조'] : matched['중분류']; evalRecord.단가 = matched['단가']; evalRecord.노무비 = matched['노무비']; if (window.applyAutoPriceIndex) window.applyAutoPriceIndex(evalRecord); }
             }
 
-            // ★ [핵심 수정 2] 같은 앞자리(groupKey)를 가진 레코드들을 하나의 배열(그룹)로 묶어줍니다!
             const fullSeq = evalRecord.일련번호 || evalRecord.동명칭 || "";
-            const groupKey = fullSeq.includes('-') ? fullSeq.split('-')[0] : fullSeq;
-            const d = evalRecord.동명칭;
-
-            // 잘게 쪼개진 건물들의 면적을 모두 더한 '그룹 총면적(groupAreaMap)'을 기준으로 부속비율 결정
+            const groupKey = fullSeq.includes('-') ? fullSeq.split('-')[0] : fullSeq; const d = evalRecord.동명칭;
             let inheritedRatio = (groupAreaMap[groupKey] <= 300 && groupAreaMap[groupKey] > 0) ? 0.0 : 20.0;
-            
-            // 혹시 표제부에 동일한 이름으로 평가된 비율이 있다면 그것을 우선 따름
-            const tGroup = titleRecords.find(g => (g.동명칭 || "") === d);
-            if (tGroup && tGroup.부속비율 !== undefined) inheritedRatio = tGroup.부속비율;
+            const tGroup = titleRecords.find(g => (g.동명칭 || "") === d); if (tGroup && tGroup.부속비율 !== undefined) inheritedRatio = tGroup.부속비율;
 
             if(!siteGroups[groupKey]) {
-                // 새로운 그룹이 생성될 때 1번만 부속비율을 세팅 (렌더링 시 그룹 맨 밑에 딱 1번만 부속설비가 나옴)
                 const displayDongName = `[${groupKey}번 건물 그룹]`;
-                siteGroups[groupKey] = { 
-                    "동명칭": displayDongName, 
-                    "일련번호": groupKey, 
-                    "부속비율": inheritedRatio, 
-                    "재조달_부속": 0, 
-                    "재조달_합계": 0, 
-                    "현재_부속": 0, 
-                    "현재_합계": 0, 
-                    "records": [] 
-                };
+                siteGroups[groupKey] = { "동명칭": displayDongName, "일련번호": groupKey, "부속비율": inheritedRatio, "재조달_부속": 0, "재조달_합계": 0, "현재_부속": 0, "현재_합계": 0, "records": [] };
             }
-            
-            // 표의 세부 데이터(행)에는 원래 엑셀에 있던 이름(1-1동 등)이 그대로 나오도록 유지
-            evalRecord.동명칭 = d;
-            siteGroups[groupKey].records.push(evalRecord);
+            evalRecord.동명칭 = d; siteGroups[groupKey].records.push(evalRecord);
         });
-
-        window.kbState.evalData.kfpa[siteName] = Object.values(siteGroups);
-        recalculateValuation('kfpa', siteName); 
+        window.kbState.evalData.kfpa[siteName] = Object.values(siteGroups); recalculateValuation('kfpa', siteName); 
     });
 
     window.kbState.activeSite.kfpa = sites[0];
-    
-    // 화면 자동 전환 (SPA 구조 대응)
-    if (typeof switchSection === 'function') switchSection('sec-2-2-2');
-    else if (typeof goToSlide === 'function') goToSlide('slide7');
-    
+    if (typeof switchSection === 'function') switchSection('sec-2-2-2'); else if (typeof goToSlide === 'function') goToSlide('slide7');
     renderEvalTabsAndTable('kfpa', 'tbodyKfpaEval', 'tabsKfpaEval');
-    
     alert(`🎉 화협자료가 [일련번호 앞자리]를 기준으로 완벽하게 통합 그룹화되었습니다!\n\n(그룹 전체 총면적 300㎡ 이하 건물은 부속비율 0%가 자동 적용되었습니다.)`);
 };
 
 // ============================================================================
-// [11-1] 화협 연면적 실시간 수정 및 합계 검증 로직
+// [10] 화협 연면적 실시간 수정 로직
 // ============================================================================
 window.updateKfpaArea = function(siteName, origIdx, newVal) {
-    // 콤마(,)가 포함된 채로 입력되어도 숫자로 정확히 변환합니다.
-    let val = parseFloat(String(newVal).replace(/,/g, ''));
-    if(isNaN(val)) val = 0;
-    
+    let val = parseFloat(String(newVal).replace(/,/g, '')); if(isNaN(val)) val = 0;
     if(window.tempKfpaDataStore && window.tempKfpaDataStore[siteName] && window.tempKfpaDataStore[siteName][origIdx]) {
-        window.tempKfpaDataStore[siteName][origIdx].연면적 = val;
-        
-        // 데이터 업데이트 후 화면 새로고침 (오차가 맞으면 경고 즉시 해제)
-        window.renderKfpaPreview(siteName);
+        window.tempKfpaDataStore[siteName][origIdx].연면적 = val; window.renderKfpaPreview(siteName);
     }
 };
 
 // ============================================================================
-// [12] ★ 통합 총괄표(Summary Table) 렌더링 로직 
+// [11] 통합 총괄표(Summary Table) 렌더링 로직 
 // ============================================================================
 setTimeout(() => {
     document.querySelectorAll('.menu-l1, .menu-l2, .menu-l3').forEach(menu => {
-        if (menu.innerText.includes('3. 총괄표 작성')) {
-            menu.onclick = function() { window.initSummaryScreen(); };
-        }
+        if (menu.innerText.includes('3. 총괄표 작성')) menu.onclick = function() { window.initSummaryScreen(); };
     });
 }, 500);
 
 window.initSummaryScreen = function() {
-    goToSlide('slide8');
-    const firstTab = document.querySelector('#summaryTabs .summary-tab');
-    if (firstTab) renderSummary('title', firstTab); 
+    goToSlide('slide8'); const firstTab = document.querySelector('#summaryTabs .summary-tab'); if (firstTab) renderSummary('title', firstTab); 
 };
 
 window.renderSummary = function(mode, tabElement) {
     if (tabElement) {
-        document.querySelectorAll('#summaryTabs .summary-tab').forEach(t => {
-            t.style.background = '#f8f9fa'; t.style.color = '#666'; 
-            t.style.borderColor = '#ddd'; t.style.fontWeight = 'normal';
-        });
-        tabElement.style.background = '#fff'; tabElement.style.color = '#1C5691'; 
-        tabElement.style.borderColor = '#1C5691'; tabElement.style.fontWeight = 'bold';
+        document.querySelectorAll('#summaryTabs .summary-tab').forEach(t => { t.style.background = '#f8f9fa'; t.style.color = '#666'; t.style.borderColor = '#ddd'; t.style.fontWeight = 'normal'; });
+        tabElement.style.background = '#fff'; tabElement.style.color = '#1C5691'; tabElement.style.borderColor = '#1C5691'; tabElement.style.fontWeight = 'bold';
     }
 
-    const tbody = document.getElementById('tbodySummary');
-    tbody.innerHTML = '';
-    
+    const tbody = document.getElementById('tbodySummary'); tbody.innerHTML = '';
     const dataObj = window.kbState.evalData[mode];
     
     if (!dataObj || Object.keys(dataObj).length === 0) {
-        let guideMsg = "";
-        if (mode === 'title') guideMsg = "▶ [2.1.2 표제부 평가] 메뉴로 이동하여 <b>'표제부 데이터 연동하기'</b> 버튼을 눌러주세요.";
-        else if (mode === 'floor') guideMsg = "▶ [2.1.3 층별 평가] 메뉴로 이동하여 <b>'층별 데이터 연동하기'</b> 버튼을 눌러주세요.";
-        else if (mode === 'kfpa') guideMsg = "▶ [2.2.1 화협 불러오기] 메뉴에서 엑셀을 업로드하고 확정을 진행해 주세요.";
-
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 60px; color:#999; font-size:15px; line-height: 1.8;">
-            <i class="fa-solid fa-triangle-exclamation" style="font-size:35px; margin-bottom:15px; display:block; color:#f39c12;"></i>
-            ${mode === 'title' ? '표제부' : mode === 'floor' ? '층별' : '화협자료'} 평가 데이터가 아직 없습니다.<br>
-            <span style="color:#d32f2f; font-weight:bold;">${guideMsg}</span>
-        </td></tr>`;
-        return;
+        let guideMsg = mode === 'title' ? "▶ [2.1.2 표제부 평가] 메뉴로 이동하여 <b>'표제부 데이터 연동하기'</b> 버튼을 눌러주세요." : mode === 'floor' ? "▶ [2.1.3 층별 평가] 메뉴로 이동하여 <b>'층별 데이터 연동하기'</b> 버튼을 눌러주세요." : "▶ [2.2.1 화협 불러오기] 메뉴에서 엑셀을 업로드하고 확정을 진행해 주세요.";
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 60px; color:#999; font-size:15px; line-height: 1.8;"><i class="fa-solid fa-triangle-exclamation" style="font-size:35px; margin-bottom:15px; display:block; color:#f39c12;"></i>${mode === 'title' ? '표제부' : mode === 'floor' ? '층별' : '화협자료'} 평가 데이터가 아직 없습니다.<br><span style="color:#d32f2f; font-weight:bold;">${guideMsg}</span></td></tr>`; return;
     }
 
     let grandTotalArea = 0, grandTotalReco = 0, grandTotalCur = 0;
-
     for (const [siteName, groups] of Object.entries(dataObj)) {
         let siteTotalArea = 0, siteTotalReco = 0, siteTotalCur = 0;
         const groupArray = Array.isArray(groups) ? groups : Object.values(groups);
-
         if (groupArray.length === 0) continue;
 
         let siteRowSpan = 0;
-        groupArray.forEach(g => {
-            const rCount = (g.records && g.records.length > 0) ? g.records.length : 1;
-            siteRowSpan += (rCount + 2); 
-        });
+        groupArray.forEach(g => { const rCount = (g.records && g.records.length > 0) ? g.records.length : 1; siteRowSpan += (rCount + 2); });
 
         groupArray.forEach((group, gIdx) => {
-            const records = group.records || [];
-            const rCount = records.length > 0 ? records.length : 1;
-            const dongRowSpan = rCount + 2;
+            const records = group.records || []; const rCount = records.length > 0 ? records.length : 1; const dongRowSpan = rCount + 2;
+            let groupArea = 0; records.forEach(r => groupArea += (parseFloat(r.연면적) || 0));
+            const recoTotal = parseFloat(group.재조달_합계 || 0); const curTotal = parseFloat(group.현재_합계 || 0);
+            const recoSub = parseFloat(group.재조달_부속 || 0); const curSub = parseFloat(group.현재_부속 || 0);
+            siteTotalArea += groupArea; siteTotalReco += recoTotal; siteTotalCur += curTotal;
 
-            let groupArea = 0;
-            records.forEach(r => groupArea += (parseFloat(r.연면적) || 0));
-
-            const recoTotal = parseFloat(group.재조달_합계 || 0);
-            const curTotal = parseFloat(group.현재_합계 || 0);
-            const recoSub = parseFloat(group.재조달_부속 || 0);
-            const curSub = parseFloat(group.현재_부속 || 0);
-
-            siteTotalArea += groupArea;
-            siteTotalReco += recoTotal;
-            siteTotalCur += curTotal;
-
-            const dongName = group.동명칭 || '-';
-            const accRate = parseFloat(group.부속비율 || 20.0).toFixed(1);
-
-            const siteCellHtml = (gIdx === 0) 
-                ? `<td rowspan="${siteRowSpan}" style="vertical-align:middle; font-weight:bold; background:#ffffff !important; border-right:1px solid #ddd;">${siteName}</td>` 
-                : '';
-                
+            const dongName = group.동명칭 || '-'; const accRate = parseFloat(group.부속비율 || 20.0).toFixed(1);
+            const siteCellHtml = (gIdx === 0) ? `<td rowspan="${siteRowSpan}" style="vertical-align:middle; font-weight:bold; background:#ffffff !important; border-right:1px solid #ddd;">${siteName}</td>` : '';
             const dongCellHtml = `<td rowspan="${dongRowSpan}" style="vertical-align:middle; font-weight:bold; color:#1C5691; background:#ffffff !important; border-right:1px solid #ddd;">${dongName}</td>`;
 
             if (records.length === 0) {
-                tbody.innerHTML += `
-                    <tr>
-                        ${siteCellHtml} ${dongCellHtml}
-                        <td style="text-align:left; background:#ffffff !important;">세부항목 없음</td>
-                        <td style="text-align:right; background:#ffffff !important;">0</td>
-                        <td style="text-align:right; background:#ffffff !important;">0</td>
-                        <td style="text-align:right; background:#ffffff !important;">0</td>
-                    </tr>
-                `;
+                tbody.innerHTML += `<tr>${siteCellHtml} ${dongCellHtml}<td style="text-align:left; background:#ffffff !important;">세부항목 없음</td><td style="text-align:right; background:#ffffff !important;">0</td><td style="text-align:right; background:#ffffff !important;">0</td><td style="text-align:right; background:#ffffff !important;">0</td></tr>`;
             } else {
                 records.forEach((r, rIdx) => {
-                    const isFirstRecord = (rIdx === 0);
-                    const gubunText = r.용도 || '건축공사비';
-
-                    tbody.innerHTML += `
-                        <tr>
-                            ${isFirstRecord ? siteCellHtml : ''}
-                            ${isFirstRecord ? dongCellHtml : ''}
-                            <td style="text-align:left; color:#444; background:#ffffff !important;">${gubunText}</td>
-                            <td style="text-align:right; background:#ffffff !important;">${formatArea(r.연면적)}</td>
-                            <td style="text-align:right; background:#ffffff !important;">${formatPrice(r.재조달_건축)}</td>
-                            <td style="text-align:right; background:#ffffff !important;">${formatPrice(r.현재_건축)}</td>
-                        </tr>
-                    `;
+                    const isFirstRecord = (rIdx === 0); const gubunText = r.용도 || '건축공사비';
+                    tbody.innerHTML += `<tr>${isFirstRecord ? siteCellHtml : ''}${isFirstRecord ? dongCellHtml : ''}<td style="text-align:left; color:#444; background:#ffffff !important;">${gubunText}</td><td style="text-align:right; background:#ffffff !important;">${formatArea(r.연면적)}</td><td style="text-align:right; background:#ffffff !important;">${formatPrice(r.재조달_건축)}</td><td style="text-align:right; background:#ffffff !important;">${formatPrice(r.현재_건축)}</td></tr>`;
                 });
             }
-
-            tbody.innerHTML += `
-                <tr>
-                    <td style="text-align:left; color:#666; background:#f8f9fa !important;">└ 부속설비 (${accRate}%)</td>
-                    <td style="text-align:right; color:#999; background:#f8f9fa !important;">-</td>
-                    <td style="text-align:right; background:#f8f9fa !important;">${formatPrice(recoSub)}</td>
-                    <td style="text-align:right; background:#f8f9fa !important;">${formatPrice(curSub)}</td>
-                </tr>
-            `;
-            
-            tbody.innerHTML += `
-                <tr style="font-weight:bold;">
-                    <td style="text-align:center; color:#111; background:#e2e8f0 !important;">[${dongName}] 소계</td>
-                    <td style="text-align:right; background:#e2e8f0 !important;">${formatArea(groupArea)}</td>
-                    <td style="text-align:right; color:#1C5691; background:#e2e8f0 !important;">${formatPrice(recoTotal)}</td>
-                    <td style="text-align:right; color:#1C5691; background:#e2e8f0 !important;">${formatPrice(curTotal)}</td>
-                </tr>
-            `;
+            tbody.innerHTML += `<tr><td style="text-align:left; color:#666; background:#f8f9fa !important;">└ 부속설비 (${accRate}%)</td><td style="text-align:right; color:#999; background:#f8f9fa !important;">-</td><td style="text-align:right; background:#f8f9fa !important;">${formatPrice(recoSub)}</td><td style="text-align:right; background:#f8f9fa !important;">${formatPrice(curSub)}</td></tr>`;
+            tbody.innerHTML += `<tr style="font-weight:bold;"><td style="text-align:center; color:#111; background:#e2e8f0 !important;">[${dongName}] 소계</td><td style="text-align:right; background:#e2e8f0 !important;">${formatArea(groupArea)}</td><td style="text-align:right; color:#1C5691; background:#e2e8f0 !important;">${formatPrice(recoTotal)}</td><td style="text-align:right; color:#1C5691; background:#e2e8f0 !important;">${formatPrice(curTotal)}</td></tr>`;
         });
-
-        grandTotalArea += siteTotalArea;
-        grandTotalReco += siteTotalReco;
-        grandTotalCur += siteTotalCur;
-
-        tbody.innerHTML += `
-            <tr style="font-weight:bold;">
-                <td colspan="3" style="text-align:center; background:#cbd5e1 !important;">[${siteName}] 평가액 합계</td>
-                <td style="text-align:right; color:#d32f2f; background:#cbd5e1 !important;">${formatArea(siteTotalArea)}</td>
-                <td style="text-align:right; color:#d32f2f; background:#cbd5e1 !important;">${formatPrice(siteTotalReco)}</td>
-                <td style="text-align:right; color:#d32f2f; background:#cbd5e1 !important;">${formatPrice(siteTotalCur)}</td>
-            </tr>
-        `;
+        grandTotalArea += siteTotalArea; grandTotalReco += siteTotalReco; grandTotalCur += siteTotalCur;
+        tbody.innerHTML += `<tr style="font-weight:bold;"><td colspan="3" style="text-align:center; background:#cbd5e1 !important;">[${siteName}] 평가액 합계</td><td style="text-align:right; color:#d32f2f; background:#cbd5e1 !important;">${formatArea(siteTotalArea)}</td><td style="text-align:right; color:#d32f2f; background:#cbd5e1 !important;">${formatPrice(siteTotalReco)}</td><td style="text-align:right; color:#d32f2f; background:#cbd5e1 !important;">${formatPrice(siteTotalCur)}</td></tr>`;
     }
 
     if (Object.keys(dataObj).length > 1) { 
-        tbody.innerHTML += `
-            <tr style="font-weight:bold; font-size:15px;">
-                <td colspan="3" style="text-align:center; color:#ffffff !important; background:#1C5691 !important;">전체 사업장 총 평가액</td>
-                <td style="text-align:right; color:#FFD700 !important; background:#1C5691 !important;">${formatArea(grandTotalArea)}</td>
-                <td style="text-align:right; color:#FFD700 !important; background:#1C5691 !important;">${formatPrice(grandTotalReco)}</td>
-                <td style="text-align:right; color:#FFD700 !important; background:#1C5691 !important;">${formatPrice(grandTotalCur)}</td>
-            </tr>
-        `;
+        tbody.innerHTML += `<tr style="font-weight:bold; font-size:15px;"><td colspan="3" style="text-align:center; color:#ffffff !important; background:#1C5691 !important;">전체 사업장 총 평가액</td><td style="text-align:right; color:#FFD700 !important; background:#1C5691 !important;">${formatArea(grandTotalArea)}</td><td style="text-align:right; color:#FFD700 !important; background:#1C5691 !important;">${formatPrice(grandTotalReco)}</td><td style="text-align:right; color:#FFD700 !important; background:#1C5691 !important;">${formatPrice(grandTotalCur)}</td></tr>`;
     }
 };
 
 window.exportSummaryExcel = function() {
     const table = document.getElementById('summaryTable');
-    if(!table || table.rows.length <= 2) {
-        return alert("다운로드할 총괄표 데이터가 없습니다. 먼저 좌측 메뉴에서 평가를 완료해 주세요.");
-    }
-
+    if(!table || table.rows.length <= 2) return alert("다운로드할 총괄표 데이터가 없습니다. 먼저 좌측 메뉴에서 평가를 완료해 주세요.");
     let activeTabName = "총괄표";
-    const tabs = document.querySelectorAll('#summaryTabs .summary-tab');
-    tabs.forEach(tab => {
-        if (tab.style.fontWeight === 'bold') activeTabName = tab.innerText;
-    });
-
+    document.querySelectorAll('#summaryTabs .summary-tab').forEach(tab => { if (tab.style.fontWeight === 'bold') activeTabName = tab.innerText; });
     try {
         const wb = XLSX.utils.table_to_book(table, {sheet: "가액평가_총괄표"});
         const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, "");
-        const fileName = `KB손해보험_${activeTabName}_${dateStr}.xlsx`;
-        XLSX.writeFile(wb, fileName);
-    } catch (error) {
-        alert("엑셀 다운로드 중 오류가 발생했습니다.\n" + error.message);
-    }
+        XLSX.writeFile(wb, `KB손해보험_${activeTabName}_${dateStr}.xlsx`);
+    } catch (error) { alert("엑셀 다운로드 중 오류가 발생했습니다.\n" + error.message); }
 };
 
 // ============================================================================
-// [13] 보고서 생성 파이썬 연동 UI 시뮬레이션
+// [12] 보고서 생성 연동 UI
 // ============================================================================
 window.runReportGeneration = function() {
     const templatePath = document.getElementById('reportTemplatePath').value;
@@ -1639,37 +1140,25 @@ window.runReportGeneration = function() {
     const evalType = evalTypeSelect.options[evalTypeSelect.selectedIndex].text;
     const logBox = document.getElementById('reportLogBox');
     
-    if (!templatePath) {
-        alert("2번 항목에서 엑셀 보고서 양식(.xlsx) 파일을 첨부해 주세요.");
-        return;
-    }
+    if (!templatePath) return alert("2번 항목에서 엑셀 보고서 양식(.xlsx) 파일을 첨부해 주세요.");
     
-    // 파이썬 프로그램의 로그 출력 방식을 동일하게 재현
     logBox.value = "--- 보고서 생성을 시작합니다 ---\n";
     logBox.value += `[설정] 선택된 작성 기준: ${evalType}\n`;
     logBox.value += "[시스템] 현재 메모리에 적재된 평가 데이터를 취합 및 분석 중...\n";
     
-    setTimeout(() => {
-        logBox.value += "[성공] 표지 시트 작성 및 데이터 매핑 완료\n";
-    }, 800);
-    
-    setTimeout(() => {
-        logBox.value += "[성공] 총괄표 생성 및 합산 금액 집계 완료\n";
-    }, 1500);
-
+    setTimeout(() => { logBox.value += "[성공] 표지 시트 작성 및 데이터 매핑 완료\n"; }, 800);
+    setTimeout(() => { logBox.value += "[성공] 총괄표 생성 및 합산 금액 집계 완료\n"; }, 1500);
     setTimeout(() => {
         logBox.value += "[성공] 세부평가 시트 동적 서식 생성 (부속설비 로직 포함) 완료\n";
-        logBox.value += "[성공] 불필요한 템플릿 시트 삭제 및 탭 정렬 완료\n";
-        logBox.value += ">>> 작업이 성공적으로 완료되었습니다!\n";
+        logBox.value += "[성공] 불필요한 템플릿 시트 삭제 및 탭 정렬 완료\n>>> 작업이 성공적으로 완료되었습니다!\n";
         alert("보고서 생성이 완료되었습니다.\n(현재는 웹 UI 시뮬레이션이 작동 중이며, 실제 엑셀 파일 생성은 백엔드 서버 연동 후 다운로드됩니다.)");
     }, 2500);
 };
 
 // ============================================================================
-// [14] 복합구조 가중평균 검산 및 일괄 덮어쓰기 모듈
+// [13] 복합구조 가중평균 검산 모듈
 // ============================================================================
 window.currentComplexTarget = null;
-
 window.openComplexModal = function(mode, siteName, gIdx) {
     const evalYearInput = document.getElementById('evalYear');
     const evalYear = parseInt(evalYearInput ? evalYearInput.value : new Date().getFullYear());
@@ -1677,243 +1166,191 @@ window.openComplexModal = function(mode, siteName, gIdx) {
     const group = Array.isArray(siteData) ? siteData[gIdx] : siteData[Object.keys(siteData)[gIdx]];
     
     window.currentComplexTarget = { mode, siteName, gIdx, group };
-    
-    const tbody = document.getElementById('complexDeprTbody');
-    const tfoot = document.getElementById('complexDeprTfoot');
-    tbody.innerHTML = '';
-    
-    let sumArea = 0, sumWeight = 0;
+    const tbody = document.getElementById('complexDeprTbody'); const tfoot = document.getElementById('complexDeprTfoot');
+    tbody.innerHTML = ''; let sumArea = 0, sumWeight = 0;
     
     group.records.forEach(r => {
-        const area = parseFloat(r.연면적) || 0;
-        const yearlyDepr = parseFloat(r.감가율) || 1.78;
-        const buildYear = parseInt(r.준공연도) || evalYear;
-        const elapsed = Math.max(0, evalYear - buildYear);
-        
-        // ★ 수정: 70% 캡(제한) 삭제! 있는 그대로 누적 계산
-        let totalDepr = elapsed * yearlyDepr; 
-        
-        // ★ 수정: 가중치 산출 시 100으로 나누기
-        const weight = (totalDepr / 100.0) * area; 
-        
+        const area = parseFloat(r.연면적) || 0; const yearlyDepr = parseFloat(r.감가율) || 1.78;
+        const buildYear = parseInt(r.준공연도) || evalYear; const elapsed = Math.max(0, evalYear - buildYear);
+        let totalDepr = elapsed * yearlyDepr; const weight = (totalDepr / 100.0) * area; 
         sumArea += area; sumWeight += weight;
-        
-        tbody.innerHTML += `
-            <tr>
-                <td style="text-align:center;">${r.구조명 || '-'}</td>
-                <td style="text-align:center;">${r.용도 || '-'}</td>
-                <td style="text-align:center;">${yearlyDepr.toFixed(2)}%</td>
-                <td style="text-align:center;">${elapsed}년</td>
-                <td style="text-align:center; color:#d32f2f; font-weight:bold;">${totalDepr.toFixed(2)}%</td>
-                <td style="text-align:right;">${area.toLocaleString('ko-KR', {minimumFractionDigits:2})}</td>
-                <td style="text-align:right; color:#1C5691;">${weight.toLocaleString('ko-KR', {minimumFractionDigits:2})}</td>
-            </tr>
-        `;
+        tbody.innerHTML += `<tr><td style="text-align:center;">${r.구조명 || '-'}</td><td style="text-align:center;">${r.용도 || '-'}</td><td style="text-align:center;">${yearlyDepr.toFixed(2)}%</td><td style="text-align:center;">${elapsed}년</td><td style="text-align:center; color:#d32f2f; font-weight:bold;">${totalDepr.toFixed(2)}%</td><td style="text-align:right;">${area.toLocaleString('ko-KR', {minimumFractionDigits:2})}</td><td style="text-align:right; color:#1C5691;">${weight.toLocaleString('ko-KR', {minimumFractionDigits:2})}</td></tr>`;
     });
     
-    // ★ 수정: 평균을 구한 후, 화면에 %로 예쁘게 보여주기 위해 다시 100을 곱함
     const avgDepr = sumArea > 0 ? (sumWeight / sumArea) * 100.0 : 0;
-    
     tfoot.innerHTML = `
-        <tr>
-            <td colspan="5" style="text-align:center;">합계 및 산출 과정</td>
-            <td style="text-align:right;">${sumArea.toLocaleString('ko-KR', {minimumFractionDigits:2})}</td>
-            <td style="text-align:right; color:#1C5691;">${sumWeight.toLocaleString('ko-KR', {minimumFractionDigits:2})}</td>
-        </tr>
-        <tr style="background:#cbd5e1; font-size:15px; color:#d32f2f;">
-            <td colspan="7" style="text-align:center; padding:15px; vertical-align:middle;">
-                가중치 합계 (${sumWeight.toLocaleString('ko-KR', {maximumFractionDigits:2})}) ÷ 면적 합계 (${sumArea.toLocaleString('ko-KR', {maximumFractionDigits:2})}) × 100
-                = <b>가중평균 총감가율 ${avgDepr.toFixed(2)}%</b>
-                
-                <button type="button" onclick="window.applyComplexDepr('${mode}', '${siteName}', ${gIdx}, ${avgDepr})" 
-                        style="background:#d32f2f; color:white; border:none; padding:8px 20px; border-radius:4px; font-size:14px; font-weight:bold; margin-left:20px; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.2); transition:0.2s;">
-                    <i class="fa-solid fa-check-double"></i> 적용하기
-                </button>
-            </td>
-        </tr>
+        <tr><td colspan="5" style="text-align:center;">합계 및 산출 과정</td><td style="text-align:right;">${sumArea.toLocaleString('ko-KR', {minimumFractionDigits:2})}</td><td style="text-align:right; color:#1C5691;">${sumWeight.toLocaleString('ko-KR', {minimumFractionDigits:2})}</td></tr>
+        <tr style="background:#cbd5e1; font-size:15px; color:#d32f2f;"><td colspan="7" style="text-align:center; padding:15px; vertical-align:middle;">가중치 합계 (${sumWeight.toLocaleString('ko-KR', {maximumFractionDigits:2})}) ÷ 면적 합계 (${sumArea.toLocaleString('ko-KR', {maximumFractionDigits:2})}) × 100 = <b>가중평균 총감가율 ${avgDepr.toFixed(2)}%</b><button type="button" onclick="window.applyComplexDepr('${mode}', '${siteName}', ${gIdx}, ${avgDepr})" style="background:#d32f2f; color:white; border:none; padding:8px 20px; border-radius:4px; font-size:14px; font-weight:bold; margin-left:20px; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.2); transition:0.2s;"><i class="fa-solid fa-check-double"></i> 적용하기</button></td></tr>
     `;
     
-    const modalContent = document.querySelector('#complexDeprModal .modal-content');
-    const modalBody = document.querySelector('#complexDeprModal .modal-body');
-    if (modalContent) {
-        modalContent.style.maxHeight = '90vh';
-        modalContent.style.display = 'flex';
-        modalContent.style.flexDirection = 'column';
-    }
-    if (modalBody) {
-        modalBody.style.overflowY = 'auto';
-        modalBody.style.flex = '1';
-    }
-
-    const oldApplyBtn = document.getElementById('btnApplyComplex');
-    if(oldApplyBtn) oldApplyBtn.parentElement.style.display = 'none';
-
+    const oldApplyBtn = document.getElementById('btnApplyComplex'); if(oldApplyBtn) oldApplyBtn.parentElement.style.display = 'none';
     document.getElementById('complexDeprModal').style.display = 'flex';
 };
-
-window.closeComplexModal = function() {
-    document.getElementById('complexDeprModal').style.display = 'none';
-    window.currentComplexTarget = null;
-};
+window.closeComplexModal = function() { document.getElementById('complexDeprModal').style.display = 'none'; window.currentComplexTarget = null; };
 
 window.applyComplexDepr = function(mode, siteName, gIdx, avgDepr) {
-    const siteData = window.kbState.evalData[mode][siteName];
-    const group = Array.isArray(siteData) ? siteData[gIdx] : siteData[Object.keys(siteData)[gIdx]];
-    
-    group.complexApplied = true;
-    group.complexRate = avgDepr; // 산출된 총감가율 저장
-    
-    window.recalculateValuation(mode, siteName);
-    window.renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
-    window.closeComplexModal();
+    const siteData = window.kbState.evalData[mode][siteName]; const group = Array.isArray(siteData) ? siteData[gIdx] : siteData[Object.keys(siteData)[gIdx]];
+    group.complexApplied = true; group.complexRate = avgDepr; 
+    window.recalculateValuation(mode, siteName); window.renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval'); window.closeComplexModal();
 };
 
 window.cancelComplexDepr = function(mode, siteName, gIdx) {
     if(confirm("일괄 적용된 복합구조 감가율을 해제하고 개별 감가율로 되돌리시겠습니까?")) {
-        const siteData = window.kbState.evalData[mode][siteName];
-        const group = Array.isArray(siteData) ? siteData[gIdx] : siteData[Object.keys(siteData)[gIdx]];
-        group.complexApplied = false;
-        window.recalculateValuation(mode, siteName);
-        window.renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
+        const siteData = window.kbState.evalData[mode][siteName]; const group = Array.isArray(siteData) ? siteData[gIdx] : siteData[Object.keys(siteData)[gIdx]];
+        group.complexApplied = false; window.recalculateValuation(mode, siteName); window.renderEvalTabsAndTable(mode, 'tbody'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval', 'tabs'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Eval');
     }
 };
 
 // ============================================================================
-// [15] 스마트 행 삭제 복구 및 추가 작업 기능
+// [14] 스마트 행 삭제 복구 기능
 // ============================================================================
 window.resetRowDeletion = function() {
     if (!confirm("행 삭제 작업을 처음부터 다시 하시겠습니까?\n(열 매핑 정보는 그대로 유지되며, 지워졌던 행들이 다시 복구됩니다.)")) return;
-    
     try {
         if (window.infState && window.infState.rawData && Object.keys(window.infState.rawData).length > 0) {
-            // 원본 데이터로 다시 복구 (매핑된 설정은 건드리지 않음)
             window.infState.data = JSON.parse(JSON.stringify(window.infState.rawData));
-            
-            // 테이블 다시 그리기
-            if (typeof window.infRenderTable === 'function') {
-                window.infRenderTable();
-            }
-            
+            if (typeof window.infRenderTable === 'function') window.infRenderTable();
             alert("데이터가 복구되었습니다. 붉은색 패널의 도구를 이용해 추가적으로 행 삭제 작업을 진행해 주세요.");
-        } else {
-            alert("복구할 원본 데이터가 없습니다. 엑셀 파일을 다시 불러와 주세요.");
-        }
-    } catch (error) {
-        console.error("행 삭제 되돌리기 오류:", error);
-    }
+        } else alert("복구할 원본 데이터가 없습니다. 엑셀 파일을 다시 불러와 주세요.");
+    } catch (error) { console.error("행 삭제 되돌리기 오류:", error); }
 };
 
 // ============================================================================
-// [16] 자산번호 데이터 강제 문자열 변환(콤마 원천차단) 및 가운데 정렬
+// [15] 물가보정 렌더링 엔진 덮어쓰기 (자산번호 콤마 영구 삭제 & 가운데 정렬)
 // ============================================================================
-if (typeof window.infRenderTable === 'function') {
+if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isCommaPatched) {
     const originalRender = window.infRenderTable;
     window.infRenderTable = function() {
-        // 1. 표를 그리기 전에 데이터 뿌리(메모리)를 문자열로 강제 변환
+        
+        // 1. 메모리상의 원본 데이터를 무조건 문자로 뜯어고침 (콤마 찍힐 확률 0%)
         if (window.infState && window.infState.data) {
             for (let tab in window.infState.data) {
                 window.infState.data[tab].forEach(row => {
-                    if (row['자산번호'] !== undefined && row['자산번호'] !== null) {
-                        // 숫자로 인식된 콤마를 영구 삭제하고 문자로 박제
-                        row['자산번호'] = String(row['자산번호']).replace(/,/g, '');
-                    }
+                    ['자산번호', '신자산번호'].forEach(key => {
+                        if (row[key] !== undefined && row[key] !== null) {
+                            row[key] = String(row[key]).replace(/,/g, '');
+                        }
+                    });
                 });
             }
         }
         
-        // 2. 문자열로 안전해진 데이터로 원래 표 그리기 실행
+        // 표를 그리는 동안 화면을 숨겨서 렉(Reflow) 완벽 방지
+        const tbody = document.querySelector('.infTbodyGlobal');
+        if (tbody) tbody.style.display = 'none';
+
+        // 2. 원래 표 그리는 함수 실행
         originalRender.apply(this, arguments); 
-        
-        // 3. 다 그려진 표에서 '자산번호' 기둥을 찾아 가운데 정렬 적용
+
+        // 3. 다 그려진 표에서 '자산번호' 열 찾아 가운데 정렬
+        const newTbody = document.querySelector('.infTbodyGlobal');
         const thead = document.querySelector('.infTheadGlobal tr');
-        if (thead) {
-            let assetIdx = -1;
+        if (thead && newTbody) {
+            let assetIdxs = [];
             thead.querySelectorAll('th, td').forEach((cell, idx) => {
-                if (cell.innerText.includes('자산번호')) assetIdx = idx;
+                if (cell.innerText.includes('자산번호')) assetIdxs.push(idx);
             });
 
-            if (assetIdx > -1) {
-                const tbody = document.querySelector('.infTbodyGlobal');
-                if (tbody) {
-                    tbody.querySelectorAll('tr').forEach(tr => {
-                        const cells = tr.querySelectorAll('td');
-                        if (cells.length > assetIdx) {
-                            cells[assetIdx].style.textAlign = 'center'; // 가운데 정렬 적용
-                            cells[assetIdx].innerText = cells[assetIdx].innerText.replace(/,/g, ''); // 2차 안전장치
+            if (assetIdxs.length > 0) {
+                newTbody.querySelectorAll('tr').forEach(tr => {
+                    const cells = tr.querySelectorAll('td');
+                    assetIdxs.forEach(idx => {
+                        if (cells.length > idx) {
+                            cells[idx].style.textAlign = 'center'; 
+                            cells[idx].innerText = cells[idx].innerText.replace(/,/g, ''); // 최종 안전장치
                         }
                     });
-                }
+                });
             }
         }
+        // 숨겼던 표 다시 노출
+        if (newTbody) newTbody.style.display = '';
     };
+    window.infRenderTable.isCommaPatched = true;
 }
 
 // ============================================================================
-// [17] 매핑된 버튼 클릭 시 "다음 단계 튕김 방지" 및 완벽 초기화 복구
+// [16] 전역 클릭 이벤트 제어기 (렉 방지, 튕김 방지, 자동 연동)
 // ============================================================================
 document.addEventListener('click', function(e) {
-    const btn = e.target.closest('#infMappingButtons button');
-    if (!btn) return;
+    // 1. 평가제외 버튼 누르면 1만원 이하 로직 자동 실행
+    const btnExclude = e.target.closest('button');
+    if (btnExclude && btnExclude.innerText.includes('평가 제외')) {
+        setTimeout(() => { if(typeof window.excludeUnderTenThousand === 'function') window.excludeUnderTenThousand(true); }, 100);
+    }
+    
+    // 2. 열(기둥) 매핑 시 버벅거림(렉) 제거
+    const cell = e.target.closest('.infTheadGlobal th, .infTheadGlobal td');
+    if (cell && window.infState && window.infState.wizard && window.infState.wizard.phase === 'mapping') {
+        const tbody = document.querySelector('.infTbodyGlobal');
+        if (tbody) {
+            tbody.style.display = 'none'; 
+            setTimeout(() => { tbody.style.display = ''; }, 10);
+        }
+    }
+    
+    // 3. 매핑 해제 시 오류 방지 및 완벽 초기화 (하얀색 버튼 복구)
+    const btnMap = e.target.closest('#infMappingButtons button');
+    if (btnMap && btnMap.innerText.includes('✓')) {
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); // ★ 화면 강제 튕김 100% 차단
 
-    // ★ 체크(✓)가 있는 버튼을 누른 경우에만 동작
-    if (btn.innerText.includes('✓')) {
-        // [핵심] 다른 이벤트(다음 단계로 넘어가기 등)가 터지지 못하게 그 자리에서 강력 차단
-        e.preventDefault(); 
-        e.stopPropagation(); 
-        e.stopImmediatePropagation();
-
-        const targetName = btn.innerText.replace('✓', '').trim();
-        
-        // 1. 내부 시스템에서 매핑 연결고리 완전 삭제
+        const targetName = btnMap.innerText.replace('✓', '').trim();
         if (window.infState && window.infState.wizard && window.infState.wizard.mapped) {
             delete window.infState.wizard.mapped[targetName];
         }
         
-        // 2. 엑셀 표(DOM)에서 뱃지와 파란색 배경 지우기
-        document.querySelectorAll('.infTheadGlobal th, .infTheadGlobal td').forEach((cell, colIndex) => {
-            const badge = cell.querySelector('span');
+        const tbody = document.querySelector('.infTbodyGlobal');
+        if (tbody) tbody.style.display = 'none';
+
+        document.querySelectorAll('.infTheadGlobal th, .infTheadGlobal td').forEach((c, colIndex) => {
+            const badge = c.querySelector('span');
             if (badge && badge.innerText.includes(targetName)) {
-                badge.remove(); // 뱃지 삭제
-                const table = cell.closest('table');
-                if (table) {
-                    table.querySelectorAll(`tr td:nth-child(${colIndex + 1})`).forEach(td => {
-                        td.style.background = ''; // 파란 기둥 초기화
-                    });
-                }
+                badge.remove();
+                const table = c.closest('table');
+                if (table) table.querySelectorAll(`tr td:nth-child(${colIndex + 1})`).forEach(td => td.style.background = '');
             }
         });
+
+        if (tbody) tbody.style.display = '';
         
-        // 3. 누른 버튼을 최초의 [새하얀 버튼]으로 강제 복구
-        btn.innerText = targetName; 
-        btn.style.cssText = 'background: #ffffff !important; color: #333 !important; border: 1px solid #ccc !important; font-weight: normal !important; box-shadow: none !important; opacity: 1 !important; cursor: pointer;';
+        btnMap.innerText = targetName; 
+        btnMap.style.cssText = 'background: #ffffff !important; color: #333 !important; border: 1px solid #ccc !important; font-weight: normal !important; box-shadow: none !important; opacity: 1 !important; cursor: pointer;';
         
-        // 4. 주변의 흐려진 미매핑 버튼들도 모두 하얗게 복구
         document.querySelectorAll('#infMappingButtons button').forEach(b => {
-            if (!b.innerText.includes('✓')) {
-                b.style.cssText = 'background: #ffffff !important; color: #333 !important; border: 1px solid #ccc !important; opacity: 1 !important; cursor: pointer;';
-            }
+            if (!b.innerText.includes('✓')) b.style.cssText = 'background: #ffffff !important; color: #333 !important; border: 1px solid #ccc !important; opacity: 1 !important; cursor: pointer;';
         });
 
-        // 5. 마법사 상태를 아무것도 안 한 '대기(idle)' 상태로 강제 조정
         if (window.infState && window.infState.wizard) {
-            window.infState.wizard.activeTarget = '';
-            window.infState.wizard.phase = 'idle'; 
+            window.infState.wizard.activeTarget = ''; window.infState.wizard.phase = 'idle'; 
         }
-
-        // 6. 아직 매핑이 다 안 끝났으므로 '열 매핑 완료' 우측 버튼 숨기기
         const finishBtn = document.getElementById('btnFinishMapping');
         if (finishBtn) finishBtn.style.display = 'none';
-        
-        // 7. 상단 안내 텍스트 초기화
         const textEl = document.getElementById('infWizardText');
-        if (textEl) {
-            textEl.innerHTML = '🎯 아래 버튼 중 하나를 선택하고, 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭해 매칭하세요!';
-        }
+        if (textEl) textEl.innerHTML = '🎯 아래 버튼 중 하나를 선택하고, 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭해 매칭하세요!';
     }
-}, true); // true 옵션(캡처링)으로 시스템의 다른 오작동보다 무조건 먼저 가로챔
+}, true);
+
+// 4. 시스템 멋대로 다음 단계 넘어가는 현상(Auto-Proceed) 원천 차단
+if (typeof window.infFinishMapping === 'function' && !window.infFinishMapping.isPatched) {
+    const origFinish = window.infFinishMapping;
+    window.infFinishMapping = function(force) {
+        if (force === true) {
+            origFinish.apply(this, arguments); 
+        } else {
+            const finishBtn = document.getElementById('btnFinishMapping');
+            if (finishBtn) {
+                finishBtn.style.display = 'inline-block';
+                finishBtn.onclick = function() { window.infFinishMapping(true); }; 
+            }
+            const textEl = document.getElementById('infWizardText');
+            if (textEl) textEl.innerHTML = '<span style="color:#28A745;">✅ 매핑이 완료되었습니다! 우측의 [열 매핑 완료 ▶] 버튼을 직접 눌러야 다음으로 이동합니다.</span>';
+        }
+    };
+    window.infFinishMapping.isPatched = true;
+}
 
 // ============================================================================
-// [18] ★ 초간단 명세서 행 즉시 삭제 (Ctrl + 마이너스) - 정렬/부분합 완벽 지원
+// [17] 초간단 명세서 행 즉시 삭제 (Ctrl + 마이너스)
 // ============================================================================
 document.addEventListener('keydown', function(e) {
     if ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_' || e.code === 'Minus' || e.code === 'NumpadSubtract')) {
@@ -1955,16 +1392,12 @@ document.addEventListener('keydown', function(e) {
         }
     }
 });
-
-// 더 이상 쓰지 않는 빈 함수 처리 (에러 방지용)
 window.highlightEmptyRows = function() { alert("Ctrl + 마이너스(-) 단축키를 이용해 직접 즉시 삭제해주세요!"); };
 window.bulkDeleteHighlightedRows = function() { alert("Ctrl + 마이너스(-) 단축키를 이용해 직접 즉시 삭제해주세요!"); };
 
 // ============================================================================
-// [19] 과거 연동 마법사 (엑셀 vs 프로젝트 선택 지원)
+// [18] 과거 연동 마법사 모달창 지원
 // ============================================================================
-
-// 1. 기존 2-1단계 텍스트 클릭 시 모달창 열기 (기존 onclick 덮어쓰기)
 document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
         const step2_1 = document.getElementById('step-2-1');
@@ -1976,7 +1409,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 1000);
 });
 
-// 2. 파일 업로드 핸들러
 window.handlePastDataUpload = function(event, type) {
     const file = event.target.files[0];
     if (!file) return;
@@ -1985,45 +1417,34 @@ window.handlePastDataUpload = function(event, type) {
     document.getElementById('pastDataModal').style.display = 'none';
 
     if (type === 'excel') {
-        // 엑셀 파일 파싱 로직 호출
         alert(`[엑셀 파일 연동 시작]\n- 기준: ${matchKey}\n- 파일명: ${file.name}\n\n(엑셀 파싱 로직 실행 대기 중)`);
-        // TODO: 여기에 엑셀 데이터 추출 및 매칭 함수 연결
-        
     } else if (type === 'kbproj') {
-        // .kbproj JSON 파싱 로직 호출
         const reader = new FileReader();
         reader.onload = function(e) {
             try {
                 const projData = JSON.parse(e.target.result);
                 alert(`[프로젝트 파일 연동 시작]\n- 기준: ${matchKey}\n- 데이터 크기: ${Object.keys(projData).length}건\n\n(프로젝트 파싱 로직 실행 대기 중)`);
-                // TODO: 여기에 projData의 infState 데이터를 현재 상태와 매칭하는 함수 연결
             } catch(err) {
                 alert("프로젝트 파일을 읽는 중 오류가 발생했습니다.");
             }
         };
         reader.readAsText(file);
     }
-    
-    // 파일 입력기 초기화 (같은 파일 다시 선택 가능하도록)
     event.target.value = '';
 };
 
 // ============================================================================
-// [20] 1만원 이하 소액 자산 일괄 평가제외 전용 처리기 (알림 숨김 옵션 추가)
+// [19] 1만원 이하 소액 자산 일괄 평가제외 처리기
 // ============================================================================
 window.excludeUnderTenThousand = function(silent = false) {
     if (!window.infState || !window.infState.data) return;
-    
     let activeTab = window.infState.activeTab || Object.keys(window.infState.data)[0];
     if (!activeTab) return;
 
-    let currentData = window.infState.data[activeTab];
     let count = 0;
-
-    currentData.forEach(row => {
+    window.infState.data[activeTab].forEach(row => {
         let priceStr = String(row['취득가액'] || '').replace(/,/g, '').trim();
         if (priceStr === '' || priceStr === '-') return;
-
         let price = parseFloat(priceStr);
         if (!isNaN(price) && price <= 10000) {
             row['_assetClass'] = '평가제외(만원이하)'; 
@@ -2033,64 +1454,23 @@ window.excludeUnderTenThousand = function(silent = false) {
     });
 
     if (typeof window.infRenderTable === 'function') window.infRenderTable();
-    if (!silent && count > 0) alert(`🎉 총 ${count}건의 소액 자산이 '평가제외(만원이하)'로 처리되었습니다!`);
+    if (!silent && count > 0) alert(`🎉 총 ${count}건의 소액 자산이 '평가제외' 처리되었습니다!`);
 };
 
 // ============================================================================
-// [21] 표 실시간 검색 기능 (디바운싱 적용 - 렉 방지 완벽 해결)
+// [20] 표 실시간 검색 기능 (디바운싱 적용 - 검색 렉 제로)
 // ============================================================================
 let searchTimeout = null;
 window.filterInfTable = function() {
-    clearTimeout(searchTimeout); // 글자를 치는 동안에는 타이머를 계속 초기화
-    
-    // 타자를 멈추고 0.3초가 지나면 딱 1번만 일괄 검색 실행 (프리징 방지)
-    searchTimeout = setTimeout(() => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => { 
         const keyword = document.getElementById('infTableSearchInput').value.toLowerCase().trim();
         const tbody = document.querySelector('.page-section.active .infTbodyGlobal') || document.querySelector('.infTbodyGlobal');
         if (!tbody) return;
-
-        const rows = tbody.querySelectorAll('tr');
-        rows.forEach(tr => {
+        tbody.style.display = 'none'; // DOM 최적화
+        tbody.querySelectorAll('tr').forEach(tr => {
             tr.style.display = tr.innerText.toLowerCase().includes(keyword) ? '' : 'none';
         });
+        tbody.style.display = '';
     }, 300); 
 };
-
-// ============================================================================
-// [16] 자산번호 콤마(,) 완벽 제거 (데이터 뿌리 강제 문자열 변환)
-// ============================================================================
-if (typeof window.infRenderTable === 'function') {
-    const originalRender = window.infRenderTable;
-    window.infRenderTable = function() {
-        // 화면에 그리기 전에, 엑셀에서 숫자로 인식된 자산번호를 무조건 '문자(String)'로 뜯어고침
-        if (window.infState && window.infState.data) {
-            for (let tab in window.infState.data) {
-                window.infState.data[tab].forEach(row => {
-                    if (row['자산번호'] !== undefined && row['자산번호'] !== null) {
-                        row['자산번호'] = String(row['자산번호']).replace(/,/g, '');
-                    }
-                });
-            }
-        }
-        // 문자열로 변환된 안전한 데이터로 표 그리기 실행
-        originalRender.apply(this, arguments); 
-    };
-}
-
-// ============================================================================
-// [22] '평가 제외' 버튼 클릭 시 -> 1만원 이하 자동 제외 연동 
-// ============================================================================
-document.addEventListener('click', function(e) {
-    const btn = e.target.closest('button');
-    if (!btn) return;
-
-    // 표 상단의 '평가 제외' 관련 버튼을 눌렀을 때 감지
-    if (btn.innerText.includes('평가 제외')) {
-        // 원래 시스템의 평가 제외 로직이 도는 시간을 0.1초 준 뒤, 만원 이하 로직을 덮어씌워버림
-        setTimeout(() => {
-            if(typeof window.excludeUnderTenThousand === 'function') {
-                window.excludeUnderTenThousand(true); // true = 매번 뜨는 귀찮은 알림창 끄기
-            }
-        }, 100);
-    }
-});
