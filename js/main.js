@@ -1216,8 +1216,38 @@ window.resetRowDeletion = function() {
 };
 
 // ============================================================================
-// [15] 자산번호 콤마 영구 삭제 & 중앙 정렬 (실시간 감시 카메라 방식)
+// [15] 자산번호 데이터 원천 텍스트 변환 (메모리 박제) & 중앙 정렬
 // ============================================================================
+
+// 1. 화면 렌더링 전 메모리(Data)를 강제로 문자열(String)로 변환
+if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isDataPatched) {
+    const originalRender = window.infRenderTable;
+    window.infRenderTable = function() {
+        
+        // 표를 그리기 전에 내부 데이터를 완전히 텍스트로 세탁합니다. (2.3.1 ~ 2.3.3 전체 적용)
+        if (window.infState && window.infState.data) {
+            for (let tab in window.infState.data) {
+                window.infState.data[tab].forEach(row => {
+                    ['자산번호', '신자산번호'].forEach(key => {
+                        if (row[key] !== undefined && row[key] !== null) {
+                            // 숫자를 텍스트로 바꾸고, 콤마와 공백을 완전히 제거하여 박제
+                            row[key] = String(row[key]).replace(/,/g, '').trim();
+                        }
+                    });
+                });
+            }
+        }
+
+        // 세탁된 텍스트 데이터로 원래 표 그리기 실행
+        originalRender.apply(this, arguments);
+        
+        // 렌더링 직후 DOM 중앙 정렬 함수 호출
+        cleanAssetNumbers(); 
+    };
+    window.infRenderTable.isDataPatched = true;
+}
+
+// 2. DOM 실시간 감시 카메라 및 중앙 정렬 적용
 const tableObserver = new MutationObserver((mutations) => {
     let shouldClean = false;
     for (let m of mutations) {
@@ -1236,33 +1266,33 @@ function cleanAssetNumbers() {
     let assetColIdxs = [];
     const headers = thead.querySelectorAll('tr:last-child th, tr:last-child td');
     headers.forEach((th, idx) => {
-        // '자산번호' 또는 '신자산번호' 열의 위치를 정확히 추적
+        // '자산번호' 열의 위치를 추적
         if (th.innerText.replace(/\s/g, '').includes('자산번호')) assetColIdxs.push(idx);
     });
 
     if (assetColIdxs.length === 0) return;
 
-    tableObserver.disconnect(); // 콤마 지울 때 무한루프 도는 것 방지
+    tableObserver.disconnect(); // 무한루프 방지
 
     tbody.querySelectorAll('tr').forEach(tr => {
         const cells = tr.querySelectorAll('td');
         assetColIdxs.forEach(idx => {
             if (cells[idx]) {
                 let text = cells[idx].innerText;
-                // 콤마가 발견되면 즉시 도려냄 (문자열 강제 박제)
+                // 혹시라도 남아있는 콤마 2차 제거 및 텍스트 가운데 정렬 적용
                 if (text.includes(',')) cells[idx].innerText = text.replace(/,/g, '');
-                cells[idx].style.textAlign = 'center'; // 가운데 정렬
+                cells[idx].style.textAlign = 'center'; 
             }
         });
     });
 
-    // 콤마 제거 완료 후 다시 감시 모드 돌입
+    // 정렬 완료 후 다시 감시 모드 돌입
     tableObserver.observe(tbody, { childList: true, subtree: true, characterData: true });
 }
 
-// 1초마다 감시 카메라 설치 여부 확인 및 [Delete] 안내 문구 강제 교체
+// 3. 1초마다 감시 카메라 설치 여부 확인 및 [Delete] 안내 문구 강제 교체
 setInterval(() => {
-    // A. 표 감시 카메라 설치
+    // A. 표 감시 카메라 설치 확인
     const tbody = document.querySelector('.infTbodyGlobal');
     if (tbody && !tbody.dataset.observed) {
         tableObserver.observe(tbody, { childList: true, subtree: true, characterData: true });
