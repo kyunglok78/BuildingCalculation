@@ -1280,7 +1280,74 @@ setInterval(() => {
 }, 1000);
 
 // ============================================================================
-// [16] 전역 클릭 이벤트 제어기 (화면 깜빡임 제거, 튕김 방지, 자동 연동)
+// [15] 자산번호 콤마 영구 삭제 & 중앙 정렬 (CCTV 철거 -> 렉 제로 후처리 방식)
+// ============================================================================
+if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isDataPatchedFast) {
+    const originalRender = window.infRenderTable;
+    window.infRenderTable = function() {
+        
+        // 1. 메모리 데이터 문자열 강제 변환 (과거 데이터와 100% 매칭되도록 공백 제거)
+        if (window.infState && window.infState.data) {
+            for (let tab in window.infState.data) {
+                window.infState.data[tab].forEach(row => {
+                    ['자산번호', '신자산번호'].forEach(key => {
+                        if (row[key] !== undefined && row[key] !== null) {
+                            row[key] = String(row[key]).replace(/,/g, '').trim();
+                        }
+                    });
+                });
+            }
+        }
+
+        // 2. 원래 표 그리기 실행
+        originalRender.apply(this, arguments);
+
+        // 3. 다 그려진 직후 딱 1번만 콤마를 제거하고 CSS로 중앙 정렬 (무한루프 원천 차단)
+        const thead = document.querySelector('.infTheadGlobal tr');
+        const tbody = document.querySelector('.infTbodyGlobal');
+        if (thead && tbody) {
+            let assetColIdxs = [];
+            thead.querySelectorAll('th, td').forEach((th, idx) => {
+                if (th.innerText.replace(/\s/g, '').includes('자산번호')) assetColIdxs.push(idx);
+            });
+
+            if (assetColIdxs.length > 0) {
+                // CSS 인젝션을 통한 번개같은 중앙 정렬 적용
+                let styleTag = document.getElementById('fast-align-style');
+                if (!styleTag) {
+                    styleTag = document.createElement('style');
+                    styleTag.id = 'fast-align-style';
+                    document.head.appendChild(styleTag);
+                }
+                let alignStyles = '';
+                assetColIdxs.forEach(idx => alignStyles += `.infTbodyGlobal tr td:nth-child(${idx + 1}) { text-align: center !important; } `);
+                styleTag.innerHTML = alignStyles;
+
+                // 콤마 텍스트 제거 (화면 당 딱 1번만 실행되어 렉 없음)
+                tbody.querySelectorAll('tr').forEach(tr => {
+                    const cells = tr.querySelectorAll('td');
+                    assetColIdxs.forEach(idx => {
+                        if (cells[idx] && cells[idx].innerText.includes(',')) {
+                            cells[idx].innerText = cells[idx].innerText.replace(/,/g, '');
+                        }
+                    });
+                });
+            }
+        }
+    };
+    window.infRenderTable.isDataPatchedFast = true;
+}
+
+// 4. [Delete] -> [Ctrl] + [-] 텍스트 실시간 강제 교체 (가벼운 주기 검사)
+setInterval(() => {
+    const step1Panel = document.getElementById('infStep1Panel');
+    if (step1Panel && step1Panel.innerHTML.includes('[Delete] 키로 지우시고')) {
+        step1Panel.innerHTML = step1Panel.innerHTML.replace(/\[Delete\] 키로 지우시고/g, "<b style='color:#dc3545;'>[Ctrl] + [-] (마이너스) 키</b>로 지우시고");
+    }
+}, 1000);
+
+// ============================================================================
+// [16] 전역 클릭 제어기 (열 매핑 렉 제로 CSS 인젝션 & 튕김 방지 & 자동연동)
 // ============================================================================
 document.addEventListener('click', function(e) {
     // 1. 평가제외 버튼 누르면 1만원 이하 로직 자동 실행
@@ -1289,9 +1356,54 @@ document.addEventListener('click', function(e) {
         setTimeout(() => { if(typeof window.excludeUnderTenThousand === 'function') window.excludeUnderTenThousand(true); }, 100);
     }
     
-    // (※ 기존에 있던 표 숨김(display='none') 깜빡임 코드는 완전히 삭제했습니다!)
+    // 2. 열(기둥) 매핑 시 기존의 무거운 로직을 죽이고, 가장 빠른 CSS 꼼수 사용
+    const cell = e.target.closest('.infTheadGlobal th, .infTheadGlobal td');
+    if (cell && window.infState && window.infState.wizard && window.infState.wizard.phase === 'mapping') {
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); // 기존 렉 유발 로직 완벽 차단
+
+        const targetName = window.infState.wizard.activeTarget;
+        if (!targetName) { alert('먼저 매핑할 버튼을 선택하세요.'); return; }
+
+        const tr = cell.closest('tr');
+        const colIndex = Array.from(tr.children).indexOf(cell);
+
+        // 상태 저장
+        if (!window.infState.wizard.mapped) window.infState.wizard.mapped = {};
+        window.infState.wizard.mapped[targetName] = colIndex;
+
+        // 기존 뱃지 제거 및 새 뱃지 삽입
+        document.querySelectorAll(`.badge-${targetName}`).forEach(el => el.remove());
+        cell.innerHTML += `<span class="badge-${targetName}" style="display:block; font-size:11px; color:white; background:#1C5691; border-radius:3px; margin-top:4px; padding:3px;">${targetName} ✓</span>`;
+
+        // CSS로 기둥 한 번에 색칠 (DOM 반복문 제거 -> 렉 제로)
+        let styleTag = document.getElementById('fast-mapping-style');
+        if (!styleTag) {
+            styleTag = document.createElement('style');
+            styleTag.id = 'fast-mapping-style';
+            document.head.appendChild(styleTag);
+        }
+        let newStyles = '';
+        for (const [name, idx] of Object.entries(window.infState.wizard.mapped)) {
+            newStyles += `.infTbodyGlobal tr td:nth-child(${idx + 1}) { background-color: #e6f2ff !important; } `;
+        }
+        styleTag.innerHTML = newStyles;
+
+        // 버튼 UI 갱신
+        const btn = Array.from(document.querySelectorAll('#infMappingButtons button')).find(b => b.innerText.trim() === targetName);
+        if (btn) {
+            btn.innerText = `${targetName} ✓`;
+            btn.style.cssText = 'background:#1C5691 !important; color:white !important; border:1px solid #1C5691 !important; font-weight:bold !important;';
+        }
+
+        // 대기 상태로 복귀
+        window.infState.wizard.activeTarget = ''; window.infState.wizard.phase = 'idle';
+        const finishBtn = document.getElementById('btnFinishMapping');
+        if (finishBtn) finishBtn.style.display = 'inline-block';
+        const textEl = document.getElementById('infWizardText');
+        if (textEl) textEl.innerHTML = '<span style="color:#28A745;">✅ 매핑되었습니다! 다른 버튼을 누르거나 [열 매핑 완료 ▶]를 진행하세요.</span>';
+    }
     
-    // 2. 매핑 해제 시 오류 방지 및 완벽 초기화 (하얀색 버튼 복구)
+    // 3. 매핑 해제 시 오류 방지 및 완벽 초기화
     const btnMap = e.target.closest('#infMappingButtons button');
     if (btnMap && btnMap.innerText.includes('✓')) {
         e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); // 화면 강제 튕김 100% 차단
@@ -1301,14 +1413,16 @@ document.addEventListener('click', function(e) {
             delete window.infState.wizard.mapped[targetName];
         }
         
-        document.querySelectorAll('.infTheadGlobal th, .infTheadGlobal td').forEach((c, colIndex) => {
-            const badge = c.querySelector('span');
-            if (badge && badge.innerText.includes(targetName)) {
-                badge.remove();
-                const table = c.closest('table');
-                if (table) table.querySelectorAll(`tr td:nth-child(${colIndex + 1})`).forEach(td => td.style.background = '');
+        // 뱃지 및 CSS 초기화
+        document.querySelectorAll(`.badge-${targetName}`).forEach(el => el.remove());
+        let styleTag = document.getElementById('fast-mapping-style');
+        if (styleTag && window.infState && window.infState.wizard && window.infState.wizard.mapped) {
+            let newStyles = '';
+            for (const [name, idx] of Object.entries(window.infState.wizard.mapped)) {
+                newStyles += `.infTbodyGlobal tr td:nth-child(${idx + 1}) { background-color: #e6f2ff !important; } `;
             }
-        });
+            styleTag.innerHTML = newStyles;
+        }
 
         btnMap.innerText = targetName; 
         btnMap.style.cssText = 'background: #ffffff !important; color: #333 !important; border: 1px solid #ccc !important; font-weight: normal !important; box-shadow: none !important; opacity: 1 !important; cursor: pointer;';
@@ -1327,8 +1441,8 @@ document.addEventListener('click', function(e) {
     }
 }, true);
 
-// 3. 시스템 멋대로 다음 단계 넘어가는 현상(Auto-Proceed) 원천 차단
-if (typeof window.infFinishMapping === 'function' && !window.infFinishMapping.isPatched) {
+// 4. 시스템 멋대로 다음 단계 넘어가는 현상(Auto-Proceed) 원천 차단
+if (typeof window.infFinishMapping === 'function' && !window.infFinishMapping.isPatchedFast) {
     const origFinish = window.infFinishMapping;
     window.infFinishMapping = function(force) {
         if (force === true) {
@@ -1343,7 +1457,7 @@ if (typeof window.infFinishMapping === 'function' && !window.infFinishMapping.is
             if (textEl) textEl.innerHTML = '<span style="color:#28A745;">✅ 매핑이 완료되었습니다! 우측의 [열 매핑 완료 ▶] 버튼을 직접 눌러야 다음으로 이동합니다.</span>';
         }
     };
-    window.infFinishMapping.isPatched = true;
+    window.infFinishMapping.isPatchedFast = true;
 }
 
 // ============================================================================
@@ -1352,23 +1466,18 @@ if (typeof window.infFinishMapping === 'function' && !window.infFinishMapping.is
 document.addEventListener('keydown', function(e) {
     if ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_' || e.code === 'Minus' || e.code === 'NumpadSubtract')) {
         e.preventDefault(); 
-        
         const activeTr = document.querySelector('.infTbodyGlobal tr:hover');
         if (!activeTr) return;
-
         const tbody = activeTr.closest('tbody');
         if (!tbody) return;
         
         const rowIndex = Array.from(tbody.children).indexOf(activeTr);
-
         if (!window.infState || !window.infState.data) return;
-
         let activeTab = window.infState.activeTab || Object.keys(window.infState.data)[0];
         if (!activeTab) return;
 
         const currentData = window.infState.data[activeTab];
         if (!currentData || !currentData[rowIndex]) return;
-        
         const targetObj = currentData[rowIndex];
 
         const cacheKeys = ['data', 'rawData', 'displayData', 'filteredData'];
@@ -1376,17 +1485,12 @@ document.addEventListener('keydown', function(e) {
             if (window.infState[key] && Array.isArray(window.infState[key][activeTab])) {
                 const arr = window.infState[key][activeTab];
                 const exactIdx = arr.indexOf(targetObj); 
-                if (exactIdx > -1) {
-                    arr.splice(exactIdx, 1); 
-                }
+                if (exactIdx > -1) arr.splice(exactIdx, 1); 
             }
         });
 
-        if (typeof window.infRenderTable === 'function') {
-            window.infRenderTable();
-        } else {
-            activeTr.remove(); 
-        }
+        if (typeof window.infRenderTable === 'function') window.infRenderTable();
+        else activeTr.remove(); 
     }
 });
 window.highlightEmptyRows = function() { alert("Ctrl + 마이너스(-) 단축키를 이용해 직접 즉시 삭제해주세요!"); };
@@ -1398,11 +1502,7 @@ window.bulkDeleteHighlightedRows = function() { alert("Ctrl + 마이너스(-) �
 document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
         const step2_1 = document.getElementById('step-2-1');
-        if (step2_1) {
-            step2_1.onclick = function() {
-                document.getElementById('pastDataModal').style.display = 'flex';
-            };
-        }
+        if (step2_1) step2_1.onclick = function() { document.getElementById('pastDataModal').style.display = 'flex'; };
     }, 1000);
 });
 
@@ -1421,9 +1521,7 @@ window.handlePastDataUpload = function(event, type) {
             try {
                 const projData = JSON.parse(e.target.result);
                 alert(`[프로젝트 파일 연동 시작]\n- 기준: ${matchKey}\n- 데이터 크기: ${Object.keys(projData).length}건\n\n(프로젝트 파싱 로직 실행 대기 중)`);
-            } catch(err) {
-                alert("프로젝트 파일을 읽는 중 오류가 발생했습니다.");
-            }
+            } catch(err) { alert("프로젝트 파일을 읽는 중 오류가 발생했습니다."); }
         };
         reader.readAsText(file);
     }
