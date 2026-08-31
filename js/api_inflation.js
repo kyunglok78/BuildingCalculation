@@ -224,13 +224,32 @@ window.infFinishMapping = function() {
                 const dateCol = mappedCols.find(mc => mc.name === '취득일');
                 let year = '';
                 if (dateCol && oldRow[dateCol.oldIdx] !== undefined) {
-                    const match = String(oldRow[dateCol.oldIdx]).match(/(19|20)\d{2}/);
-                    if (match) year = match[0];
+                    let rawDate = oldRow[dateCol.oldIdx];
+                    // 엑셀 날짜 일련번호(예: 34349)인 경우 연도로 환산
+                    if (typeof rawDate === 'number' && rawDate > 10000) {
+                        const dateObj = new Date(Math.round((rawDate - 25569) * 86400 * 1000));
+                        year = dateObj.getFullYear().toString();
+                    } else {
+                        const match = String(rawDate).match(/(19|20)\d{2}/);
+                        if (match) year = match[0];
+                    }
                 }
                 newRow[newIdx] = year;
             } else {
                 const mappedCol = mappedCols.find(mc => mc.name === colName);
-                newRow[newIdx] = (mappedCol && oldRow[mappedCol.oldIdx] !== undefined) ? oldRow[mappedCol.oldIdx] : '';
+                
+                // [신규 규칙 1] 소재지 매핑 누락 시 탭 이름(사업장명)으로 자동 채움
+                if (colName === '소재지' && !mappedCol) {
+                    newRow[newIdx] = window.infState.activeTab;
+                } 
+                // [신규 규칙 2] 국산/외산 매핑 누락 시 '국산'으로 자동 채움
+                else if (colName === '국산/외산' && !mappedCol) {
+                    newRow[newIdx] = '국산';
+                } 
+                // 그 외 정상 매핑 항목
+                else {
+                    newRow[newIdx] = (mappedCol && oldRow[mappedCol.oldIdx] !== undefined) ? oldRow[mappedCol.oldIdx] : '';
+                }
             }
         });
         return newRow;
@@ -239,7 +258,7 @@ window.infFinishMapping = function() {
     wiz.mapped = {};
     finalColumns.forEach((colName, idx) => { wiz.mapped[colName] = idx; });
 
-    // ★ [버그 수정 2] 남아있는 임시 하늘색 매핑 스타일 강제 삭제!
+    // 남아있는 임시 하늘색 매핑 스타일 강제 삭제 (렉 제로 클리너)
     const styleTag = document.getElementById('fast-mapping-style');
     if (styleTag) styleTag.remove();
 
@@ -1480,7 +1499,8 @@ window.applyInflationIndex = function() {
         let subRep = 0, totRep = 0;
 
         const getYearColIndex = (sheet, yearStr) => {
-            if (!sheet) return null;
+            // [핵심 방어] yearStr이 비어있으면 아예 검색하지 않음 (빈칸 검색 시 무조건 0번 인덱스 리턴되는 버그 차단)
+            if (!sheet || !yearStr || yearStr.trim() === '') return null; 
             for (let i = 0; i < Math.min(5, sheet.length); i++) {
                 const colIdx = sheet[i].findIndex(cell => String(cell).includes(yearStr));
                 if (colIdx !== -1) return { rowIdx: i, colIdx: colIdx };
@@ -1533,8 +1553,9 @@ window.applyInflationIndex = function() {
                 }
             }
 
-            if (indexValue !== "") {
-                row[inflationIdx] = isNaN(indexValue) ? indexValue : Number(indexValue).toFixed(4); 
+            // 정확한 숫자일 때만 인덱스 반영 처리
+            if (indexValue !== "" && !isNaN(Number(indexValue))) {
+                row[inflationIdx] = Number(indexValue).toFixed(4); 
                 row[replacementIdx] = isNaN(replacementCost) ? replacementCost : Math.round(replacementCost); 
                 
                 if (!isNaN(replacementCost)) {
@@ -1544,6 +1565,9 @@ window.applyInflationIndex = function() {
                 applyCount++;
             } else { 
                 missingCount++; 
+                // 못 찾은 경우 빈칸 유지
+                row[inflationIdx] = "";
+                row[replacementIdx] = "";
             }
         });
 
@@ -1832,7 +1856,6 @@ window.DEPR_REF_DATA = {
     }
 };
 
-// ★ 엑셀 데이터 뷰어 탭 전환 기능 (가로 폭 및 글씨 꺾임 처리 적용)
 window.switchDeprRefTab = function(tabIndex) {
     document.querySelectorAll('.ref-tab-btn').forEach((btn, idx) => {
         btn.className = (idx === tabIndex - 1) ? 'ref-tab-btn active' : 'ref-tab-btn';
@@ -1842,7 +1865,6 @@ window.switchDeprRefTab = function(tabIndex) {
     const tbody = document.getElementById('deprRefTbody');
     const data = window.DEPR_REF_DATA['sheet' + tabIndex];
     
-    // 탭을 바꿀 때마다 검색창 내용 초기화
     const searchInput = document.getElementById('deprRefSearchInput');
     if (searchInput) searchInput.value = '';
 
@@ -1859,7 +1881,6 @@ window.switchDeprRefTab = function(tabIndex) {
             const td = document.createElement('td');
             td.innerText = cell;
             
-            // ★ 3. 업종 감가율 탭일 경우 (글씨가 밀리지 않도록 자동 줄바꿈)
             if(tabIndex === 3) {
                 if(cellIdx > 2) {
                     td.style.textAlign = 'center';
@@ -1877,7 +1898,6 @@ window.switchDeprRefTab = function(tabIndex) {
     });
 };
 
-// ★ 실시간 검색(필터링) 기능
 window.filterDeprRefTable = function() {
     const searchInput = document.getElementById('deprRefSearchInput');
     if(!searchInput) return;
@@ -1948,7 +1968,6 @@ window.openDeprBatchModal = function() {
         `;
     });
 
-    // 팝업이 열릴 때 우측 엑셀 뷰어의 '1. 건물' 탭을 기본으로 띄워줌
     if(typeof window.switchDeprRefTab === 'function') {
         window.switchDeprRefTab(1);
     }
@@ -1965,8 +1984,8 @@ window.applyDeprBatch = function() {
     const yearIdx = wiz.mapped['취득년도'];
     
     const mappedColCount = Object.keys(wiz.mapped).length;
-    const finalIdx = mappedColCount + 4; // 최종 구분 열
-    const deprIdx = mappedColCount + 7;  // 감가율 열
+    const finalIdx = mappedColCount + 4; 
+    const deprIdx = mappedColCount + 7;  
 
     const inputMap = {};
     if (!window.infState.minResidualMap) window.infState.minResidualMap = {};
@@ -1989,12 +2008,11 @@ window.applyDeprBatch = function() {
         if (yearVal.includes('소계') || yearVal.includes('총계')) return;
 
         const acc = String(row[accIdx] || '').trim();
-        const finalVal = String(row[finalIdx] || '').trim(); // 최종 구분 확인
+        const finalVal = String(row[finalIdx] || '').trim(); 
 
         if (inputMap[acc] !== undefined && inputMap[acc] !== "") {
             const inputVal = inputMap[acc];
 
-            // 부보제외 또는 평가제외인 경우 감가율 강제 제외(-) 처리
             if (finalVal.includes('부보제외') || finalVal.includes('평가제외')) {
                 row[deprIdx] = '-';
             } 
@@ -2020,7 +2038,7 @@ window.applyCurrentValue = function() {
     const mappedColCount = Object.keys(wiz.mapped).length;
     const accIdx = wiz.mapped['자산계정'];
     const yearIdx = wiz.mapped['취득년도'];
-    const finalIdx = mappedColCount + 4; // 최종 구분 열
+    const finalIdx = mappedColCount + 4; 
     const replacementIdx = mappedColCount + 6; 
     const deprIdx = mappedColCount + 7;        
     const residualIdx = mappedColCount + 8;    
@@ -2046,11 +2064,10 @@ window.applyCurrentValue = function() {
         }
 
         const accVal = String(row[accIdx] || '').trim();
-        const finalVal = String(row[finalIdx] || '').trim(); // 최종 구분 확인
+        const finalVal = String(row[finalIdx] || '').trim(); 
         const repCostStr = String(row[replacementIdx] || '').replace(/,/g, '');
         const deprStr = String(row[deprIdx] || '').replace(/,/g, ''); 
         
-        // 부보제외거나 재조달가액이 없는 경우 강제 제외
         if (finalVal.includes('부보제외') || repCostStr === '-' || repCostStr === '') { 
             row[deprIdx] = '-'; 
             row[residualIdx] = '-'; 
@@ -2062,7 +2079,6 @@ window.applyCurrentValue = function() {
         const acqYear = parseInt(yearVal);
         const deprRate = Number(deprStr);
 
-        // 평가제외인 경우 강제 유지 (현재가액 = 재조달가액)
         if (finalVal.includes('평가제외')) {
             row[deprIdx] = '-';
             row[residualIdx] = '-';
@@ -2073,7 +2089,6 @@ window.applyCurrentValue = function() {
             return;
         }
         
-        // 메모리에 저장해둔 최종 잔가율(하한선) 가져오기 (없으면 0)
         const minResRate = (window.infState.minResidualMap && window.infState.minResidualMap[accVal] !== undefined) 
                             ? window.infState.minResidualMap[accVal] : 0;
 
