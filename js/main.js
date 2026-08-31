@@ -1365,13 +1365,15 @@ document.addEventListener('click', function(e) {
         if (!targetName) { alert('먼저 매핑할 버튼을 선택하세요.'); return; }
 
         const tr = cell.closest('tr');
-        const colIndex = Array.from(tr.children).indexOf(cell);
+        // [버그 수정 1] 행 번호(1번째 기둥)를 제외하여 실제 데이터 인덱스 매칭 (-1 처리)
+        const colIndex = Array.from(tr.children).indexOf(cell) - 1;
+        
+        if (colIndex < 0) return; // '행 번호' 열 자체를 클릭한 경우 무시
 
         // 상태 저장
         if (!window.infState.wizard.mapped) window.infState.wizard.mapped = {};
         window.infState.wizard.mapped[targetName] = colIndex;
 
-        // [버그 수정] 특수문자(/)가 들어간 이름으로 클래스를 생성/조회하면 CSS Syntax 에러가 발생하므로 안전한 이름으로 치환
         const safeTargetName = targetName.replace(/[^a-zA-Z0-9가-힣]/g, '');
 
         // 기존 뱃지 제거 및 새 뱃지 삽입
@@ -1387,7 +1389,8 @@ document.addEventListener('click', function(e) {
         }
         let newStyles = '';
         for (const [name, idx] of Object.entries(window.infState.wizard.mapped)) {
-            newStyles += `.infTbodyGlobal tr td:nth-child(${idx + 1}) { background-color: #e6f2ff !important; } `;
+            // [버그 수정 연동] CSS nth-child는 1부터 시작 + 행 번호 기둥 1개 포함이므로 idx + 2
+            newStyles += `.infTbodyGlobal tr td:nth-child(${idx + 2}) { background-color: #e6f2ff !important; } `;
         }
         styleTag.innerHTML = newStyles;
 
@@ -1403,7 +1406,6 @@ document.addEventListener('click', function(e) {
         window.infState.wizard.activeTarget = unmapped || ''; 
 
         if (window.infState.wizard.activeTarget) {
-            // 다음 타겟 버튼에 활성화 스타일(파란색) 적용
             const nextBtn = Array.from(document.querySelectorAll('#infMappingButtons button')).find(b => b.innerText.trim() === window.infState.wizard.activeTarget);
             if (nextBtn) {
                 nextBtn.style.cssText = 'background:#1C5691 !important; color:white !important; border:2px solid #1C5691 !important; font-weight:bold !important; box-shadow:0 0 8px rgba(28,86,145,0.4);';
@@ -1433,7 +1435,6 @@ document.addEventListener('click', function(e) {
             delete window.infState.wizard.mapped[targetName];
         }
         
-        // [버그 수정] 매핑 해제 시에도 안전한 클래스명으로 뱃지 제거
         const safeTargetName = targetName.replace(/[^a-zA-Z0-9가-힣]/g, '');
         document.querySelectorAll(`.badge-${safeTargetName}`).forEach(el => el.remove());
         
@@ -1441,14 +1442,14 @@ document.addEventListener('click', function(e) {
         if (styleTag && window.infState && window.infState.wizard && window.infState.wizard.mapped) {
             let newStyles = '';
             for (const [name, idx] of Object.entries(window.infState.wizard.mapped)) {
-                newStyles += `.infTbodyGlobal tr td:nth-child(${idx + 1}) { background-color: #e6f2ff !important; } `;
+                // [버그 수정 연동] 해제 시 다시 그릴 때도 idx + 2
+                newStyles += `.infTbodyGlobal tr td:nth-child(${idx + 2}) { background-color: #e6f2ff !important; } `;
             }
             styleTag.innerHTML = newStyles;
         }
 
         btnMap.innerText = targetName; 
         
-        // 버튼 전체 초기화 후 취소한 대상을 강제 타겟팅
         document.querySelectorAll('#infMappingButtons button').forEach(b => {
             if (!b.innerText.includes('✓')) b.style.cssText = 'background: #ffffff !important; color: #333 !important; border: 1px solid #ccc !important; opacity: 1 !important; cursor: pointer;';
         });

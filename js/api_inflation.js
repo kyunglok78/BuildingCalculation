@@ -239,15 +239,17 @@ window.infFinishMapping = function() {
     wiz.mapped = {};
     finalColumns.forEach((colName, idx) => { wiz.mapped[colName] = idx; });
 
-    // ★ [핵심] 다른 탭으로 자동 찢어주는 로직 완전 삭제. 
-    // 오직 사용자가 현재 작업 중인 탭에만 데이터를 독점 저장합니다.
+    // ★ [버그 수정 2] 남아있는 임시 하늘색 매핑 스타일 강제 삭제!
+    const styleTag = document.getElementById('fast-mapping-style');
+    if (styleTag) styleTag.remove();
+
     tData.raw = mappedRaw;
     alert(`✅ [${window.infState.activeTab}] 엑셀 데이터 매핑 완료!`);
     
     wiz.phase = 'row-delete';
     wiz.activeTarget = '';
     
-    document.getElementById('infWizardText').innerHTML = `🧹 1.5단계: 불필요한 행(빈 줄, 합계 등)을 선택 후 <b>[Delete]</b> 키로 지우시고, <b>우측 하단의 '부분합 및 정렬' 버튼</b>을 눌러주세요.`;
+    document.getElementById('infWizardText').innerHTML = `🧹 1.5단계: 불필요한 행(빈 줄, 합계 등)을 선택 후 <b>[Ctrl] + [-]</b> 키로 지우시고, <b>우측 하단의 '부분합 및 정렬' 버튼</b>을 눌러주세요.`;
     document.getElementById('btnFinishMapping').style.display = 'none';
     document.getElementById('infMappingButtons').style.display = 'none';
     
@@ -263,6 +265,7 @@ window.infFinishMapping = function() {
     tData.selectedRows.clear();
     if(typeof infRenderTable === 'function') infRenderTable();
 };
+
 
 // ============================================================================
 // [섹션 4] 상태 표시/스텝 전환 및 테이블 렌더링 엔진 (다중 화면 연동)
