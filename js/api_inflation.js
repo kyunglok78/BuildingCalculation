@@ -1127,7 +1127,8 @@ window.infLoadPastData = function(event) {
                 const workbook = XLSX.read(data, {type: 'array'});
                 workbook.SheetNames.forEach(sheetName => {
                     const sheet = workbook.Sheets[sheetName];
-                    const sheetJson = XLSX.utils.sheet_to_json(sheet, {defval: ""});
+                    // header: 1 옵션을 사용하여 데이터를 표 형태(2차원 배열)로 강제 로드
+                    const sheetJson = XLSX.utils.sheet_to_json(sheet, {header: 1, defval: ""});
                     if (sheetJson.length > 0) {
                         window.tempPastParsed[sheetName] = sheetJson;
                     }
@@ -1149,7 +1150,7 @@ window.infLoadPastData = function(event) {
     event.target.value = '';
 };
 
-// 3. 마법사 팝업창 제어
+// 3. 마법사 팝업창 제어 및 동적 헤더 생성
 window.openSmartPastModal = function() {
     const sheets = Object.keys(window.tempPastParsed);
     const sheetSelect = document.getElementById('smartPastSheet');
@@ -1163,25 +1164,58 @@ window.openSmartPastModal = function() {
 window.updateSmartPastHeaders = function() {
     const sheet = document.getElementById('smartPastSheet').value;
     const data = window.tempPastParsed[sheet] || [];
-    const headers = data.length > 0 ? Object.keys(data[0]) : [];
     
     const assetSelect = document.getElementById('smartPastAssetCol');
     const valSelect = document.getElementById('smartPastValCol');
     
     assetSelect.innerHTML = '';
     valSelect.innerHTML = '';
-    
-    headers.forEach(h => {
-        assetSelect.innerHTML += `<option value="${h}">${h}</option>`;
-        valSelect.innerHTML += `<option value="${h}">${h}</option>`;
-    });
 
-    // 지능형 자동 매칭 (자산번호, 구분/지수)
-    const assetAuto = headers.find(h => String(h).includes('자산번호') || String(h).includes('자산코드'));
-    if (assetAuto) assetSelect.value = assetAuto;
-    
-    const valAuto = headers.find(h => String(h).includes('물가지수') || String(h).includes('과거') || String(h).includes('최종') || String(h).includes('구분'));
-    if (valAuto) valSelect.value = valAuto;
+    // 엑셀은 2차원 배열, kbproj는 Object 배열 형태이므로 이를 구분
+    const isArrayOfArrays = data.length > 0 && Array.isArray(data[0]);
+
+    if (isArrayOfArrays) {
+        // [엑셀의 경우] A, B, C... 알파벳으로 열 표시
+        let maxCols = 0;
+        data.forEach(r => { if(r.length > maxCols) maxCols = r.length; });
+        
+        for(let i=0; i<maxCols; i++) {
+            let letter = String.fromCharCode(65 + (i % 26));
+            if (i >= 26) letter = String.fromCharCode(64 + Math.floor(i / 26)) + letter;
+            const optionHtml = `<option value="${i}">${letter} 열</option>`;
+            assetSelect.innerHTML += optionHtml;
+            valSelect.innerHTML += optionHtml;
+        }
+
+        // 지능형 자동 매칭 (엑셀 표 상단 1~10행을 스캔하여 키워드 탐색)
+        let foundAssetCol = -1, foundValCol = -1;
+        for(let r=0; r<Math.min(10, data.length); r++) {
+            for(let c=0; c<data[r].length; c++) {
+                const cellStr = String(data[r][c]).replace(/\s/g,'');
+                if(foundAssetCol === -1 && (cellStr.includes('자산번호') || cellStr.includes('자산코드'))) foundAssetCol = c;
+                if(foundValCol === -1 && (cellStr.includes('최종구분') || cellStr.includes('과거구분') || cellStr.includes('평가결과') || cellStr.includes('물가지수'))) foundValCol = c;
+            }
+        }
+        if(foundAssetCol !== -1) assetSelect.value = foundAssetCol;
+        if(foundValCol !== -1) valSelect.value = foundValCol;
+
+    } else {
+        // [kbproj의 경우] 데이터의 key값(자산번호, 최종선택 등)으로 표시
+        const headers = data.length > 0 ? Object.keys(data[0]) : [];
+        headers.forEach(h => {
+            const optionHtml = `<option value="${h}">${h}</option>`;
+            assetSelect.innerHTML += optionHtml;
+            valSelect.innerHTML += optionHtml;
+        });
+
+        // 지능형 자동 매칭 (.kbproj 용)
+        const assetAuto = headers.find(h => String(h).includes('자산번호'));
+        if (assetAuto) assetSelect.value = assetAuto;
+        
+        // kbproj는 이전에 평가했던 '최종선택' 또는 '과거구분' 열을 기본값으로 추천
+        const valAuto = headers.find(h => String(h).includes('최종선택') || String(h).includes('과거구분'));
+        if (valAuto) valSelect.value = valAuto;
+    }
 };
 
 // 4. 최종 연동 적용
@@ -1205,6 +1239,7 @@ window.applySmartPastMapping = function() {
     // 빠른 검색을 위한 과거 데이터 Map 생성
     const pastMap = {};
     pastData.forEach(row => {
+        // array의 경우 assetCol이 "0", "1" 등 숫자 문자열이므로 배열에서도 정상 조회됨
         const aNum = String(row[assetCol] || '').trim();
         if (aNum) pastMap[aNum] = String(row[valCol] || '').trim();
     });
@@ -1229,7 +1264,7 @@ window.applySmartPastMapping = function() {
 
     document.getElementById('smartPastModal').style.display = 'none';
     if(typeof window.infRenderTable === 'function') window.infRenderTable();
-    alert(`✅ 스마트 과거 데이터 연동 완료!\n선택하신 '${valCol}' 값이 총 ${matchCount}건 매칭되었습니다.`);
+    alert(`✅ 스마트 과거 데이터 연동 완료!\n선택하신 열의 데이터가 총 ${matchCount}건 매칭되었습니다.`);
 };
 
 // ============================================================================
