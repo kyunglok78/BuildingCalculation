@@ -134,29 +134,58 @@ document.addEventListener("DOMContentLoaded", () => {
 window.infLoadExcel = function(event) {
     const file = event.target.files[0];
     if(!file) return;
-    const tabName = window.infState.activeTab;
     
+    // ★ 탭 이름 2중 방어: 로드시 탭이 활성화되지 않았다면 강제 초기화
+    let tabName = window.infState.activeTab;
+    if (!tabName) {
+        if (typeof window.infInitTabs === 'function') window.infInitTabs();
+        tabName = window.infState.activeTab || '기본 사업장';
+    }
+
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
-            const jsonData = XLSX.utils.sheet_to_json(XLSX.read(new Uint8Array(e.target.result), {type: 'array'}).Sheets[XLSX.read(new Uint8Array(e.target.result), {type: 'array'}).SheetNames[0]], {header: 1, defval: ""});
-            if(jsonData.length === 0) return alert("엑셀 파일이 비어있습니다.");
+            // ★ 버그 픽스 1: 엑셀 파일 이중 파싱 오류 해결 (안전한 단일 파싱)
+            const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
+            const sheetName = workbook.SheetNames[0];
+            const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {header: 1, defval: ""});
+            
+            if(!jsonData || jsonData.length === 0) return alert("엑셀 파일이 비어있습니다.");
+            
+            // ★ 버그 픽스 2: 데이터 컨테이너 부재 시 강제 생성
+            if (!window.infState.data[tabName]) {
+                window.infState.data[tabName] = { raw: [], history: [], selectedRows: new Set(), selectedCols: new Set(), hasSubtotal: false, step: 1 };
+            }
             
             window.infState.data[tabName].raw = jsonData;
             window.infState.data[tabName].history = [];
             window.infState.data[tabName].hasSubtotal = false;
             window.infState.wizard.phase = 'idle';
             
-            document.getElementById('infWizardArea').style.display = 'flex';
-            document.getElementById('btnStartWizard').style.display = 'inline-block';
-            document.getElementById('btnFinishMapping').style.display = 'none';
-            document.getElementById('infMappingButtons').style.display = 'none';
-            document.getElementById('infWizardText').innerHTML = `🎯 [${tabName}] 원본 데이터를 불러왔습니다. 우측의 <b>'열 매핑 마법사 시작'</b>을 눌러주세요.`;
+            const wizArea = document.getElementById('infWizardArea');
+            if(wizArea) wizArea.style.display = 'flex';
+            
+            const btnStart = document.getElementById('btnStartWizard');
+            if(btnStart) btnStart.style.display = 'inline-block';
+            
+            const btnFinish = document.getElementById('btnFinishMapping');
+            if(btnFinish) btnFinish.style.display = 'none';
+            
+            const mapBtns = document.getElementById('infMappingButtons');
+            if(mapBtns) mapBtns.style.display = 'none';
+            
+            const wizText = document.getElementById('infWizardText');
+            if(wizText) wizText.innerHTML = `🎯 [<b>${tabName}</b>] 원본 데이터를 불러왔습니다. 우측의 <b>'열 매핑 마법사 시작'</b>을 눌러주세요.`;
+            
             const btnNext = document.getElementById('btnInfNextStep');
             if(btnNext) btnNext.style.display = 'none';
             
-            if(typeof infRenderTable === 'function') infRenderTable();
-        } catch(err) { alert("엑셀 로드 오류: " + err); }
+            // 글로벌 스코프 명시 호출
+            if(typeof window.infRenderTable === 'function') window.infRenderTable();
+        } catch(err) { 
+            console.error(err);
+            alert("엑셀 파싱 오류가 발생했습니다.\n양식을 확인해주세요. 에러내용: " + err.message); 
+        }
     };
     reader.readAsArrayBuffer(file);
     event.target.value = '';
@@ -174,13 +203,13 @@ window.infStartWizard = function() {
     document.getElementById('infMappingButtons').style.display = 'flex';
     document.getElementById('infWizardText').innerHTML = `🎯 아래 버튼 중 하나를 선택하고, 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭하세요. (없는 항목은 무시하세요)`;
     
-    if(typeof infUpdateWizardUI === 'function') infUpdateWizardUI();
-    if(typeof infRenderTable === 'function') infRenderTable();
+    if(typeof window.infUpdateWizardUI === 'function') window.infUpdateWizardUI();
+    if(typeof window.infRenderTable === 'function') window.infRenderTable();
 };
 
 window.infSetMappingTarget = function(colName) {
     window.infState.wizard.activeTarget = colName;
-    if(typeof infUpdateWizardUI === 'function') infUpdateWizardUI();
+    if(typeof window.infUpdateWizardUI === 'function') window.infUpdateWizardUI();
 };
 
 window.infUpdateWizardUI = function() {
@@ -256,7 +285,7 @@ window.infFinishMapping = function() {
     
     tData.selectedCols.clear();
     tData.selectedRows.clear();
-    if(typeof infRenderTable === 'function') infRenderTable();
+    if(typeof window.infRenderTable === 'function') window.infRenderTable();
 };
 
 // ============================================================================
@@ -426,6 +455,11 @@ window.infHandleInputKey = function(e, rIdx, cIdx) {
 
 window.infRenderTable = function() {
     const wiz = window.infState.wizard;
+    
+    // activeTab 방어
+    if (!window.infState.activeTab && window.infState.tabs.length > 0) {
+        window.infState.activeTab = window.infState.tabs[0];
+    }
     const tData = window.infState.data[window.infState.activeTab];
 
     let currentSection = window.infState.step || 1; 
@@ -435,12 +469,12 @@ window.infRenderTable = function() {
     
     window.infState.step = currentSection;
 
-    if (window.infState.activeTab && window.infState.data[window.infState.activeTab]) {
-        window.infState.data[window.infState.activeTab].step = currentSection;
+    if (tData) {
+        tData.step = currentSection;
     }
 
-    window.infUpdateStatusBadges();
-    window.infUpdateStepper();
+    if(typeof window.infUpdateStatusBadges === 'function') window.infUpdateStatusBadges();
+    if(typeof window.infUpdateStepper === 'function') window.infUpdateStepper();
 
     const theads = document.querySelectorAll('.infTheadGlobal');
     const tbodys = document.querySelectorAll('.infTbodyGlobal');
@@ -475,53 +509,18 @@ window.infRenderTable = function() {
 
     const data = tData.raw;
     const finalColumns = ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득일', '취득년도', '취득가액'];
-    
     const isMappedPhase = (wiz.phase !== 'mapping' && wiz.phase !== 'idle'); 
 
-    if (currentSection === 1) {
-        if (tData.hasSubtotal) {
-            if(wizText) wizText.innerHTML = `✅ [<b>${window.infState.activeTab}</b>] 명세서 정제 및 부분합 처리가 완료되었습니다. 다음 단계로 이동해 주세요.`;
-            if(btnStart) btnStart.style.display = 'none';
-            if(btnFinish) btnFinish.style.display = 'none';
-            if(mapBtns) mapBtns.style.display = 'none';
-            if(btnNext) {
-                btnNext.style.display = 'inline-block';
-                btnNext.innerHTML = '명세서 검증 완료 및 2.3.2(자산구분)로 전환 ▶';
-                btnNext.style.backgroundColor = '#17A2B8';
-                if(typeof window.infProceedToStep2 === 'function') btnNext.onclick = window.infProceedToStep2;
-            }
-        } else if (isMappedPhase) {
-            if(wizText) wizText.innerHTML = `🧹 1.5단계: 불필요한 행(빈 줄, 합계 등)을 선택 후 <b>[Delete]</b> 키로 지우시고, <b>'부분합 및 정렬'</b> 버튼을 눌러주세요.`;
-            if(btnStart) btnStart.style.display = 'none';
-            if(btnFinish) btnFinish.style.display = 'none';
-            if(mapBtns) mapBtns.style.display = 'none';
-            if(btnNext) {
-                btnNext.style.display = 'inline-block';
-                btnNext.innerHTML = '<i class="fa-solid fa-layer-group"></i> 부분합 및 정렬 ➔ 2.3.2로 이동';
-                btnNext.style.backgroundColor = '#6f42c1'; 
-                btnNext.onclick = () => window.infCalculateSubtotals(false); 
-            }
-            wiz.phase = 'row-delete'; 
-        } else {
-            if (wiz.phase === 'mapping') {
-                if(wizText && !wizText.innerHTML.includes('완료! 다음은')) {
-                    wizText.innerHTML = `🎯 아래 버튼 중 하나를 선택하고, 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭하세요. (없는 항목은 무시하세요)`;
-                }
-                if(btnStart) btnStart.style.display = 'none';
-                if(btnFinish) btnFinish.style.display = 'inline-block';
-                if(mapBtns) mapBtns.style.display = 'flex';
-                if(btnNext) btnNext.style.display = 'none';
-            } else {
-                if(wizText) wizText.innerHTML = `🎯 [<b>${window.infState.activeTab}</b>] 원본 데이터를 불러왔습니다. 우측의 <b>'열 매핑 마법사 시작'</b>을 눌러주세요.`;
-                if(btnStart) btnStart.style.display = 'inline-block';
-                if(btnFinish) btnFinish.style.display = 'none';
-                if(mapBtns) mapBtns.style.display = 'none';
-                if(btnNext) btnNext.style.display = 'none';
-            }
+    // ★ 버그 픽스 3: 데이터 첫 줄이 비어있어도 화면이 멈추지 않도록 안전하게 열 개수(colCount) 파악
+    let maxCols = 0;
+    if (!isMappedPhase) {
+        for (let r = 0; r < Math.min(data.length, 50); r++) {
+            if (data[r] && data[r].length > maxCols) maxCols = data[r].length;
         }
+        if (maxCols === 0) maxCols = 15; // 기본 폭
     }
+    const colCount = (!isMappedPhase) ? maxCols : finalColumns.length;
 
-    const colCount = (!isMappedPhase) ? data[0].length : finalColumns.length;
     const headerTr = document.createElement('tr');
     
     let foldHtml = '';
@@ -2323,6 +2322,8 @@ window.filterInfTable = function() {
 if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isDataPatchedFast) {
     const originalRender = window.infRenderTable;
     window.infRenderTable = function() {
+        
+        // 1. 메모리 데이터 문자열 강제 변환
         if (window.infState && window.infState.data) {
             for (let tab in window.infState.data) {
                 window.infState.data[tab].forEach(row => {
@@ -2334,10 +2335,14 @@ if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isData
                 });
             }
         }
+
+        // 2. 원래 표 그리기 실행
         originalRender.apply(this, arguments);
 
-        const thead = document.querySelector('.infTheadGlobal tr');
-        const tbody = document.querySelector('.infTbodyGlobal');
+        // ★ 버그 픽스 4: 현재 화면에 활성화된(active) 섹션의 테이블만 정조준
+        const thead = document.querySelector('.page-section.active .infTheadGlobal tr') || document.querySelector('.infTheadGlobal tr');
+        const tbody = document.querySelector('.page-section.active .infTbodyGlobal') || document.querySelector('.infTbodyGlobal');
+        
         if (thead && tbody) {
             let assetColIdxs = [];
             thead.querySelectorAll('th, td').forEach((th, idx) => {
