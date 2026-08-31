@@ -1388,19 +1388,36 @@ document.addEventListener('click', function(e) {
         }
         styleTag.innerHTML = newStyles;
 
-        // 버튼 UI 갱신
+        // 버튼 UI 갱신 (현재 매핑 완료된 버튼 상태 변경)
         const btn = Array.from(document.querySelectorAll('#infMappingButtons button')).find(b => b.innerText.trim() === targetName);
         if (btn) {
             btn.innerText = `${targetName} ✓`;
-            btn.style.cssText = 'background:#1C5691 !important; color:white !important; border:1px solid #1C5691 !important; font-weight:bold !important;';
+            btn.style.cssText = 'background:#e2e8f0 !important; color:#64748b !important; border:2px solid #cbd5e1 !important;'; 
         }
 
-        // 대기 상태로 복귀
-        window.infState.wizard.activeTarget = ''; window.infState.wizard.phase = 'idle';
+        // [수정] 대기 상태로 빠지지 않고 다음 매핑 대상 자동 탐색 및 활성화
+        const unmapped = window.infState.wizard.columns.find(col => window.infState.wizard.mapped[col] === undefined);
+        window.infState.wizard.activeTarget = unmapped || ''; 
+
+        if (window.infState.wizard.activeTarget) {
+            // 다음 타겟 버튼에 활성화 스타일(파란색) 적용
+            const nextBtn = Array.from(document.querySelectorAll('#infMappingButtons button')).find(b => b.innerText.trim() === window.infState.wizard.activeTarget);
+            if (nextBtn) {
+                nextBtn.style.cssText = 'background:#1C5691 !important; color:white !important; border:2px solid #1C5691 !important; font-weight:bold !important; box-shadow:0 0 8px rgba(28,86,145,0.4);';
+            }
+        }
+
         const finishBtn = document.getElementById('btnFinishMapping');
         if (finishBtn) finishBtn.style.display = 'inline-block';
+        
         const textEl = document.getElementById('infWizardText');
-        if (textEl) textEl.innerHTML = '<span style="color:#28A745;">✅ 매핑되었습니다! 다른 버튼을 누르거나 [열 매핑 완료 ▶]를 진행하세요.</span>';
+        if (textEl) {
+            if (window.infState.wizard.activeTarget) {
+                textEl.innerHTML = `<span style="color:#28A745;">✅ [${targetName}] 매핑 완료! 이어서 <b>[${window.infState.wizard.activeTarget}]</b> 열의 상단을 클릭해 매칭하세요.</span>`;
+            } else {
+                textEl.innerHTML = '<span style="color:#28A745;">✅ 모든 항목 매핑이 완료되었습니다! 우측의 [열 매핑 완료 ▶] 버튼을 눌러주세요.</span>';
+            }
+        }
     }
     
     // 3. 매핑 해제 시 오류 방지 및 완벽 초기화
@@ -1425,19 +1442,24 @@ document.addEventListener('click', function(e) {
         }
 
         btnMap.innerText = targetName; 
-        btnMap.style.cssText = 'background: #ffffff !important; color: #333 !important; border: 1px solid #ccc !important; font-weight: normal !important; box-shadow: none !important; opacity: 1 !important; cursor: pointer;';
         
+        // 버튼 전체 초기화 후 취소한 대상을 강제 타겟팅
         document.querySelectorAll('#infMappingButtons button').forEach(b => {
             if (!b.innerText.includes('✓')) b.style.cssText = 'background: #ffffff !important; color: #333 !important; border: 1px solid #ccc !important; opacity: 1 !important; cursor: pointer;';
         });
 
+        // [수정] 해제한 버튼을 다시 활성화 타겟으로 지정하고 mapping 상태 유지
         if (window.infState && window.infState.wizard) {
-            window.infState.wizard.activeTarget = ''; window.infState.wizard.phase = 'idle'; 
+            window.infState.wizard.activeTarget = targetName;
+            window.infState.wizard.phase = 'mapping'; 
+            btnMap.style.cssText = 'background:#1C5691 !important; color:white !important; border:2px solid #1C5691 !important; font-weight:bold !important; box-shadow:0 0 8px rgba(28,86,145,0.4);';
         }
+        
         const finishBtn = document.getElementById('btnFinishMapping');
         if (finishBtn) finishBtn.style.display = 'none';
+        
         const textEl = document.getElementById('infWizardText');
-        if (textEl) textEl.innerHTML = '🎯 아래 버튼 중 하나를 선택하고, 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭해 매칭하세요!';
+        if (textEl) textEl.innerHTML = `🎯 <b>[${targetName}]</b> 항목 매핑이 해제되었습니다. 엑셀 열 상단을 다시 클릭해 매칭하세요!`;
     }
 }, true);
 
@@ -1459,7 +1481,6 @@ if (typeof window.infFinishMapping === 'function' && !window.infFinishMapping.is
     };
     window.infFinishMapping.isPatchedFast = true;
 }
-
 // ============================================================================
 // [17] 초간단 명세서 행 즉시 삭제 (Ctrl + 마이너스)
 // ============================================================================
