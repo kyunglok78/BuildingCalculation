@@ -1359,7 +1359,7 @@ document.addEventListener('click', function(e) {
     // 2. 열(기둥) 매핑 시 기존의 무거운 로직을 죽이고, 가장 빠른 CSS 꼼수 사용
     const cell = e.target.closest('.infTheadGlobal th, .infTheadGlobal td');
     if (cell && window.infState && window.infState.wizard && window.infState.wizard.phase === 'mapping') {
-        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); // 기존 렉 유발 로직 완벽 차단
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
 
         const targetName = window.infState.wizard.activeTarget;
         if (!targetName) { alert('먼저 매핑할 버튼을 선택하세요.'); return; }
@@ -1371,11 +1371,14 @@ document.addEventListener('click', function(e) {
         if (!window.infState.wizard.mapped) window.infState.wizard.mapped = {};
         window.infState.wizard.mapped[targetName] = colIndex;
 
-        // 기존 뱃지 제거 및 새 뱃지 삽입
-        document.querySelectorAll(`.badge-${targetName}`).forEach(el => el.remove());
-        cell.innerHTML += `<span class="badge-${targetName}" style="display:block; font-size:11px; color:white; background:#1C5691; border-radius:3px; margin-top:4px; padding:3px;">${targetName} ✓</span>`;
+        // [버그 수정] 특수문자(/)가 들어간 이름으로 클래스를 생성/조회하면 CSS Syntax 에러가 발생하므로 안전한 이름으로 치환
+        const safeTargetName = targetName.replace(/[^a-zA-Z0-9가-힣]/g, '');
 
-        // CSS로 기둥 한 번에 색칠 (DOM 반복문 제거 -> 렉 제로)
+        // 기존 뱃지 제거 및 새 뱃지 삽입
+        document.querySelectorAll(`.badge-${safeTargetName}`).forEach(el => el.remove());
+        cell.innerHTML += `<span class="badge-${safeTargetName}" style="display:block; font-size:11px; color:white; background:#1C5691; border-radius:3px; margin-top:4px; padding:3px;">${targetName} ✓</span>`;
+
+        // CSS로 기둥 한 번에 색칠
         let styleTag = document.getElementById('fast-mapping-style');
         if (!styleTag) {
             styleTag = document.createElement('style');
@@ -1395,7 +1398,7 @@ document.addEventListener('click', function(e) {
             btn.style.cssText = 'background:#e2e8f0 !important; color:#64748b !important; border:2px solid #cbd5e1 !important;'; 
         }
 
-        // [수정] 대기 상태로 빠지지 않고 다음 매핑 대상 자동 탐색 및 활성화
+        // 다음 매핑 대상 자동 탐색 및 활성화
         const unmapped = window.infState.wizard.columns.find(col => window.infState.wizard.mapped[col] === undefined);
         window.infState.wizard.activeTarget = unmapped || ''; 
 
@@ -1423,15 +1426,17 @@ document.addEventListener('click', function(e) {
     // 3. 매핑 해제 시 오류 방지 및 완벽 초기화
     const btnMap = e.target.closest('#infMappingButtons button');
     if (btnMap && btnMap.innerText.includes('✓')) {
-        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); // 화면 강제 튕김 100% 차단
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
 
         const targetName = btnMap.innerText.replace('✓', '').trim();
         if (window.infState && window.infState.wizard && window.infState.wizard.mapped) {
             delete window.infState.wizard.mapped[targetName];
         }
         
-        // 뱃지 및 CSS 초기화
-        document.querySelectorAll(`.badge-${targetName}`).forEach(el => el.remove());
+        // [버그 수정] 매핑 해제 시에도 안전한 클래스명으로 뱃지 제거
+        const safeTargetName = targetName.replace(/[^a-zA-Z0-9가-힣]/g, '');
+        document.querySelectorAll(`.badge-${safeTargetName}`).forEach(el => el.remove());
+        
         let styleTag = document.getElementById('fast-mapping-style');
         if (styleTag && window.infState && window.infState.wizard && window.infState.wizard.mapped) {
             let newStyles = '';
@@ -1448,7 +1453,6 @@ document.addEventListener('click', function(e) {
             if (!b.innerText.includes('✓')) b.style.cssText = 'background: #ffffff !important; color: #333 !important; border: 1px solid #ccc !important; opacity: 1 !important; cursor: pointer;';
         });
 
-        // [수정] 해제한 버튼을 다시 활성화 타겟으로 지정하고 mapping 상태 유지
         if (window.infState && window.infState.wizard) {
             window.infState.wizard.activeTarget = targetName;
             window.infState.wizard.phase = 'mapping'; 
@@ -1481,6 +1485,7 @@ if (typeof window.infFinishMapping === 'function' && !window.infFinishMapping.is
     };
     window.infFinishMapping.isPatchedFast = true;
 }
+
 // ============================================================================
 // [17] 초간단 명세서 행 즉시 삭제 (Ctrl + 마이너스)
 // ============================================================================
