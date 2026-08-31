@@ -61,7 +61,6 @@ window.infInitTabs = function() {
     if(tabContainers.length === 0) return;
     
     tabContainers.forEach((container, cIdx) => {
-        // 혹시 남아있을 수 있는 스위치 UI 찌꺼기 제거
         const parentId = container.parentElement.id || ('sec_' + cIdx);
         const oldProgDiv = document.getElementById('progModeContainer_' + parentId);
         if(oldProgDiv) oldProgDiv.remove();
@@ -70,7 +69,6 @@ window.infInitTabs = function() {
         
         window.infState.tabs.forEach((tabName, idx) => {
             if(!window.infState.data[tabName]) {
-                // ★ 각 탭마다 현재 단계를 기억할 변수(step) 추가
                 window.infState.data[tabName] = { raw: [], history: [], selectedRows: new Set(), selectedCols: new Set(), hasSubtotal: false, step: 1 };
             }
             
@@ -93,7 +91,6 @@ window.infInitTabs = function() {
 
                 window.infState.activeTab = tabName;
                 
-                // ★ 탭을 누르면, 해당 탭이 저장해둔 단계로 화면 강제 이동 (완벽 독립 진행)
                 const targetStep = window.infState.data[tabName].step || 1;
                 if (window.infState.step !== targetStep) {
                     if (typeof switchSection === 'function') switchSection('sec-2-3-' + targetStep);
@@ -239,8 +236,6 @@ window.infFinishMapping = function() {
     wiz.mapped = {};
     finalColumns.forEach((colName, idx) => { wiz.mapped[colName] = idx; });
 
-    // ★ [핵심] 다른 탭으로 자동 찢어주는 로직 완전 삭제. 
-    // 오직 사용자가 현재 작업 중인 탭에만 데이터를 독점 저장합니다.
     tData.raw = mappedRaw;
     alert(`✅ [${window.infState.activeTab}] 엑셀 데이터 매핑 완료!`);
     
@@ -275,7 +270,6 @@ window.infUpdateStatusBadges = function() {
     
     if(!step1 || !step2 || !step3) return;
 
-    // ★ 파일 불러오기 시 '완료' 뱃지 상태 강제 초기화 방어
     const isS1Complete = step1.querySelector('.status-badge') && step1.querySelector('.status-badge').innerText === '완료';
     const isS2Complete = step2.querySelector('.status-badge') && step2.querySelector('.status-badge').innerText === '완료';
     const isS3Complete = step3.querySelector('.status-badge') && step3.querySelector('.status-badge').innerText === '완료';
@@ -322,7 +316,6 @@ window.infUpdateStepper = function() {
         const el3 = document.getElementById('step-2-3');
         const el4 = document.getElementById('step-2-4');
         const el5 = document.getElementById('step-2-5');
-        // 글로벌 wiz 대신, 고정된 매핑 컬럼수(8) 활용
         const mappedColCount = 8;
         const finalIdx = mappedColCount + 4;
         let hasFinal = false;
@@ -483,7 +476,6 @@ window.infRenderTable = function() {
     const data = tData.raw;
     const finalColumns = ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득일', '취득년도', '취득가액'];
     
-    // ★ [버그 완벽 수정] 열 갯수가 변하더라도 마법사 상태 변수(phase)를 기준으로 매핑 완료 여부를 판별합니다!
     const isMappedPhase = (wiz.phase !== 'mapping' && wiz.phase !== 'idle'); 
 
     if (currentSection === 1) {
@@ -512,7 +504,9 @@ window.infRenderTable = function() {
             wiz.phase = 'row-delete'; 
         } else {
             if (wiz.phase === 'mapping') {
-                if(wizText) wizText.innerHTML = `🎯 아래 버튼 중 하나를 선택하고, 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭하세요. (없는 항목은 무시하세요)`;
+                if(wizText && !wizText.innerHTML.includes('완료! 다음은')) {
+                    wizText.innerHTML = `🎯 아래 버튼 중 하나를 선택하고, 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭하세요. (없는 항목은 무시하세요)`;
+                }
                 if(btnStart) btnStart.style.display = 'none';
                 if(btnFinish) btnFinish.style.display = 'inline-block';
                 if(mapBtns) mapBtns.style.display = 'flex';
@@ -971,7 +965,6 @@ document.addEventListener('keydown', function(e) {
     const tData = window.infState.data[window.infState.activeTab];
     if(!tData) return;
 
-    // 되돌리기(Undo) 로직
     if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
         if(tData.history.length === 0) return alert("더 이상 되돌릴 작업이 없습니다.");
@@ -991,11 +984,9 @@ document.addEventListener('keydown', function(e) {
         if(typeof window.infRenderTable === 'function') window.infRenderTable();
     }
     
-    // ★ [핵심] 행/열 삭제 로직 (Delete 키, Backspace 키 연동 및 인풋박스 삭제 시 행 날아감 방어)
     const isDeleteKey = e.key === 'Delete' || e.key === 'Backspace' || ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_'));
     
     if (isDeleteKey) {
-        // 인풋 박스(텍스트 입력칸) 안에서 글씨를 지우는 중이라면 행 전체 삭제 방지
         const activeTag = document.activeElement.tagName.toUpperCase();
         if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
 
@@ -1092,8 +1083,6 @@ window.infLoadPastData = function(event) {
 // ============================================================================
 // [섹션 7] 자산 구분 일괄 지정 (기본/평가제외/부보제외 자동화)
 // ============================================================================
-
-// ★ 안전한 룰 로드 함수: 메모리가 초기화되어도 내장된 사전을 복구합니다.
 window.getSafeMappingRules = function() {
     if (window.infState && window.infState.mappingRules) return window.infState.mappingRules;
     
@@ -1195,7 +1184,6 @@ window.applyBasicClass = function() {
         if (inputMap[acc] !== undefined && inputMap[acc] !== "") {
             row[basicClassIdx] = inputMap[acc]; 
             
-            // ★ 값이 들어가면 최종 구분 열도 함께 업데이트되도록 연동!
             const finalIdx = Object.keys(wiz.mapped).length + 4;
             if(typeof window.syncToFinal === 'function') {
                 window.syncToFinal(rIdx, finalIdx, inputMap[acc], basicClassIdx);
@@ -1235,7 +1223,6 @@ window.assignExcludeEval = function() {
         const matched = rules.find(r => accStr.includes(r.keyword.toUpperCase()) || nameStr.includes(r.keyword.toUpperCase()));
         if (matched) {
             row[targetIdx] = matched.val;
-            // ★ 값이 들어가면 최종 구분 열도 함께 업데이트되도록 연동!
             if(typeof window.syncToFinal === 'function') {
                 window.syncToFinal(rIdx, finalIdx, matched.val, targetIdx);
             }
@@ -1274,7 +1261,6 @@ window.assignExcludeCoverage = function() {
         const matched = rules.find(r => accStr.includes(r.keyword.toUpperCase()) || nameStr.includes(r.keyword.toUpperCase()));
         if (matched) {
             row[targetIdx] = matched.val;
-            // ★ 값이 들어가면 최종 구분 열도 함께 업데이트되도록 연동!
             if(typeof window.syncToFinal === 'function') {
                 window.syncToFinal(rIdx, finalIdx, matched.val, targetIdx);
             }
@@ -1313,7 +1299,6 @@ window.assignFinalClass = function() {
 
         let finalVal = "";
         
-        // ★ 우선순위 평가: 1.과거 -> 2.평가제외 -> 3.부보제외 -> 4.기본
         if (past) finalVal = past;
         else if (evalEx) finalVal = evalEx;
         else if (covEx) finalVal = covEx;
@@ -1332,8 +1317,6 @@ window.assignFinalClass = function() {
 // ============================================================================
 // [섹션 8] 매핑 마스터 데이터 관리 (3가지 정책 통합 관리)
 // ============================================================================
-
-// ★ 초기 엑셀 데이터 100% 내장 (기본, 평가제외, 부보제외)
 const initialRules = {
     basic: [
         { keyword: '건물', val: '50' },
@@ -1360,7 +1343,6 @@ const initialRules = {
     ]
 };
 
-// 캐시에서 가져오기 (없으면 엑셀 데이터 초기값 적용)
 window.infState.mappingRules = JSON.parse(localStorage.getItem('kb_mapping_rules_v3')) || initialRules;
 
 window.openRuleManager = function() {
@@ -1419,7 +1401,6 @@ window.saveRules = function() {
 // ============================================================================
 // [섹션 9] 3단계 가액평가 일괄 계산 및 감가율 엑셀 참고 모달 로직 (검색 포함)
 // ============================================================================
-
 window.loadIndexExcel = function(event) {
     const file = event.target.files[0];
     if(!file) return;
@@ -1549,9 +1530,7 @@ window.applyInflationIndex = function() {
     } catch (err) { alert("계산 중 오류가 발생했습니다.\n" + err.message); }
 };
 
-// ★ 엑셀 데이터 압축 내장 (4개 시트 - 업종감가율 100% 원본 포함)
 window.DEPR_REF_DATA = {
-    // ... sheet1, sheet2 유지 ...
     sheet1: {
         head: `<tr><th rowspan="2" style="background:#e9ecef;">건물 구조별</th><th colspan="2" style="background:#d1e7dd;">우기 이외 (일반건물)</th><th colspan="2" style="background:#ffe69c;">창고, 공장</th><th colspan="2" style="background:#f8d7da;">특수건물 (냉장, 화학 등)</th></tr>
                <tr><th style="background:#d1e7dd;">내용연수</th><th style="background:#d1e7dd;">감가율(%)</th><th style="background:#ffe69c;">내용연수</th><th style="background:#ffe69c;">감가율(%)</th><th style="background:#f8d7da;">내용연수</th><th style="background:#f8d7da;">감가율(%)</th></tr>`,
@@ -1576,7 +1555,6 @@ window.DEPR_REF_DATA = {
         ]
     },
     sheet3: {
-        // ★ 열 너비(폭)를 조정하여 우측 숫자가 잘리지 않도록 강제 배분
         head: `<tr>
             <th style="background:#e9ecef; width:22%;">대분류</th>
             <th style="background:#e9ecef; width:22%;">중분류</th>
@@ -1829,7 +1807,6 @@ window.DEPR_REF_DATA = {
     }
 };
 
-// ★ 엑셀 데이터 뷰어 탭 전환 기능 (가로 폭 및 글씨 꺾임 처리 적용)
 window.switchDeprRefTab = function(tabIndex) {
     document.querySelectorAll('.ref-tab-btn').forEach((btn, idx) => {
         btn.className = (idx === tabIndex - 1) ? 'ref-tab-btn active' : 'ref-tab-btn';
@@ -1839,7 +1816,6 @@ window.switchDeprRefTab = function(tabIndex) {
     const tbody = document.getElementById('deprRefTbody');
     const data = window.DEPR_REF_DATA['sheet' + tabIndex];
     
-    // 탭을 바꿀 때마다 검색창 내용 초기화
     const searchInput = document.getElementById('deprRefSearchInput');
     if (searchInput) searchInput.value = '';
 
@@ -1856,7 +1832,6 @@ window.switchDeprRefTab = function(tabIndex) {
             const td = document.createElement('td');
             td.innerText = cell;
             
-            // ★ 3. 업종 감가율 탭일 경우 (글씨가 밀리지 않도록 자동 줄바꿈)
             if(tabIndex === 3) {
                 if(cellIdx > 2) {
                     td.style.textAlign = 'center';
@@ -1874,7 +1849,6 @@ window.switchDeprRefTab = function(tabIndex) {
     });
 };
 
-// ★ 실시간 검색(필터링) 기능
 window.filterDeprRefTable = function() {
     const searchInput = document.getElementById('deprRefSearchInput');
     if(!searchInput) return;
@@ -1945,7 +1919,6 @@ window.openDeprBatchModal = function() {
         `;
     });
 
-    // 팝업이 열릴 때 우측 엑셀 뷰어의 '1. 건물' 탭을 기본으로 띄워줌
     if(typeof window.switchDeprRefTab === 'function') {
         window.switchDeprRefTab(1);
     }
@@ -1962,8 +1935,8 @@ window.applyDeprBatch = function() {
     const yearIdx = wiz.mapped['취득년도'];
     
     const mappedColCount = Object.keys(wiz.mapped).length;
-    const finalIdx = mappedColCount + 4; // 최종 구분 열
-    const deprIdx = mappedColCount + 7;  // 감가율 열
+    const finalIdx = mappedColCount + 4; 
+    const deprIdx = mappedColCount + 7;  
 
     const inputMap = {};
     if (!window.infState.minResidualMap) window.infState.minResidualMap = {};
@@ -1986,12 +1959,11 @@ window.applyDeprBatch = function() {
         if (yearVal.includes('소계') || yearVal.includes('총계')) return;
 
         const acc = String(row[accIdx] || '').trim();
-        const finalVal = String(row[finalIdx] || '').trim(); // 최종 구분 확인
+        const finalVal = String(row[finalIdx] || '').trim(); 
 
         if (inputMap[acc] !== undefined && inputMap[acc] !== "") {
             const inputVal = inputMap[acc];
 
-            // 부보제외 또는 평가제외인 경우 감가율 강제 제외(-) 처리
             if (finalVal.includes('부보제외') || finalVal.includes('평가제외')) {
                 row[deprIdx] = '-';
             } 
@@ -2017,7 +1989,7 @@ window.applyCurrentValue = function() {
     const mappedColCount = Object.keys(wiz.mapped).length;
     const accIdx = wiz.mapped['자산계정'];
     const yearIdx = wiz.mapped['취득년도'];
-    const finalIdx = mappedColCount + 4; // 최종 구분 열
+    const finalIdx = mappedColCount + 4; 
     const replacementIdx = mappedColCount + 6; 
     const deprIdx = mappedColCount + 7;        
     const residualIdx = mappedColCount + 8;    
@@ -2043,11 +2015,10 @@ window.applyCurrentValue = function() {
         }
 
         const accVal = String(row[accIdx] || '').trim();
-        const finalVal = String(row[finalIdx] || '').trim(); // 최종 구분 확인
+        const finalVal = String(row[finalIdx] || '').trim(); 
         const repCostStr = String(row[replacementIdx] || '').replace(/,/g, '');
         const deprStr = String(row[deprIdx] || '').replace(/,/g, ''); 
         
-        // 부보제외거나 재조달가액이 없는 경우 강제 제외
         if (finalVal.includes('부보제외') || repCostStr === '-' || repCostStr === '') { 
             row[deprIdx] = '-'; 
             row[residualIdx] = '-'; 
@@ -2059,7 +2030,6 @@ window.applyCurrentValue = function() {
         const acqYear = parseInt(yearVal);
         const deprRate = Number(deprStr);
 
-        // 평가제외인 경우 강제 유지 (현재가액 = 재조달가액)
         if (finalVal.includes('평가제외')) {
             row[deprIdx] = '-';
             row[residualIdx] = '-';
@@ -2070,7 +2040,6 @@ window.applyCurrentValue = function() {
             return;
         }
         
-        // 메모리에 저장해둔 최종 잔가율(하한선) 가져오기 (없으면 0)
         const minResRate = (window.infState.minResidualMap && window.infState.minResidualMap[accVal] !== undefined) 
                             ? window.infState.minResidualMap[accVal] : 0;
 
@@ -2104,3 +2073,305 @@ window.applyCurrentValue = function() {
     if(typeof window.infRenderTable === 'function') window.infRenderTable();
     alert(`✅ 잔가율 및 현재가액 산출 완료!\n- 총 ${applyCount}건의 현재가액이 계산되었습니다.`);
 };
+
+// ============================================================================
+// [16] 전역 클릭 제어기 (열 매핑 렉 제로 CSS 인젝션 & 튕김 방지 & 자동연동)
+// ============================================================================
+document.addEventListener('click', function(e) {
+    const btnExclude = e.target.closest('button');
+    if (btnExclude && btnExclude.innerText.includes('평가 제외')) {
+        setTimeout(() => { if(typeof window.excludeUnderTenThousand === 'function') window.excludeUnderTenThousand(true); }, 100);
+    }
+    
+    // 2. 열(기둥) 매핑 시 기존의 무거운 로직을 죽이고, 가장 빠른 CSS 꼼수 사용
+    const cell = e.target.closest('.infTheadGlobal th, .infTheadGlobal td');
+    if (cell && window.infState && window.infState.wizard && window.infState.wizard.phase === 'mapping') {
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); // 기존 렉 유발 로직 완벽 차단
+
+        const targetName = window.infState.wizard.activeTarget;
+        if (!targetName) { alert('먼저 매핑할 버튼을 선택하세요.'); return; }
+
+        const tr = cell.closest('tr');
+        const colIndex = Array.from(tr.children).indexOf(cell);
+
+        if (!window.infState.wizard.mapped) window.infState.wizard.mapped = {};
+        window.infState.wizard.mapped[targetName] = colIndex;
+
+        document.querySelectorAll(`.badge-${targetName}`).forEach(el => el.remove());
+        cell.innerHTML += `<span class="badge-${targetName}" style="display:block; font-size:11px; color:white; background:#1C5691; border-radius:3px; margin-top:4px; padding:3px;">${targetName} ✓</span>`;
+
+        let styleTag = document.getElementById('fast-mapping-style');
+        if (!styleTag) {
+            styleTag = document.createElement('style');
+            styleTag.id = 'fast-mapping-style';
+            document.head.appendChild(styleTag);
+        }
+        let newStyles = '';
+        for (const [name, idx] of Object.entries(window.infState.wizard.mapped)) {
+            newStyles += `.infTbodyGlobal tr td:nth-child(${idx + 1}) { background-color: #e6f2ff !important; } `;
+        }
+        styleTag.innerHTML = newStyles;
+
+        const btn = Array.from(document.querySelectorAll('#infMappingButtons button')).find(b => b.innerText.replace('✓', '').trim() === targetName);
+        if (btn) {
+            btn.innerText = `${targetName} ✓`;
+            btn.className = 'wiz-btn mapped';
+            btn.style.cssText = 'background:#e2e8f0 !important; color:#64748b !important; border:2px solid #cbd5e1 !important;';
+        }
+
+        // ★ [버그 완벽 수정] 마법사 종료(idle)를 취소하고, 다음 항목으로 자동 이동!
+        const unmapped = window.infState.wizard.columns.find(col => window.infState.wizard.mapped[col] === undefined);
+        window.infState.wizard.activeTarget = unmapped || ''; 
+        // phase는 'mapping' 상태를 계속 유지합니다.
+        
+        if (unmapped) {
+            const nextBtn = Array.from(document.querySelectorAll('#infMappingButtons button')).find(b => b.innerText.trim() === unmapped);
+            if (nextBtn) {
+                nextBtn.className = 'wiz-btn active';
+                nextBtn.style.cssText = 'background:#1C5691 !important; color:#fff !important; border:2px solid #1C5691 !important; box-shadow:0 0 8px rgba(28,86,145,0.4);';
+            }
+        }
+
+        const finishBtn = document.getElementById('btnFinishMapping');
+        if (finishBtn) finishBtn.style.display = 'inline-block';
+        
+        const textEl = document.getElementById('infWizardText');
+        if (textEl) {
+            if (unmapped) {
+                textEl.innerHTML = `<span style="color:#28A745;">✅ [${targetName}] 매핑 완료! 다음은 <b>[${unmapped}]</b> 열을 클릭하세요.</span>`;
+            } else {
+                textEl.innerHTML = '<span style="color:#28A745;">🎉 모든 필수 매핑이 완료되었습니다! 우측의 [열 매핑 완료 ▶] 버튼을 클릭하세요.</span>';
+            }
+        }
+    }
+    
+    // 3. 매핑 해제 시 오류 방지 및 수동 버튼 클릭 처리
+    const btnMap = e.target.closest('#infMappingButtons button');
+    if (btnMap) {
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+
+        const targetName = btnMap.innerText.replace('✓', '').trim();
+        
+        if (btnMap.innerText.includes('✓')) {
+            if (window.infState && window.infState.wizard && window.infState.wizard.mapped) {
+                delete window.infState.wizard.mapped[targetName];
+            }
+            
+            document.querySelectorAll(`.badge-${targetName}`).forEach(el => el.remove());
+            let styleTag = document.getElementById('fast-mapping-style');
+            if (styleTag && window.infState && window.infState.wizard && window.infState.wizard.mapped) {
+                let newStyles = '';
+                for (const [name, idx] of Object.entries(window.infState.wizard.mapped)) {
+                    newStyles += `.infTbodyGlobal tr td:nth-child(${idx + 1}) { background-color: #e6f2ff !important; } `;
+                }
+                styleTag.innerHTML = newStyles;
+            }
+            btnMap.innerText = targetName; 
+        }
+        
+        if (window.infState && window.infState.wizard) {
+            window.infState.wizard.activeTarget = targetName; 
+            window.infState.wizard.phase = 'mapping'; 
+        }
+        
+        document.querySelectorAll('#infMappingButtons button').forEach(b => {
+            if (!b.innerText.includes('✓')) {
+                b.className = 'wiz-btn default';
+                b.style.cssText = 'background: #ffffff !important; color: #333 !important; border: 1px solid #ccc !important;';
+            }
+        });
+        btnMap.className = 'wiz-btn active';
+        btnMap.style.cssText = 'background:#1C5691 !important; color:#fff !important; border:2px solid #1C5691 !important; box-shadow:0 0 8px rgba(28,86,145,0.4);';
+
+        const textEl = document.getElementById('infWizardText');
+        if (textEl) textEl.innerHTML = `🎯 <b>[${targetName}]</b>을(를) 매핑할 차례입니다. 일치하는 엑셀 <span style="background:#FFCC00; padding:2px 5px; border-radius:3px; color:#000;">열 상단(알파벳)</span>을 클릭하세요.`;
+    }
+}, true);
+
+// 4. 시스템 멋대로 다음 단계 넘어가는 현상(Auto-Proceed) 원천 차단
+if (typeof window.infFinishMapping === 'function' && !window.infFinishMapping.isPatchedFast) {
+    const origFinish = window.infFinishMapping;
+    window.infFinishMapping = function(force) {
+        if (force === true) {
+            origFinish.apply(this, arguments); 
+        } else {
+            const finishBtn = document.getElementById('btnFinishMapping');
+            if (finishBtn) {
+                finishBtn.style.display = 'inline-block';
+                finishBtn.onclick = function() { window.infFinishMapping(true); }; 
+            }
+            const textEl = document.getElementById('infWizardText');
+            if (textEl) textEl.innerHTML = '<span style="color:#28A745;">✅ 매핑이 완료되었습니다! 우측의 [열 매핑 완료 ▶] 버튼을 직접 눌러야 다음으로 이동합니다.</span>';
+        }
+    };
+    window.infFinishMapping.isPatchedFast = true;
+}
+
+// ============================================================================
+// [17] 초간단 명세서 행 즉시 삭제 (Ctrl + 마이너스)
+// ============================================================================
+document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_' || e.code === 'Minus' || e.code === 'NumpadSubtract')) {
+        e.preventDefault(); 
+        const activeTr = document.querySelector('.infTbodyGlobal tr:hover');
+        if (!activeTr) return;
+        const tbody = activeTr.closest('tbody');
+        if (!tbody) return;
+        
+        const rowIndex = Array.from(tbody.children).indexOf(activeTr);
+        if (!window.infState || !window.infState.data) return;
+        let activeTab = window.infState.activeTab || Object.keys(window.infState.data)[0];
+        if (!activeTab) return;
+
+        const currentData = window.infState.data[activeTab];
+        if (!currentData || !currentData[rowIndex]) return;
+        const targetObj = currentData[rowIndex];
+
+        const cacheKeys = ['data', 'rawData', 'displayData', 'filteredData'];
+        cacheKeys.forEach(key => {
+            if (window.infState[key] && Array.isArray(window.infState[key][activeTab])) {
+                const arr = window.infState[key][activeTab];
+                const exactIdx = arr.indexOf(targetObj); 
+                if (exactIdx > -1) arr.splice(exactIdx, 1); 
+            }
+        });
+
+        if (typeof window.infRenderTable === 'function') window.infRenderTable();
+        else activeTr.remove(); 
+    }
+});
+window.highlightEmptyRows = function() { alert("Ctrl + 마이너스(-) 단축키를 이용해 직접 즉시 삭제해주세요!"); };
+window.bulkDeleteHighlightedRows = function() { alert("Ctrl + 마이너스(-) 단축키를 이용해 직접 즉시 삭제해주세요!"); };
+
+// ============================================================================
+// [18] 과거 연동 마법사 모달창 지원
+// ============================================================================
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(() => {
+        const step2_1 = document.getElementById('step-2-1');
+        if (step2_1) step2_1.onclick = function() { document.getElementById('pastDataModal').style.display = 'flex'; };
+    }, 1000);
+});
+
+window.handlePastDataUpload = function(event, type) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const matchKey = document.getElementById('pastMatchKey').value;
+    document.getElementById('pastDataModal').style.display = 'none';
+
+    if (type === 'excel') {
+        alert(`[엑셀 파일 연동 시작]\n- 기준: ${matchKey}\n- 파일명: ${file.name}\n\n(엑셀 파싱 로직 실행 대기 중)`);
+    } else if (type === 'kbproj') {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const projData = JSON.parse(e.target.result);
+                alert(`[프로젝트 파일 연동 시작]\n- 기준: ${matchKey}\n- 데이터 크기: ${Object.keys(projData).length}건\n\n(프로젝트 파싱 로직 실행 대기 중)`);
+            } catch(err) { alert("프로젝트 파일을 읽는 중 오류가 발생했습니다."); }
+        };
+        reader.readAsText(file);
+    }
+    event.target.value = '';
+};
+
+// ============================================================================
+// [19] 1만원 이하 소액 자산 일괄 평가제외 처리기
+// ============================================================================
+window.excludeUnderTenThousand = function(silent = false) {
+    if (!window.infState || !window.infState.data) return;
+    let activeTab = window.infState.activeTab || Object.keys(window.infState.data)[0];
+    if (!activeTab) return;
+
+    let count = 0;
+    window.infState.data[activeTab].forEach(row => {
+        let priceStr = String(row['취득가액'] || '').replace(/,/g, '').trim();
+        if (priceStr === '' || priceStr === '-') return;
+        let price = parseFloat(priceStr);
+        if (!isNaN(price) && price <= 10000) {
+            row['_assetClass'] = '평가제외(만원이하)'; 
+            row['구분'] = '평가제외(만원이하)';
+            count++;
+        }
+    });
+
+    if (typeof window.infRenderTable === 'function') window.infRenderTable();
+    if (!silent && count > 0) alert(`🎉 총 ${count}건의 소액 자산이 '평가제외' 처리되었습니다!`);
+};
+
+// ============================================================================
+// [20] 표 실시간 검색 기능 (디바운싱 적용 - 검색 렉 제로)
+// ============================================================================
+let searchTimeout = null;
+window.filterInfTable = function() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => { 
+        const keyword = document.getElementById('infTableSearchInput').value.toLowerCase().trim();
+        const tbody = document.querySelector('.page-section.active .infTbodyGlobal') || document.querySelector('.infTbodyGlobal');
+        if (!tbody) return;
+        tbody.style.display = 'none'; 
+        tbody.querySelectorAll('tr').forEach(tr => {
+            tr.style.display = tr.innerText.toLowerCase().includes(keyword) ? '' : 'none';
+        });
+        tbody.style.display = '';
+    }, 300); 
+};
+
+// ============================================================================
+// [15] 자산번호 콤마 영구 삭제 & 중앙 정렬 (CCTV 철거 -> 렉 제로 후처리 방식)
+// ============================================================================
+if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isDataPatchedFast) {
+    const originalRender = window.infRenderTable;
+    window.infRenderTable = function() {
+        if (window.infState && window.infState.data) {
+            for (let tab in window.infState.data) {
+                window.infState.data[tab].forEach(row => {
+                    ['자산번호', '신자산번호'].forEach(key => {
+                        if (row[key] !== undefined && row[key] !== null) {
+                            row[key] = String(row[key]).replace(/,/g, '').trim();
+                        }
+                    });
+                });
+            }
+        }
+        originalRender.apply(this, arguments);
+
+        const thead = document.querySelector('.infTheadGlobal tr');
+        const tbody = document.querySelector('.infTbodyGlobal');
+        if (thead && tbody) {
+            let assetColIdxs = [];
+            thead.querySelectorAll('th, td').forEach((th, idx) => {
+                if (th.innerText.replace(/\s/g, '').includes('자산번호')) assetColIdxs.push(idx);
+            });
+
+            if (assetColIdxs.length > 0) {
+                let styleTag = document.getElementById('fast-align-style');
+                if (!styleTag) {
+                    styleTag = document.createElement('style');
+                    styleTag.id = 'fast-align-style';
+                    document.head.appendChild(styleTag);
+                }
+                let alignStyles = '';
+                assetColIdxs.forEach(idx => alignStyles += `.infTbodyGlobal tr td:nth-child(${idx + 1}) { text-align: center !important; } `);
+                styleTag.innerHTML = alignStyles;
+
+                tbody.querySelectorAll('tr').forEach(tr => {
+                    const cells = tr.querySelectorAll('td');
+                    assetColIdxs.forEach(idx => {
+                        if (cells[idx] && cells[idx].innerText.includes(',')) {
+                            cells[idx].innerText = cells[idx].innerText.replace(/,/g, '');
+                        }
+                    });
+                });
+            }
+        }
+    };
+    window.infRenderTable.isDataPatchedFast = true;
+}
+
+setInterval(() => {
+    const step1Panel = document.getElementById('infStep1Panel');
+    if (step1Panel && step1Panel.innerHTML.includes('[Delete] 키로 지우시고')) {
+        step1Panel.innerHTML = step1Panel.innerHTML.replace(/\[Delete\] 키로 지우시고/g, "<b style='color:#dc3545;'>[Ctrl] + [-] (마이너스) 키</b>로 지우시고");
+    }
+}, 1000);
