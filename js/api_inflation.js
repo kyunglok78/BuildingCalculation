@@ -287,7 +287,7 @@ window.infFinishMapping = function() {
 
 
 // ============================================================================
-// [섹션 4] 상태 표시/스텝 전환 및 테이블 렌더링 엔진 (다중 화면 연동 및 틀 고정 적용)
+// [섹션 4] 상태 표시/스텝 전환 및 테이블 렌더링 엔진 (다중 화면 연동)
 // ============================================================================
 
 window.infUpdateStatusBadges = function() {
@@ -297,6 +297,7 @@ window.infUpdateStatusBadges = function() {
     
     if(!step1 || !step2 || !step3) return;
 
+    // ★ 파일 불러오기 시 '완료' 뱃지 상태 강제 초기화 방어
     const isS1Complete = step1.querySelector('.status-badge') && step1.querySelector('.status-badge').innerText === '완료';
     const isS2Complete = step2.querySelector('.status-badge') && step2.querySelector('.status-badge').innerText === '완료';
     const isS3Complete = step3.querySelector('.status-badge') && step3.querySelector('.status-badge').innerText === '완료';
@@ -343,8 +344,8 @@ window.infUpdateStepper = function() {
         const el3 = document.getElementById('step-2-3');
         const el4 = document.getElementById('step-2-4');
         const el5 = document.getElementById('step-2-5');
-        
-        const mappedColCount = Object.keys(wiz.mapped).length;
+        // 글로벌 wiz 대신, 고정된 매핑 컬럼수(8) 활용
+        const mappedColCount = 8;
         const finalIdx = mappedColCount + 4;
         let hasFinal = false;
         const tData = window.infState.data[window.infState.activeTab];
@@ -361,8 +362,7 @@ window.infUpdateStepper = function() {
         const el2 = document.getElementById('step-3-2');
         const el3 = document.getElementById('step-3-3');
         const el4 = document.getElementById('step-3-4');
-        
-        const mappedColCount = Object.keys(wiz.mapped).length;
+        const mappedColCount = 8;
         const currentValIdx = mappedColCount + 9;
         let hasCurrentVal = false;
         const tData = window.infState.data[window.infState.activeTab];
@@ -503,7 +503,9 @@ window.infRenderTable = function() {
     }
 
     const data = tData.raw;
-    const finalColumns = ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득년도', '취득가액'];
+    const finalColumns = ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득일', '취득년도', '취득가액'];
+    
+    // ★ [버그 완벽 수정] 열 갯수가 변하더라도 마법사 상태 변수(phase)를 기준으로 매핑 완료 여부를 판별합니다!
     const isMappedPhase = (wiz.phase !== 'mapping' && wiz.phase !== 'idle'); 
 
     if (currentSection === 1) {
@@ -519,7 +521,7 @@ window.infRenderTable = function() {
                 if(typeof window.infProceedToStep2 === 'function') btnNext.onclick = window.infProceedToStep2;
             }
         } else if (isMappedPhase) {
-            if(wizText) wizText.innerHTML = `🧹 1.5단계: 불필요한 행(빈 줄, 합계 등)을 선택 후 <b>[Ctrl] + [-]</b> 키로 지우시고, <b>'부분합 및 정렬'</b> 버튼을 눌러주세요.`;
+            if(wizText) wizText.innerHTML = `🧹 1.5단계: 불필요한 행(빈 줄, 합계 등)을 선택 후 <b>[Delete]</b> 키로 지우시고, <b>'부분합 및 정렬'</b> 버튼을 눌러주세요.`;
             if(btnStart) btnStart.style.display = 'none';
             if(btnFinish) btnFinish.style.display = 'none';
             if(mapBtns) mapBtns.style.display = 'none';
@@ -560,8 +562,8 @@ window.infRenderTable = function() {
             </div>`;
     }
     
-    // [틀 고정] 행 번호 컬럼에 position: sticky 적용
-    headerTr.innerHTML = `<th style="width:60px; background:#f8fafc; border:1px solid #ccc; text-align:center; padding:6px 2px; position:sticky; top:0; z-index:10; box-shadow: 0 1px 0 #ccc;">행 번호${foldHtml}</th>`; 
+    // [틀 고정 추가] style 끝에 position:sticky; top:0; z-index:10; box-shadow:0 1px 0 #ccc; 삽입
+    headerTr.innerHTML = `<th style="width:60px; background:#f8fafc; border:1px solid #ccc; text-align:center; padding:6px 2px; position:sticky; top:0; z-index:10; box-shadow:0 1px 0 #ccc;">행 번호${foldHtml}</th>`; 
     
     const step2Cols = ['과거 구분', '기본 지정', '평가 제외', '부보 제외', '최종 선택'];
     const step3Cols = ['물가지수', '재조달가액', '감가율', '잔가율', '현재가액', '비고'];
@@ -570,8 +572,9 @@ window.infRenderTable = function() {
         const isSelected = tData.selectedCols.has(c) ? 'inf-sel-col' : '';
         const th = document.createElement('th');
         th.className = `inf-header ${isSelected}`;
-        // [틀 고정] 기본 데이터 컬럼들에 position: sticky 적용
-        th.style.cssText = `background:#f8fafc; border:1px solid #ccc; padding:8px; text-align:center; font-weight:bold; min-width:80px; vertical-align:bottom; position:sticky; top:0; z-index:10; box-shadow: 0 1px 0 #ccc;`;
+        
+        // [틀 고정 추가] cssText 끝에 position:sticky; top:0; z-index:10; box-shadow:0 1px 0 #ccc; 삽입
+        th.style.cssText = `background:#f8fafc; border:1px solid #ccc; padding:8px; text-align:center; font-weight:bold; min-width:80px; vertical-align:bottom; position:sticky; top:0; z-index:10; box-shadow:0 1px 0 #ccc;`;
         
         const emptySpaceForBtn = (window.infState.step >= 2 && isMappedPhase) ? `<div style="height:25px; margin-bottom:6px;"></div>` : '';
 
@@ -644,8 +647,8 @@ window.infRenderTable = function() {
                 }
             }
 
-            // [틀 고정] 우측 패널(구분 및 예외처리) 헤더들에 position: sticky 적용
-            headerTr.innerHTML += `<th style="background:#e9ecef; color:#1C5691; border:1px solid #ccc; padding:8px 4px; text-align:center; vertical-align:bottom; min-width:90px; position:sticky; top:0; z-index:10; box-shadow: 0 1px 0 #ccc;">
+            // [틀 고정 추가] style 끝에 position:sticky; top:0; z-index:10; box-shadow:0 1px 0 #ccc; 삽입
+            headerTr.innerHTML += `<th style="background:#e9ecef; color:#1C5691; border:1px solid #ccc; padding:8px 4px; text-align:center; vertical-align:bottom; min-width:90px; position:sticky; top:0; z-index:10; box-shadow:0 1px 0 #ccc;">
                 ${topButtonHtml}
                 <div>${displayName}</div>
             </th>`;
@@ -664,8 +667,8 @@ window.infRenderTable = function() {
                 topButtonHtml = `<button type="button" style="display:block; width:100%; margin-bottom:6px; background:#17A2B8; color:#fff; border:none; padding:4px 0; border-radius:3px; font-weight:bold; font-size:11px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="event.stopPropagation(); window.applyCurrentValue()"><i class="fa-solid fa-bolt"></i> 잔가/현재 계산</button>`;
             }
 
-            // [틀 고정] 3단계 우측 최종 가액 산출 헤더들에 position: sticky 적용
-            headerTr.innerHTML += `<th style="background:#e9ecef; color:#1C5691; border:1px solid #ccc; padding:8px 4px; text-align:center; vertical-align:bottom; min-width:90px; position:sticky; top:0; z-index:10; box-shadow: 0 1px 0 #ccc;">
+            // [틀 고정 추가] style 끝에 position:sticky; top:0; z-index:10; box-shadow:0 1px 0 #ccc; 삽입
+            headerTr.innerHTML += `<th style="background:#e9ecef; color:#1C5691; border:1px solid #ccc; padding:8px 4px; text-align:center; vertical-align:bottom; min-width:90px; position:sticky; top:0; z-index:10; box-shadow:0 1px 0 #ccc;">
                 ${topButtonHtml}
                 <div>${colName}</div>
             </th>`;
@@ -825,6 +828,7 @@ window.infRenderTable = function() {
         tbody.appendChild(tr);
     });
 };
+
 
 // ============================================================================
 // [섹션 5] 정렬/부분합, 히스토리, 단축키 로직 및 행 추가 로직
