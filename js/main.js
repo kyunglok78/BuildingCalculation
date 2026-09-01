@@ -718,11 +718,8 @@ window.saveProject = function() {
         const hasTempKfpa = Object.keys(window.tempKfpaDataStore || {}).length > 0;
         const hasCostData = window.kbState.costData && window.kbState.costData.length > 0;
         const hasInfData = window.infState && window.infState.data && Object.keys(window.infState.data).length > 0;
-        
-        // 건축물대장 원본 데이터 존재 여부 확인
-        const hasFetchedData = window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0;
                             
-        if (!hasFetchedData && !hasEvalData && !hasTempKfpa && !hasCostData && !hasInfData) {
+        if (Object.keys(window.kbState.fetchedData).length === 0 && !hasEvalData && !hasTempKfpa && !hasCostData && !hasInfData) {
             alert("저장할 데이터가 존재하지 않습니다. 대장 조회, 엑셀 업로드 등을 먼저 진행해 주세요."); return;
         }
 
@@ -755,10 +752,7 @@ window.saveProject = function() {
             unitCostPath: document.getElementById('unitCostPath') ? document.getElementById('unitCostPath').value : "",
             priceIndexPath: document.getElementById('priceIndexPath') ? document.getElementById('priceIndexPath').value : "",
             tempKfpaDataStore: window.tempKfpaDataStore || {}, targetKfpaSite: window.targetKfpaSite || "", targetKfpaAddress: window.targetKfpaAddress || "",
-            kbState: window.kbState, 
-            // 대장 데이터를 독립 객체로 한 번 더 안전하게 포장하여 저장
-            fetchedData: window.kbState.fetchedData || {},
-            inflationSheets: window.kbState.inflationSheets || null,
+            kbState: window.kbState, inflationSheets: window.kbState.inflationSheets || null,
             indexData: window.kbState.indexData || null, infState: window.infState || null 
         };
 
@@ -786,46 +780,7 @@ window.loadProject = function(event) {
                 return value;
             });
             
-            if (projectData.kbState) {
-                window.kbState = projectData.kbState;
-                
-                // 포장해 둔 대장 데이터를 kbState 내부에 확실히 복구
-                if (projectData.fetchedData) {
-                    window.kbState.fetchedData = projectData.fetchedData;
-                }
-                
-                // [핵심] 건축물대장 데이터가 복구되었다면 화면(UI) 강제 렌더링 실행
-                setTimeout(() => {
-                    if (window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
-                        const emptyMsg = document.getElementById('emptyStateMsg');
-                        const dataCont = document.getElementById('fetchedDataContainer');
-                        if (emptyMsg) emptyMsg.style.display = 'none';
-                        if (dataCont) dataCont.style.display = 'block';
-                        
-                        // executeLedgerRender가 인식할 수 있는 배열 형태로 데이터 재조립
-                        if (typeof executeLedgerRender === 'function') {
-                            const reconstructedResults = [];
-                            let tempIdx = 0;
-                            for (const siteName in window.kbState.fetchedData) {
-                                const sd = window.kbState.fetchedData[siteName];
-                                reconstructedResults.push({
-                                    index: tempIdx++,
-                                    locName: siteName,
-                                    locAddr: "", // 주소는 렌더링에 치명적이지 않으므로 빈값 처리
-                                    totalData: sd["recap"] || sd["총괄표제부 정보"] || [],
-                                    titleData: sd["title"] || sd["표제부 상세"] || [],
-                                    floorData: sd["floor"] || sd["층별 개요"] || [],
-                                    isSuccess: true
-                                });
-                            }
-                            executeLedgerRender(reconstructedResults);
-                        } else if (typeof window.renderSlide3Tabs === 'function') {
-                            window.renderSlide3Tabs();
-                        }
-                    }
-                }, 300);
-            }
-            
+            if (projectData.kbState) window.kbState = projectData.kbState;
             if (projectData.inflationSheets) window.kbState.inflationSheets = projectData.inflationSheets;
             if (projectData.indexData) window.kbState.indexData = projectData.indexData;
             
