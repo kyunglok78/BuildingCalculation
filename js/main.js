@@ -719,7 +719,7 @@ window.saveProject = function() {
         const hasCostData = window.kbState.costData && window.kbState.costData.length > 0;
         const hasInfData = window.infState && window.infState.data && Object.keys(window.infState.data).length > 0;
         
-        // [추가] 건축물대장 원본 데이터 존재 여부 명시적 확인
+        // 건축물대장 원본 데이터 존재 여부 확인
         const hasFetchedData = window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0;
                             
         if (!hasFetchedData && !hasEvalData && !hasTempKfpa && !hasCostData && !hasInfData) {
@@ -756,7 +756,7 @@ window.saveProject = function() {
             priceIndexPath: document.getElementById('priceIndexPath') ? document.getElementById('priceIndexPath').value : "",
             tempKfpaDataStore: window.tempKfpaDataStore || {}, targetKfpaSite: window.targetKfpaSite || "", targetKfpaAddress: window.targetKfpaAddress || "",
             kbState: window.kbState, 
-            // [추가] 대장 데이터를 독립적인 객체로 한 번 더 안전하게 포장하여 저장
+            // 대장 데이터를 독립 객체로 한 번 더 안전하게 포장하여 저장
             fetchedData: window.kbState.fetchedData || {},
             inflationSheets: window.kbState.inflationSheets || null,
             indexData: window.kbState.indexData || null, infState: window.infState || null 
@@ -789,12 +789,12 @@ window.loadProject = function(event) {
             if (projectData.kbState) {
                 window.kbState = projectData.kbState;
                 
-                // [추가] 포장해 둔 대장 데이터를 kbState 내부에 확실히 복구
+                // 포장해 둔 대장 데이터를 kbState 내부에 확실히 복구
                 if (projectData.fetchedData) {
                     window.kbState.fetchedData = projectData.fetchedData;
                 }
                 
-                // [핵심] 건축물대장 데이터가 복구되었다면 화면(UI)도 즉시 다시 그려주도록 렌더링 함수 강제 호출
+                // [핵심] 건축물대장 데이터가 복구되었다면 화면(UI) 강제 렌더링 실행
                 setTimeout(() => {
                     if (window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
                         const emptyMsg = document.getElementById('emptyStateMsg');
@@ -802,8 +802,24 @@ window.loadProject = function(event) {
                         if (emptyMsg) emptyMsg.style.display = 'none';
                         if (dataCont) dataCont.style.display = 'block';
                         
-                        // 2.1.1 대장 조회 탭과 표를 다시 그리는 메인 함수 실행
-                        if (typeof window.renderSlide3Tabs === 'function') {
+                        // executeLedgerRender가 인식할 수 있는 배열 형태로 데이터 재조립
+                        if (typeof executeLedgerRender === 'function') {
+                            const reconstructedResults = [];
+                            let tempIdx = 0;
+                            for (const siteName in window.kbState.fetchedData) {
+                                const sd = window.kbState.fetchedData[siteName];
+                                reconstructedResults.push({
+                                    index: tempIdx++,
+                                    locName: siteName,
+                                    locAddr: "", // 주소는 렌더링에 치명적이지 않으므로 빈값 처리
+                                    totalData: sd["recap"] || sd["총괄표제부 정보"] || [],
+                                    titleData: sd["title"] || sd["표제부 상세"] || [],
+                                    floorData: sd["floor"] || sd["층별 개요"] || [],
+                                    isSuccess: true
+                                });
+                            }
+                            executeLedgerRender(reconstructedResults);
+                        } else if (typeof window.renderSlide3Tabs === 'function') {
                             window.renderSlide3Tabs();
                         }
                     }
