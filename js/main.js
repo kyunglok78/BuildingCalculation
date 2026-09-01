@@ -718,8 +718,11 @@ window.saveProject = function() {
         const hasTempKfpa = Object.keys(window.tempKfpaDataStore || {}).length > 0;
         const hasCostData = window.kbState.costData && window.kbState.costData.length > 0;
         const hasInfData = window.infState && window.infState.data && Object.keys(window.infState.data).length > 0;
+        
+        // [추가] 건축물대장 원본 데이터 존재 여부 명시적 확인
+        const hasFetchedData = window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0;
                             
-        if (Object.keys(window.kbState.fetchedData).length === 0 && !hasEvalData && !hasTempKfpa && !hasCostData && !hasInfData) {
+        if (!hasFetchedData && !hasEvalData && !hasTempKfpa && !hasCostData && !hasInfData) {
             alert("저장할 데이터가 존재하지 않습니다. 대장 조회, 엑셀 업로드 등을 먼저 진행해 주세요."); return;
         }
 
@@ -752,7 +755,10 @@ window.saveProject = function() {
             unitCostPath: document.getElementById('unitCostPath') ? document.getElementById('unitCostPath').value : "",
             priceIndexPath: document.getElementById('priceIndexPath') ? document.getElementById('priceIndexPath').value : "",
             tempKfpaDataStore: window.tempKfpaDataStore || {}, targetKfpaSite: window.targetKfpaSite || "", targetKfpaAddress: window.targetKfpaAddress || "",
-            kbState: window.kbState, inflationSheets: window.kbState.inflationSheets || null,
+            kbState: window.kbState, 
+            // [추가] 대장 데이터를 독립적인 객체로 한 번 더 안전하게 포장하여 저장
+            fetchedData: window.kbState.fetchedData || {},
+            inflationSheets: window.kbState.inflationSheets || null,
             indexData: window.kbState.indexData || null, infState: window.infState || null 
         };
 
@@ -780,7 +786,30 @@ window.loadProject = function(event) {
                 return value;
             });
             
-            if (projectData.kbState) window.kbState = projectData.kbState;
+            if (projectData.kbState) {
+                window.kbState = projectData.kbState;
+                
+                // [추가] 포장해 둔 대장 데이터를 kbState 내부에 확실히 복구
+                if (projectData.fetchedData) {
+                    window.kbState.fetchedData = projectData.fetchedData;
+                }
+                
+                // [핵심] 건축물대장 데이터가 복구되었다면 화면(UI)도 즉시 다시 그려주도록 렌더링 함수 강제 호출
+                setTimeout(() => {
+                    if (window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
+                        const emptyMsg = document.getElementById('emptyStateMsg');
+                        const dataCont = document.getElementById('fetchedDataContainer');
+                        if (emptyMsg) emptyMsg.style.display = 'none';
+                        if (dataCont) dataCont.style.display = 'block';
+                        
+                        // 2.1.1 대장 조회 탭과 표를 다시 그리는 메인 함수 실행
+                        if (typeof window.renderSlide3Tabs === 'function') {
+                            window.renderSlide3Tabs();
+                        }
+                    }
+                }, 300);
+            }
+            
             if (projectData.inflationSheets) window.kbState.inflationSheets = projectData.inflationSheets;
             if (projectData.indexData) window.kbState.indexData = projectData.indexData;
             
