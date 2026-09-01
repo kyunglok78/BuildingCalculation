@@ -1236,12 +1236,21 @@ window.applySmartPastMapping = function() {
     
     let matchCount = 0;
     
-    // 빠른 검색을 위한 과거 데이터 Map 생성
+    // [핵심 개선] 하이픈, 공백 제거 및 대문자 통일을 수행하는 정규화 헬퍼 함수
+    const normalizeKey = (str) => {
+        if (!str) return '';
+        // -, _, 공백을 모두 지우고 무조건 영문 대문자로 변환하여 비교 기준 통일
+        return String(str).toUpperCase().replace(/[-_\s]/g, '');
+    };
+
+    // 빠른 검색을 위한 정규화된 과거 데이터 Map 생성
     const pastMap = {};
     pastData.forEach(row => {
-        // array의 경우 assetCol이 "0", "1" 등 숫자 문자열이므로 배열에서도 정상 조회됨
-        const aNum = String(row[assetCol] || '').trim();
-        if (aNum) pastMap[aNum] = String(row[valCol] || '').trim();
+        const rawNum = String(row[assetCol] || '').trim();
+        const normNum = normalizeKey(rawNum);
+        if (normNum) {
+            pastMap[normNum] = String(row[valCol] || '').trim();
+        }
     });
 
     // 현재 표 데이터 덮어쓰기
@@ -1249,14 +1258,17 @@ window.applySmartPastMapping = function() {
         const yearVal = String(curRow[wiz.mapped['취득년도']] || '');
         if (yearVal.includes('소계') || yearVal.includes('총계')) return;
 
-        const curNum = String(curRow[curAssetNumIdx] || '').trim();
-        if (curNum && pastMap[curNum]) {
-            curRow[curPastClassIdx] = pastMap[curNum];
+        const rawCurNum = String(curRow[curAssetNumIdx] || '').trim();
+        const normCurNum = normalizeKey(rawCurNum);
+
+        if (normCurNum && pastMap[normCurNum] !== undefined) {
+            const matchedVal = pastMap[normCurNum];
+            curRow[curPastClassIdx] = matchedVal;
             
             // 최종 구분 열(idx + 4)에도 함께 연동되도록 처리
             const finalIdx = curPastClassIdx + 4;
             if(typeof window.syncToFinal === 'function') {
-                window.syncToFinal(rIdx, finalIdx, pastMap[curNum], curPastClassIdx);
+                window.syncToFinal(rIdx, finalIdx, matchedVal, curPastClassIdx);
             }
             matchCount++;
         }
@@ -1264,7 +1276,7 @@ window.applySmartPastMapping = function() {
 
     document.getElementById('smartPastModal').style.display = 'none';
     if(typeof window.infRenderTable === 'function') window.infRenderTable();
-    alert(`✅ 스마트 과거 데이터 연동 완료!\n선택하신 열의 데이터가 총 ${matchCount}건 매칭되었습니다.`);
+    alert(`✅ 스마트 과거 데이터 연동 완료!\n선택하신 열의 데이터가 총 ${matchCount}건 유연 매칭되었습니다.`);
 };
 
 // ============================================================================
