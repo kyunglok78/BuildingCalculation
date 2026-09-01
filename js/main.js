@@ -1751,23 +1751,71 @@ document.addEventListener('click', function(e) {
 });
 
 // ============================================================================
-// [섹션 10] 3.1 가액평가 데이터 검산 및 무결성 종합 비교 모듈
+// [섹션 10] 3.1 가액평가 데이터 검산 및 무결성 종합 비교 모듈 (스마트 매핑 마법사 탑재)
 // ============================================================================
 
 window.verifState = {
     pastData: {},    // 업로드된 과거 엑셀 데이터 { '계정명': { acq, rep, cur } }
     currentData: {}, // 시스템이 집계한 당해 데이터 { '계정명': { acq, rep, cur } }
     totalAcqOriginal: 0,
-    totalAcqCurrent: 0
+    totalAcqCurrent: 0,
+    tempParsed: {}   // 엑셀 원본 임시 보관소
 };
 
-// 좌측 메뉴 클릭 시 자동 실행되도록 연결
+// 좌측 메뉴 클릭 시 자동 실행
 document.addEventListener("DOMContentLoaded", () => {
     const menu3_1 = document.getElementById('nav-sec-3-1');
     if (menu3_1) {
         menu3_1.addEventListener('click', () => {
             setTimeout(() => { window.initVerificationScreen(); }, 200);
         });
+    }
+
+    // 검산용 과거 데이터 매핑 마법사 모달 동적 생성 (index.html 수정 불필요)
+    if (!document.getElementById('verifPastModal')) {
+        const modalHtml = `
+        <div class="modal-overlay" id="verifPastModal" style="display:none; z-index: 1050; justify-content: center; align-items: center;">
+            <div class="modal-content" style="width: 550px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+                <div class="modal-header" style="background:#28a745; color:white; padding:15px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight:bold;"><i class="fa-solid fa-link"></i> 과거 총괄표 데이터 매핑 마법사</span>
+                    <i class="fa-solid fa-xmark modal-close" style="cursor:pointer; font-size:18px;" onclick="document.getElementById('verifPastModal').style.display='none'"></i>
+                </div>
+                <div class="modal-body" style="padding: 25px; background:#f4f5f7;">
+                    <p style="font-size:13px; color:#555; margin-bottom:20px; line-height:1.5;">
+                        👉 불러온 과거 총괄표 엑셀에서 데이터를 추출합니다.<br>알맞은 <b>시트</b>와 4가지 필수 <b>데이터 열</b>을 직접 지정해 주세요.
+                    </p>
+                    
+                    <div style="background:#fff; padding:15px; border:1px solid #ddd; border-radius:4px; margin-bottom:15px;">
+                        <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">① 불러올 시트 선택</label>
+                        <select id="verifPastSheet" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc; margin-bottom: 15px; background:#f8f9fa;" onchange="window.updateVerifPastHeaders()"></select>
+
+                        <div style="display: flex; flex-wrap: wrap; gap: 15px;">
+                            <div style="flex: 1 1 45%;">
+                                <label style="font-weight:bold; font-size:13px; color:#1C5691; display:block; margin-bottom:5px;">② 자산계정 열</label>
+                                <select id="verifColAcc" class="input-box" style="width:100%; padding:8px; border:2px solid #1C5691;"></select>
+                            </div>
+                            <div style="flex: 1 1 45%;">
+                                <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">③ 취득가액 열</label>
+                                <select id="verifColAcq" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc;"></select>
+                            </div>
+                            <div style="flex: 1 1 45%;">
+                                <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">④ 재조달가액 열</label>
+                                <select id="verifColRep" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc;"></select>
+                            </div>
+                            <div style="flex: 1 1 45%;">
+                                <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">⑤ 현재가액 열</label>
+                                <select id="verifColCur" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc;"></select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="text-align: right;">
+                        <button type="button" class="btn-dark" style="background:#28a745; padding:10px 25px; border:none; font-weight:bold;" onclick="window.applyVerifPastMapping()">⚡ 연동 확정 및 검산 실행</button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
     }
 });
 
@@ -1778,13 +1826,12 @@ window.initVerificationScreen = function() {
 
     const wiz = window.infState && window.infState.wizard ? window.infState.wizard.mapped : {};
     
-    // [1단계] 취득금액 무결성 집계 (명세서 데이터 스캔)
+    // [1단계] 취득금액 무결성 집계
     if (window.infState && window.infState.data) {
         for (const tab in window.infState.data) {
             const tData = window.infState.data[tab];
             const raw = tData.raw || [];
             
-            // 매핑 인덱스 확보
             const accIdx = wiz['자산계정'];
             const priceIdx = wiz['취득가액'];
             const mappedColCount = Object.keys(wiz).length;
@@ -1805,21 +1852,18 @@ window.initVerificationScreen = function() {
                 const accName = String(row[accIdx] || '').trim();
                 const finalClass = String(row[finalClassIdx] || '').trim();
 
-                // 원본 무결성 집계 (삭제된 행 제외, 평가제외 포함 모든 로드된 금액)
                 window.verifState.totalAcqOriginal += acqVal;
-                window.verifState.totalAcqCurrent += acqVal; // (행 삭제를 안했다면 기본적으로 일치)
+                window.verifState.totalAcqCurrent += acqVal;
 
-                // 계정명 동적 등록
                 if (accName && !finalClass.includes('평가제외(만원이하)')) {
                     if (!window.verifState.currentData[accName]) {
                         window.verifState.currentData[accName] = { acq: 0, rep: 0, cur: 0 };
                     }
                     
-                    // 평가제외, 부보제외 처리 로직 반영
                     if (finalClass.includes('평가제외')) {
-                        repVal = 0; curVal = acqVal; // 평가제외는 장부가(취득가)를 현재가로 고정
+                        repVal = 0; curVal = acqVal; 
                     } else if (finalClass.includes('부보제외')) {
-                        repVal = 0; curVal = 0; // 부보제외는 0원 처리
+                        repVal = 0; curVal = 0; 
                     }
 
                     window.verifState.currentData[accName].acq += acqVal;
@@ -1830,7 +1874,6 @@ window.initVerificationScreen = function() {
         }
     }
 
-    // UI 배지 업데이트
     const acqOrigEl = document.getElementById('verifOrigAcq');
     const acqCurEl = document.getElementById('verifCurAcq');
     const badgeEl = document.getElementById('verifBadge');
@@ -1859,13 +1902,10 @@ window.renderVerificationTable = function() {
     const tbody = document.getElementById('verifTbody');
     if (!tbody) return;
 
-    // 2단계: 건물 평가 기준 선택 확인
-    const buildingMode = document.querySelector('input[name="verifBuildingMode"]:checked').value;
-    
-    // 복사본 생성하여 원본 데이터 보호
+    const buildingModeInput = document.querySelector('input[name="verifBuildingMode"]:checked');
+    const buildingMode = buildingModeInput ? buildingModeInput.value : 'ledger';
     const displayData = JSON.parse(JSON.stringify(window.verifState.currentData));
 
-    // '대장 기준' 선택 시, 명세서의 '건물/구축물/건물부속설비' 값을 0으로 밀고 대장 평가액 합산으로 덮어쓰기
     if (buildingMode === 'ledger' && window.kbState) {
         let ledgerRepTotal = 0, ledgerCurTotal = 0;
         
@@ -1881,10 +1921,8 @@ window.renderVerificationTable = function() {
             }
         });
 
-        // 명세서 상의 건물 관련 취득가만 살리고(비교용), 재조달/현재가는 대장값으로 오버라이드
         const buildingKeys = ['건물', '구축물', '건물부속설비'];
         let baseBuildingKey = displayData['건물'] ? '건물' : '건축물대장 통합액';
-        
         if (!displayData[baseBuildingKey]) displayData[baseBuildingKey] = { acq: 0, rep: 0, cur: 0 };
         
         buildingKeys.forEach(k => {
@@ -1895,7 +1933,6 @@ window.renderVerificationTable = function() {
         displayData[baseBuildingKey].cur = ledgerCurTotal;
     }
 
-    // 렌더링 시작 (과거 데이터와 합집합 키 추출)
     const allAccounts = new Set([...Object.keys(displayData), ...Object.keys(window.verifState.pastData)]);
     tbody.innerHTML = '';
 
@@ -1907,7 +1944,6 @@ window.renderVerificationTable = function() {
     let totPast = { acq:0, rep:0, cur:0 };
     let totCur  = { acq:0, rep:0, cur:0 };
 
-    // 한글 기준 가나다 정렬
     Array.from(allAccounts).sort().forEach(acc => {
         const past = window.verifState.pastData[acc] || { acq: 0, rep: 0, cur: 0 };
         const curr = displayData[acc] || { acq: 0, rep: 0, cur: 0 };
@@ -1925,7 +1961,6 @@ window.renderVerificationTable = function() {
         const rRep = calcRatio(curr.rep, past.rep);
         const rCur = calcRatio(curr.cur, past.cur);
 
-        // 하이라이트 로직 (1.5 이상 폭등, 0.7 이하 하락, 신규)
         const getStyle = (ratioStr) => {
             if (ratioStr === "신규") return "background: #d1ecf1; color: #0c5460; font-weight: bold;";
             if (ratioStr === "-") return "color: #999;";
@@ -1938,15 +1973,12 @@ window.renderVerificationTable = function() {
         tbody.innerHTML += `
             <tr style="background: #fff; border-bottom: 1px solid #eee;">
                 <td style="text-align: center; font-weight: bold; color: #444; border-right: 1px solid #ccc;">${acc}</td>
-                
                 <td style="text-align: right; color: #666;">${past.acq === 0 ? '-' : past.acq.toLocaleString('ko-KR')}</td>
                 <td style="text-align: right; color: #666;">${past.rep === 0 ? '-' : past.rep.toLocaleString('ko-KR')}</td>
                 <td style="text-align: right; color: #666; border-right: 1px solid #ccc;">${past.cur === 0 ? '-' : past.cur.toLocaleString('ko-KR')}</td>
-                
                 <td style="text-align: right; color: #1C5691; font-weight: 500;">${curr.acq === 0 ? '-' : curr.acq.toLocaleString('ko-KR')}</td>
                 <td style="text-align: right; color: #1C5691; font-weight: 500;">${curr.rep === 0 ? '-' : curr.rep.toLocaleString('ko-KR')}</td>
                 <td style="text-align: right; color: #1C5691; font-weight: 500; border-right: 1px solid #ccc;">${curr.cur === 0 ? '-' : curr.cur.toLocaleString('ko-KR')}</td>
-                
                 <td style="text-align: center; ${getStyle(rAcq)}">${rAcq}</td>
                 <td style="text-align: center; ${getStyle(rRep)}">${rRep}</td>
                 <td style="text-align: center; ${getStyle(rCur)}">${rCur}</td>
@@ -1954,7 +1986,6 @@ window.renderVerificationTable = function() {
         `;
     });
 
-    // 총계 렌더링
     const grandAcqRatio = totPast.acq === 0 ? "-" : (totCur.acq / totPast.acq).toFixed(2);
     const grandRepRatio = totPast.rep === 0 ? "-" : (totCur.rep / totPast.rep).toFixed(2);
     const grandCurRatio = totPast.cur === 0 ? "-" : (totCur.cur / totPast.cur).toFixed(2);
@@ -1965,11 +1996,9 @@ window.renderVerificationTable = function() {
             <td style="text-align: right;">${totPast.acq.toLocaleString('ko-KR')}</td>
             <td style="text-align: right;">${totPast.rep.toLocaleString('ko-KR')}</td>
             <td style="text-align: right; border-right: 1px solid #555;">${totPast.cur.toLocaleString('ko-KR')}</td>
-            
             <td style="text-align: right;">${totCur.acq.toLocaleString('ko-KR')}</td>
             <td style="text-align: right;">${totCur.rep.toLocaleString('ko-KR')}</td>
             <td style="text-align: right; border-right: 1px solid #555;">${totCur.cur.toLocaleString('ko-KR')}</td>
-            
             <td style="text-align: center;">${grandAcqRatio}</td>
             <td style="text-align: center;">${grandRepRatio}</td>
             <td style="text-align: center;">${grandCurRatio}</td>
@@ -1977,7 +2006,7 @@ window.renderVerificationTable = function() {
     `;
 };
 
-// [3단계] 과거 총괄표 엑셀 업로드 및 스마트 파싱
+// [3단계] 엑셀 업로드 시 임시 저장 후 팝업 오픈
 window.loadPastVerificationExcel = function(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -1988,58 +2017,122 @@ window.loadPastVerificationExcel = function(event) {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, {type: 'array'});
             
-            // '총괄표' 라는 이름의 시트를 우선 찾고, 없으면 첫 번째 시트 사용
-            const targetSheetName = workbook.SheetNames.find(n => n.includes('총괄표')) || workbook.SheetNames[0];
-            const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[targetSheetName], {header: 1, defval: ""});
+            window.verifState.tempParsed = {};
+            workbook.SheetNames.forEach(sheetName => {
+                const sheetJson = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {header: 1, defval: ""});
+                if (sheetJson.length > 0) {
+                    window.verifState.tempParsed[sheetName] = sheetJson;
+                }
+            });
+
+            if (Object.keys(window.verifState.tempParsed).length === 0) throw new Error("데이터를 찾을 수 없습니다.");
             
-            window.verifState.pastData = {};
-            let isParsingStarted = false;
-            let colMap = { acc: -1, acq: -1, rep: -1, cur: -1 };
-
-            // 휴리스틱 파싱 (컬럼 매칭)
-            for (let i = 0; i < jsonData.length; i++) {
-                const row = jsonData[i];
-                
-                // 데이터 시작점이 어디인지 키워드로 탐색
-                if (!isParsingStarted) {
-                    row.forEach((cell, idx) => {
-                        const txt = String(cell).replace(/\s/g, '');
-                        if (txt.includes('자산계정') || txt.includes('계정명')) colMap.acc = idx;
-                        if (txt.includes('취득가액') && colMap.acq === -1) colMap.acq = idx;
-                        if (txt.includes('재조달가액') && colMap.rep === -1) colMap.rep = idx;
-                        if (txt.includes('현재가액') && colMap.cur === -1) colMap.cur = idx;
-                    });
-                    
-                    if (colMap.acc !== -1 && colMap.rep !== -1) {
-                        isParsingStarted = true;
-                    }
-                    continue;
-                }
-
-                // 값 파싱
-                const accName = String(row[colMap.acc] || '').trim();
-                if (!accName || accName.includes('합계') || accName.includes('총계')) continue;
-
-                const acqVal = Number(String(row[colMap.acq] || '').replace(/,/g, '')) || 0;
-                const repVal = Number(String(row[colMap.rep] || '').replace(/,/g, '')) || 0;
-                const curVal = Number(String(row[colMap.cur] || '').replace(/,/g, '')) || 0;
-
-                // 과거 평가서에 동일 계정이 두 번 이상 나오면 합산
-                if (!window.verifState.pastData[accName]) {
-                    window.verifState.pastData[accName] = { acq: 0, rep: 0, cur: 0 };
-                }
-                window.verifState.pastData[accName].acq += acqVal;
-                window.verifState.pastData[accName].rep += repVal;
-                window.verifState.pastData[accName].cur += curVal;
-            }
-
-            alert(`✅ 과거 [${targetSheetName}] 데이터 연동 성공!\n표에 증감률(배수)이 자동 산출되어 나타납니다.`);
-            window.renderVerificationTable();
-
+            // 팝업창 세팅 및 띄우기
+            window.openVerifPastModal(workbook.SheetNames.find(n => n.includes('총괄표')) || workbook.SheetNames[0]);
+            
         } catch(err) {
-            alert("과거 총괄표 엑셀 파싱 중 오류가 발생했습니다.\n양식이 표준 포맷인지 확인해 주세요. (" + err.message + ")");
+            alert("과거 총괄표 엑셀 파싱 중 오류가 발생했습니다.\n(" + err.message + ")");
         }
     };
     reader.readAsArrayBuffer(file);
     event.target.value = '';
+};
+
+window.openVerifPastModal = function(defaultSheetName) {
+    const sheets = Object.keys(window.verifState.tempParsed);
+    const sheetSelect = document.getElementById('verifPastSheet');
+    sheetSelect.innerHTML = '';
+    
+    sheets.forEach(s => {
+        sheetSelect.innerHTML += `<option value="${s}" ${s === defaultSheetName ? 'selected' : ''}>${s}</option>`;
+    });
+    
+    window.updateVerifPastHeaders();
+    document.getElementById('verifPastModal').style.display = 'flex';
+};
+
+window.updateVerifPastHeaders = function() {
+    const sheet = document.getElementById('verifPastSheet').value;
+    const data = window.verifState.tempParsed[sheet] || [];
+    
+    const selects = {
+        acc: document.getElementById('verifColAcc'),
+        acq: document.getElementById('verifColAcq'),
+        rep: document.getElementById('verifColRep'),
+        cur: document.getElementById('verifColCur')
+    };
+
+    // 옵션 초기화
+    Object.values(selects).forEach(el => el.innerHTML = '');
+
+    let maxCols = 0;
+    data.forEach(r => { if(r.length > maxCols) maxCols = r.length; });
+    
+    for (let i = 0; i < maxCols; i++) {
+        let letter = String.fromCharCode(65 + (i % 26));
+        if (i >= 26) letter = String.fromCharCode(64 + Math.floor(i / 26)) + letter;
+        const optionHtml = `<option value="${i}">${letter} 열</option>`;
+        
+        Object.values(selects).forEach(el => el.innerHTML += optionHtml);
+    }
+
+    // 시스템 자동 추천 로직 (표 상단 1~15행 스캔)
+    let auto = { acc: -1, acq: -1, rep: -1, cur: -1 };
+    for (let r = 0; r < Math.min(15, data.length); r++) {
+        for (let c = 0; c < data[r].length; c++) {
+            const txt = String(data[r][c]).replace(/\s/g, '');
+            if (auto.acc === -1 && (txt.includes('자산계정') || txt.includes('계정명'))) auto.acc = c;
+            if (auto.acq === -1 && txt.includes('취득가액')) auto.acq = c;
+            if (auto.rep === -1 && txt.includes('재조달가액')) auto.rep = c;
+            if (auto.cur === -1 && txt.includes('현재가액')) auto.cur = c;
+        }
+    }
+
+    if (auto.acc !== -1) selects.acc.value = auto.acc;
+    if (auto.acq !== -1) selects.acq.value = auto.acq;
+    if (auto.rep !== -1) selects.rep.value = auto.rep;
+    if (auto.cur !== -1) selects.cur.value = auto.cur;
+};
+
+window.applyVerifPastMapping = function() {
+    const sheet = document.getElementById('verifPastSheet').value;
+    const colAcc = document.getElementById('verifColAcc').value;
+    const colAcq = document.getElementById('verifColAcq').value;
+    const colRep = document.getElementById('verifColRep').value;
+    const colCur = document.getElementById('verifColCur').value;
+
+    const rawData = window.verifState.tempParsed[sheet];
+    if (!rawData || !colAcc || !colAcq || !colRep || !colCur) return alert("데이터 및 열 선택을 확인해 주세요.");
+
+    window.verifState.pastData = {};
+    let isParsingStarted = false;
+
+    for (let i = 0; i < rawData.length; i++) {
+        const row = rawData[i];
+        const accName = String(row[colAcc] || '').trim();
+
+        // 합계, 총계 행은 건너뛰기
+        if (!accName || accName.includes('합계') || accName.includes('총계')) continue;
+        
+        // 헤더명 텍스트(예: "자산계정")가 포함된 행은 건너뛰기 (실제 숫자가 시작되는 곳부터 취합)
+        if (accName.includes('계정') || String(row[colAcq] || '').includes('가액')) continue;
+
+        const acqVal = Number(String(row[colAcq] || '').replace(/,/g, '')) || 0;
+        const repVal = Number(String(row[colRep] || '').replace(/,/g, '')) || 0;
+        const curVal = Number(String(row[colCur] || '').replace(/,/g, '')) || 0;
+
+        // 세 값이 모두 0이면 유효하지 않은 데이터로 간주
+        if (acqVal === 0 && repVal === 0 && curVal === 0) continue;
+
+        if (!window.verifState.pastData[accName]) {
+            window.verifState.pastData[accName] = { acq: 0, rep: 0, cur: 0 };
+        }
+        window.verifState.pastData[accName].acq += acqVal;
+        window.verifState.pastData[accName].rep += repVal;
+        window.verifState.pastData[accName].cur += curVal;
+    }
+
+    document.getElementById('verifPastModal').style.display = 'none';
+    window.renderVerificationTable();
+    alert(`✅ [${sheet}] 시트 연동 성공!\n선택하신 자산계정을 기준으로 증감률 표가 갱신되었습니다.`);
 };
