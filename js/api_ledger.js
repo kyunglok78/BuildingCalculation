@@ -108,21 +108,28 @@ function parseXMLToJSON(xmlText, colMap) {
     } catch(e) { return []; }
 }
 
+
+// ============================================================================
+// [수정] api_ledger.js 의 simulateApiFetch 함수 교체
+// 트래픽 분산(쿨타임) 및 실패 시 자동 재시도(Retry) 로직 적용
+// ============================================================================
 async function simulateApiFetch() {
     const btn = document.getElementById('btnFetchApi');
     const emptyMsg = document.getElementById('emptyStateMsg');
     const dataContainer = document.getElementById('fetchedDataContainer');
     const tabsContainer = document.getElementById('slide3Tabs');
     
-    // 현재 UI 요소에 맞게 행을 가져옵니다.
     const tbody = document.getElementById('locationTbody');
     const rows = tbody ? tbody.querySelectorAll('tr') : [];
     
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 실시간 연동 중...';
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 실시간 연동 중... (서버 안정화 적용)';
     btn.disabled = true;
     tabsContainer.innerHTML = ''; dataContainer.innerHTML = ''; 
     let fetchedResults = [];
     const baseUrl = '';
+
+    // [핵심 1] 방화벽 차단 방지 및 재시도를 위한 대기(Sleep) 함수
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
     for (let index = 0; index < rows.length; index++) {
         const row = rows[index];
@@ -145,7 +152,6 @@ async function simulateApiFetch() {
             const kakaoJson = await kakaoRes.json();
             if(!kakaoJson.documents || kakaoJson.documents.length === 0) throw new Error("조회할 수 없는 주소 형식입니다.");
             
-            // ★ 과거 파일의 매우 안정적이었던 카카오 주소 파싱 로직 100% 복원
             const doc = kakaoJson.documents[0].address || kakaoJson.documents[0].road_address;
             const sigunguCd = doc.h_code ? doc.h_code.substring(0, 5) : "00000";
             const bjdongCd = doc.b_code ? doc.b_code.substring(5) : "00000";
@@ -157,29 +163,58 @@ async function simulateApiFetch() {
                 ji: doc.sub_address_no ? doc.sub_address_no.padStart(4, '0') : '0000' 
             };
             
-            const fetchEndpoint = async (endpoint, colMap) => {
-                const res = await fetch(`${baseUrl}/api/datago?endpoint=${endpoint}&sigunguCd=${codes.sigunguCd}&bjdongCd=${codes.bjdongCd}&platGbCd=${codes.platGbCd}&bun=${codes.bun}&ji=${codes.ji}`);
-                // 예전처럼 정부 서버 통신 오류 메시지를 부드럽게 표시합니다.
-                if(!res.ok) throw new Error(`서버 통신 실패 (HTTP ${res.status}) - 정부 서버 지연 중`);
-                return parseXMLToJSON(await res.text(), colMap);
+            // [핵심 2] 3회 재시도(Retry) 로직이 탑재된 fetchEndpoint
+            const fetchEndpoint = async (endpoint, colMap, retries = 3) => {
+                const url = `${baseUrl}/api/datago?endpoint=${endpoint}&sigunguCd=${codes.sigunguCd}&bjdongCd=${codes.bjdongCd}&platGbCd=${codes.platGbCd}&bun=${codes.bun}&ji=${codes.ji}`;
+                
+                for (let i = 0; i < retries; i++) {
+                    try {
+                        const res = await fetch(url);
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        
+                        const xmlText = await res.text();
+                        
+                        // 정부 서버에서 정상 형태가 아닌 에러 메시지를 보낸 경우 강제 에러 발생
+                        if (xmlText.includes("<cmmMsgHeader>") || xmlText.includes("OpenAPI_ServiceResponse")) {
+                            throw new Error("공공데이터포털 트래픽 초과 또는 내부 오류 응답");
+                        }
+                        
+                        return parseXMLToJSON(xmlText, colMap);
+                    } catch (err) {
+                        console.warn(`[API 호출 재시도 ${i+1}/${retries}] ${endpoint} - ${err.message}`);
+                        if (i === retries - 1) {
+                            throw new Error(`정부 서버 응답 지연 (최종 실패: ${err.message})`);
+                        }
+                        await sleep(1000); // 실패 시 1초 숨고르기 후 다시 찌름
+                    }
+                }
             };
             
             const totalColMap = [["platPlc", ["platPlc"]], ["bldNm", ["bldNm"]], ["mainPurpsCdNm", ["mainPurpsCdNm"]], ["mainBldCnt", ["mainBldCnt"]], ["subBldCnt", ["subBldCnt", "atchBldCnt"]], ["totArea", ["totArea"]], ["pmsDay", ["pmsDay", "prmDay"]], ["stcnsDay", ["stcnsDay", "stcDay"]], ["useAprDay", ["useAprDay", "useAprvDay"]]];
             const titleColMap = [["dongNm", ["dongNm"]], ["mainPurpsCdNm", ["mainPurpsCdNm"]], ["grndFlrCnt", ["grndFlrCnt"]], ["ugrndFlrCnt", ["ugrndFlrCnt"]], ["totArea", ["totArea"]], ["heit", ["heit"]], ["strctCdNm", ["strctCdNm"]], ["roofCdNm", ["roofCdNm"]], ["useAprDay", ["useAprDay", "useAprvDay"]]];
             const floorColMap = [["dongNm", ["dongNm"]], ["flrGbCdNm", ["flrGbCdNm"]], ["flrNoNm", ["flrNoNm"]], ["area", ["area"]], ["etcPurps", ["etcPurps"]], ["strctCdNm", ["strctCdNm"]], ["roofCdNm", ["roofCdNm"]]];
 
+            // [핵심 3] 연속 호출에 의한 방화벽 차단 방지를 위해 각 호출 사이 0.5초 쿨타임(Sleep) 부여
             totalData = await fetchEndpoint('getBrRecapTitleInfo', totalColMap);
+            await sleep(500);
             titleData = await fetchEndpoint('getBrTitleInfo', titleColMap);
+            await sleep(500);
             floorData = await fetchEndpoint('getBrFlrOulnInfo', floorColMap);
             
             if(totalData.length > 0 || titleData.length > 0) isSuccess = true;
             else throw new Error("해당 지번에 등록된 건축물대장이 없습니다.");
         } catch(e) { isSuccess = false; apiErrMsg = e.message; }
 
+        // 다음 사업장(소재지)으로 넘어가기 전 0.8초 추가 쿨타임
+        if (index < rows.length - 1) {
+            await sleep(800);
+        }
+
         fetchedResults.push({ index, locName, locAddr, totalData, titleData, floorData, isSuccess, apiErrMsg });
     }
     executeLedgerRender(fetchedResults);
 }
+
 
 function executeLedgerRender(results) {
     const btn = document.getElementById('btnFetchApi');
