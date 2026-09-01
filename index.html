@@ -855,26 +855,110 @@
 
 
 <!-- ============================================================================ -->
-<!-- [SEC-5-8] 3. 결과 및 보고서 화면들 (3.1 ~ 3.3) -->
+<!-- [SEC-5-8] 3.1 가액평가 검산 및 통합 비교 (4단계 완벽 검증 모듈) -->
 <!-- ============================================================================ -->
+<section id="sec-3-1" class="page-section">
+    <h2 class="page-title"><i class="fa-solid fa-clipboard-check"></i> 3.1 가액평가 데이터 검산 및 종합 비교</h2>
 
-        <!-- 3.1 가액평가 검산 (신규 준비 영역) -->
-        <section id="sec-3-1" class="page-section">
-            <h2 class="page-title"><i class="fa-solid fa-clipboard-check"></i> 3.1 가액평가 데이터 검산 및 오류 확인</h2>
-            <div class="card">
-                <div class="card-body" style="text-align: center; padding: 80px 20px; color: #666;">
-                    <i class="fa-solid fa-shield-halved" style="font-size: 45px; margin-bottom: 20px; color: #17A2B8;"></i>
-                    <h3 style="margin-bottom: 10px; color: #333; font-size: 18px;">가액평가 검산 모듈 준비 중</h3>
-                    <p style="font-size: 14px; line-height: 1.6;">누락된 감가율, 빈 구조코드, 또는 현재가액 계산 오류 등을<br>자동으로 찾아내고 알려주는 데이터 무결성 검증 화면이 배치될 예정입니다.</p>
+    <!-- [1단계 & 2단계] 상단 요약 및 설정 패널 -->
+    <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+        
+        <!-- 1단계: 원시 데이터 무결성 검증 -->
+        <div class="card" style="flex: 1; margin-bottom: 0;">
+            <div class="card-header" style="background:#f8f9fa;"><span><i class="fa-solid fa-scale-balanced"></i> 1단계: 취득금액 무결성 검증</span></div>
+            <div class="card-body" style="padding: 20px; display: flex; align-items: center; justify-content: space-between;">
+                <div style="flex: 1;">
+                    <div style="font-size: 13px; color: #666; margin-bottom: 5px;">명세서 원본 (제외 항목 포함) 총 취득가액</div>
+                    <div style="font-size: 20px; font-weight: bold; color: #333;" id="verifOrigAcq">0 원</div>
+                </div>
+                <div style="font-size: 24px; color: #ccc; margin: 0 15px;">=</div>
+                <div style="flex: 1;">
+                    <div style="font-size: 13px; color: #666; margin-bottom: 5px;">평가 대상 (제외 항목 포함) 총 취득가액</div>
+                    <div style="font-size: 20px; font-weight: bold; color: #1C5691;" id="verifCurAcq">0 원</div>
+                </div>
+                <div id="verifBadge" style="margin-left: 20px; padding: 10px 20px; border-radius: 30px; font-weight: bold; font-size: 14px; background: #eee; color: #999;">
+                    대기중
                 </div>
             </div>
-            <div style="text-align: right; margin-top: 20px;">
-                <button type="button" class="btn-exec" onclick="completeAndNext('sec-3-1')" style="background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px;">
-                    검산 완료 및 3.2 총괄표로 이동 <i class="fa-solid fa-arrow-right"></i>
+        </div>
+
+        <!-- 2단계: 건물 평가 기준 선택 -->
+        <div class="card" style="flex: 1; margin-bottom: 0;">
+            <div class="card-header" style="background:#f8f9fa;"><span><i class="fa-solid fa-building-shield"></i> 2단계: 건물 자산 평가 기준 선택</span></div>
+            <div class="card-body" style="padding: 20px;">
+                <p style="font-size: 13px; color: #666; margin-bottom: 15px;">최종 보고서와 검산표에 반영할 '건물'의 가액 산출 기준을 선택하세요.</p>
+                <div style="display: flex; gap: 20px;">
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: bold; color: #1C5691;">
+                        <input type="radio" name="verifBuildingMode" value="ledger" checked onchange="window.renderVerificationTable()" style="width:18px; height:18px;"> 
+                        건축물대장 기준 (신축단가/원가법)
+                    </label>
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: bold; color: #d32f2f;">
+                        <input type="radio" name="verifBuildingMode" value="inflation" onchange="window.renderVerificationTable()" style="width:18px; height:18px;"> 
+                        명세서 기준 (물가보정법)
+                    </label>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- [3단계 & 4단계] 과거 데이터 연동 및 총괄 검산 대시보드 -->
+    <div class="card" style="flex: 1; display: flex; flex-direction: column;">
+        <div class="card-header" style="background: #2C2C2C; color: #FFCC00; border: none; display: flex; justify-content: space-between; align-items: center;">
+            <span><i class="fa-solid fa-magnifying-glass-chart"></i> 3·4단계: 자산계정별 가액 변동 검산 및 이상치 분석</span>
+            
+            <div style="display: flex; gap: 10px;">
+                <input type="file" id="verifPastExcel" accept=".xlsx, .xls" style="display: none;" onchange="window.loadPastVerificationExcel(event)">
+                <button type="button" class="btn-dark" style="background: #28a745; border: none; padding: 6px 15px; font-size: 13px;" onclick="document.getElementById('verifPastExcel').click()">
+                    <i class="fa-solid fa-file-import"></i> 과거 총괄표 엑셀 불러오기
+                </button>
+                <button type="button" class="btn-dark" style="background: #17A2B8; border: none; padding: 6px 15px; font-size: 13px;" onclick="window.initVerificationScreen()">
+                    <i class="fa-solid fa-rotate-right"></i> 데이터 최신화
                 </button>
             </div>
-        </section>
+        </div>
+        <div class="card-body" style="padding: 0; flex: 1; overflow-y: auto; background: #fff;">
+            
+            <div style="padding: 15px 20px; background: #fff3cd; color: #856404; font-size: 13px; font-weight: bold; border-bottom: 1px solid #ffeeba; display: flex; gap: 20px;">
+                <span>💡 [이상치 감지 알림] 과거 대비 변동폭 안내: </span>
+                <span><span style="display:inline-block; width:12px; height:12px; background:#ffc107; margin-right:5px; border-radius:2px;"></span>1.5배 이상 폭등 (노란색)</span>
+                <span><span style="display:inline-block; width:12px; height:12px; background:#f8d7da; margin-right:5px; border-radius:2px;"></span>0.7배 이하 하락 (빨간색)</span>
+                <span><span style="display:inline-block; width:12px; height:12px; background:#d1ecf1; margin-right:5px; border-radius:2px;"></span>과거 값 없음 (파란색)</span>
+            </div>
 
+            <table class="data-table" style="margin: 0; border: none; font-size: 13px; white-space: nowrap;">
+                <thead style="position: sticky; top: 0; z-index: 10;">
+                    <tr>
+                        <th rowspan="2" style="background: #e9ecef; border: 1px solid #ccc; text-align: center; vertical-align: middle; width: 120px;">자산계정</th>
+                        <th colspan="3" style="background: #fdfbf7; border: 1px solid #ccc; text-align: center; color: #666;">과거 평가 가액 (A)</th>
+                        <th colspan="3" style="background: #f4f8fb; border: 1px solid #ccc; text-align: center; color: #1C5691;">당해 평가 가액 (B)</th>
+                        <th colspan="3" style="background: #fdf7f8; border: 1px solid #ccc; text-align: center; color: #d32f2f;">증감률 (B / A)</th>
+                    </tr>
+                    <tr>
+                        <th style="background: #fdfbf7; border: 1px solid #ccc; text-align: right;">취득가액</th>
+                        <th style="background: #fdfbf7; border: 1px solid #ccc; text-align: right;">재조달가액</th>
+                        <th style="background: #fdfbf7; border: 1px solid #ccc; text-align: right;">현재가액</th>
+                        <th style="background: #f4f8fb; border: 1px solid #ccc; text-align: right;">취득가액</th>
+                        <th style="background: #f4f8fb; border: 1px solid #ccc; text-align: right;">재조달가액</th>
+                        <th style="background: #f4f8fb; border: 1px solid #ccc; text-align: right;">현재가액</th>
+                        <th style="background: #fdf7f8; border: 1px solid #ccc; text-align: center;">취득 증감</th>
+                        <th style="background: #fdf7f8; border: 1px solid #ccc; text-align: center;">재조달 증감</th>
+                        <th style="background: #fdf7f8; border: 1px solid #ccc; text-align: center;">현재 증감</th>
+                    </tr>
+                </thead>
+                <tbody id="verifTbody">
+                    <tr><td colspan="10" style="text-align:center; padding: 60px; color:#999;">데이터를 최신화하여 검산을 시작해 주세요.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div style="text-align: right; margin-top: 20px;">
+        <button type="button" class="btn-exec" onclick="completeAndNext('sec-3-1')" style="background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px;">
+            검산 완료 및 3.2 총괄표로 이동 <i class="fa-solid fa-arrow-right"></i>
+        </button>
+    </div>
+</section>
         <!-- 3.2 총괄표 작성 (기존 3.1에서 이동된 영역) -->
         <section id="sec-3-2" class="page-section">
             <div class="flex-between mb-20" style="align-items: flex-end;">
@@ -963,7 +1047,8 @@
     </main>
     </main>
 
-<!-- ============================================================================ -->
+
+!-- ============================================================================ -->
 <!-- [SEC-6] 자바스크립트 영역 (SPA 및 다중 생성 처리) -->
 <!-- ============================================================================ -->
 
@@ -1015,3 +1100,4 @@ function completeAndNext(currentSecId) {
     <script src="./js/api_inflation.js"></script>
 </body>
 </html>
+
