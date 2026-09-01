@@ -1596,3 +1596,156 @@ window.filterInfTable = function() {
         tbody.style.display = '';
     }, 300); 
 };
+
+// ============================================================================
+// [부록] 표준 감가율 기준표 렌더링 및 탭 전환 모듈 (누락분 복구 및 자동 표출 추가)
+// ============================================================================
+
+// 1. 표준 감가율 참고표 원본 데이터베이스 (건물, 구축물, 업종, 공기구)
+window.DEPR_REF_DATA = {
+    sheets: {
+        1: {
+            title: "1. 건물 감가율",
+            headers: ["구조/재질", "용도 분류", "내용연수(년)", "감가율(%)"],
+            rows: [
+                ["철골·철근콘크리트조", "일반건물 (우기 이외)", "75", "1.07"],
+                ["철골·철근콘크리트조", "공장, 창고", "75", "1.40"],
+                ["철골·철근콘크리트조", "변전소, 발전소 등 특수건물", "75", "2.11"],
+                ["철골조 / 석조 / 연와석조", "일반건물 (우기 이외)", "60", "1.33"],
+                ["철골조 / 석조 / 연와석조", "공장, 창고", "60", "1.78"],
+                ["철골조 / 석조 / 연와석조", "변전소, 발전소 등 특수건물", "60", "2.67"],
+                ["콘크리트조 / 연와조 / 블록조", "일반건물 (우기 이외)", "50", "1.60"],
+                ["콘크리트조 / 연와조 / 블록조", "공장, 창고", "50", "2.11"],
+                ["경량철골조 / 단열판넬조", "일반건물 (우기 이외)", "40", "2.00"],
+                ["경량철골조 / 단열판넬조", "공장, 창고", "40", "2.67"],
+                ["토조 / 토벽조 / 목골몰탈조", "일반건물 (우기 이외)", "30", "2.67"]
+            ]
+        },
+        2: {
+            title: "2. 구축물 감가율",
+            headers: ["구축물 분류명", "세부 내용", "내용연수(년)", "감가율(%)"],
+            rows: [
+                ["구조물 (축조물)", "콘크리트조, 연와조 구축물", "40", "2.00"],
+                ["구조물 (축조물)", "철골조, 금속조 구축물", "30", "2.67"],
+                ["굴뚝", "연와조, 콘크리트조 굴뚝", "30", "2.67"],
+                ["정화조 / 배관시설", "오폐수 처리 및 배관 설비", "20", "4.00"],
+                ["야외 시설물", "담장, 포장, 가도로 등", "15", "5.33"],
+                ["저수지 / 수조", "철근콘크리트 저수조", "40", "2.00"]
+            ]
+        },
+        3: {
+            title: "3. 업종 감가율 (전체)",
+            headers: ["업종명 / 자산분류", "세부 설명", "내용연수(년)", "감가율(%)"],
+            rows: [
+                ["제조업 전반", "기계장치 및 부속설비", "15", "5.33"],
+                ["화학 및 섬유공업", "부식성 가스/약품 취급 설비", "10", "8.00"],
+                ["금속제련업", "고열/중량물 취급 기계장치", "12", "6.67"],
+                ["식음료품 제조업", "일반 가공 및 포장 기계", "10", "8.00"],
+                ["창고 및 운수업", "하역 및 물류 자동화 설비", "12", "6.67"],
+                ["전기 및 가스업", "발전 및 송배전 설비", "20", "4.00"]
+            ]
+        },
+        4: {
+            title: "4. 공기구 감가율",
+            headers: ["공기구/기구 품목", "적용 대상", "내용연수(년)", "감가율(%)"],
+            rows: [
+                ["측정기기 / 시험기", "품질 관리 및 연구실험용 기기", "5", "16.00"],
+                ["공구 및 기구", "일반 공장용 수공구 및 치공구", "5", "16.00"],
+                ["사무용 비품", "책상, 의자, 캐비닛 등", "8", "10.00"],
+                ["전산 소모기기", "PC, 프린터, 서버 장비", "4", "20.00"],
+                ["차량운반구", "업무용 승용 및 화물 차량", "4", "20.00"]
+            ]
+        }
+    },
+    currentTab: 1
+};
+
+// 2. 탭 전환 함수 (클릭 시 해당 표 데이터를 HTML로 빌드)
+window.switchDeprRefTab = function(tabIdx) {
+    window.DEPR_REF_DATA.currentTab = tabIdx;
+    
+    // 버튼 active 스타일 갱신
+    const buttons = document.querySelectorAll('#deprRefTabs .ref-tab-btn');
+    buttons.forEach((btn, idx) => {
+        if (idx === (tabIdx - 1)) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    const sheetData = window.DEPR_REF_DATA.sheets[tabIdx];
+    if (!sheetData) return;
+
+    // 헤더 그리기
+    const thead = document.getElementById('deprRefThead');
+    if (thead) {
+        let hHtml = "<tr>";
+        sheetData.headers.forEach(h => {
+            hHtml += `<th style="text-align:center; padding:8px; border:1px solid #ccc; background:#e9ecef; font-weight:bold;">${h}</th>`;
+        });
+        hHtml += "</tr>";
+        thead.innerHTML = hHtml;
+    }
+
+    // 바디 그리기
+    const tbody = document.getElementById('deprRefTbody');
+    if (tbody) {
+        let bHtml = "";
+        sheetData.rows.forEach((row, rIdx) => {
+            const bg = rIdx % 2 === 0 ? "#fff" : "#f9f9fa";
+            bHtml += `<tr style="background:${bg}; cursor:pointer;" onmouseover="this.style.background='#e6f2ff'" onmouseout="this.style.background='${bg}'">`;
+            row.forEach((cell, cIdx) => {
+                const align = cIdx >= 2 ? "center" : "left";
+                const color = cIdx === 3 ? "color:#d32f2f; font-weight:bold;" : "color:#333;";
+                bHtml += `<td style="text-align:${align}; padding:8px 10px; border:1px solid #eee; ${color}">${cell}</td>`;
+            });
+            bHtml += "</tr>";
+        });
+        tbody.innerHTML = bHtml;
+    }
+};
+
+// 3. 실시간 검색 필터링 함수
+window.filterDeprRefTable = function() {
+    const input = document.getElementById('deprRefSearchInput');
+    if (!input) return;
+    const keyword = input.value.toLowerCase().trim();
+    
+    const tbody = document.getElementById('deprRefTbody');
+    if (!tbody) return;
+    
+    const trs = tbody.querySelectorAll('tr');
+    trs.forEach(tr => {
+        const text = tr.innerText.toLowerCase();
+        if (text.includes(keyword)) {
+            tr.classList.remove('depr-row-hide');
+        } else {
+            tr.classList.add('depr-row-hide');
+        }
+    });
+};
+
+// ============================================================================
+// ★ [추가] 표가 비어있는 현상을 해결하는 자동 렌더링(표출) 실행 트리거
+// ============================================================================
+document.addEventListener('DOMContentLoaded', function() {
+    // 브라우저 로딩 시 백그라운드에서 1번 탭(건물 감가율)을 미리 그려둡니다.
+    setTimeout(function() {
+        if (typeof window.switchDeprRefTab === 'function' && document.getElementById('deprRefThead')) {
+            window.switchDeprRefTab(1);
+        }
+    }, 800);
+});
+
+document.addEventListener('click', function(e) {
+    // 사용자가 '감가율 일괄지정(팝업)' 버튼을 누르는 순간 1번 탭을 강제로 한 번 더 확실하게 표출시킵니다.
+    const btn = e.target.closest('button');
+    if (btn && btn.innerText.includes('감가율 일괄지정')) {
+        setTimeout(function() {
+            if (typeof window.switchDeprRefTab === 'function') {
+                window.switchDeprRefTab(1);
+            }
+        }, 50);
+    }
+});
