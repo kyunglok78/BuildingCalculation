@@ -1762,16 +1762,8 @@ window.verifState = {
     tempParsed: {}   // 엑셀 원본 임시 보관소
 };
 
-// 좌측 메뉴 클릭 시 자동 실행
-document.addEventListener("DOMContentLoaded", () => {
-    const menu3_1 = document.getElementById('nav-sec-3-1');
-    if (menu3_1) {
-        menu3_1.addEventListener('click', () => {
-            setTimeout(() => { window.initVerificationScreen(); }, 200);
-        });
-    }
-
-    // 검산용 과거 데이터 매핑 마법사 모달 동적 생성 (index.html 수정 불필요)
+// 모달 동적 생성 및 좌측 메뉴 이벤트 바인딩 (안전하게 즉시 실행)
+(function initVerifModule() {
     if (!document.getElementById('verifPastModal')) {
         const modalHtml = `
         <div class="modal-overlay" id="verifPastModal" style="display:none; z-index: 1050; justify-content: center; align-items: center;">
@@ -1784,11 +1776,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     <p style="font-size:13px; color:#555; margin-bottom:20px; line-height:1.5;">
                         👉 불러온 과거 총괄표 엑셀에서 데이터를 추출합니다.<br>알맞은 <b>시트</b>와 4가지 필수 <b>데이터 열</b>을 직접 지정해 주세요.
                     </p>
-                    
                     <div style="background:#fff; padding:15px; border:1px solid #ddd; border-radius:4px; margin-bottom:15px;">
                         <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">① 불러올 시트 선택</label>
                         <select id="verifPastSheet" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc; margin-bottom: 15px; background:#f8f9fa;" onchange="window.updateVerifPastHeaders()"></select>
-
                         <div style="display: flex; flex-wrap: wrap; gap: 15px;">
                             <div style="flex: 1 1 45%;">
                                 <label style="font-weight:bold; font-size:13px; color:#1C5691; display:block; margin-bottom:5px;">② 자산계정 열</label>
@@ -1808,7 +1798,6 @@ document.addEventListener("DOMContentLoaded", () => {
                             </div>
                         </div>
                     </div>
-
                     <div style="text-align: right;">
                         <button type="button" class="btn-dark" style="background:#28a745; padding:10px 25px; border:none; font-weight:bold;" onclick="window.applyVerifPastMapping()">⚡ 연동 확정 및 검산 실행</button>
                     </div>
@@ -1816,6 +1805,15 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
         </div>`;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+})();
+
+document.addEventListener("DOMContentLoaded", () => {
+    const menu3_1 = document.getElementById('nav-sec-3-1');
+    if (menu3_1) {
+        menu3_1.addEventListener('click', () => {
+            setTimeout(() => { window.initVerificationScreen(); }, 200);
+        });
     }
 });
 
@@ -1826,7 +1824,6 @@ window.initVerificationScreen = function() {
 
     const wiz = window.infState && window.infState.wizard ? window.infState.wizard.mapped : {};
     
-    // [1단계] 취득금액 무결성 집계
     if (window.infState && window.infState.data) {
         for (const tab in window.infState.data) {
             const tData = window.infState.data[tab];
@@ -1902,15 +1899,12 @@ window.renderVerificationTable = function() {
     const tbody = document.getElementById('verifTbody');
     if (!tbody) return;
 
-    // 4가지 모드(title, floor, kfpa, inflation) 중 선택된 1개 값 가져오기
     const buildingModeInput = document.querySelector('input[name="verifBuildingMode"]:checked');
     const buildingMode = buildingModeInput ? buildingModeInput.value : 'title';
     const displayData = JSON.parse(JSON.stringify(window.verifState.currentData));
 
-    // 물가보정(inflation)이 아닐 경우 선택된 딱 1개의 대장 탭(예: title) 금액만 합산
     if (buildingMode !== 'inflation' && window.kbState) {
         let ledgerRepTotal = 0, ledgerCurTotal = 0;
-        
         const dataObj = window.kbState.evalData[buildingMode];
         if (dataObj) {
             for (const site in dataObj) {
@@ -1934,7 +1928,6 @@ window.renderVerificationTable = function() {
             }
         });
 
-        // 3중 중복합산 없이 딱 1개 기준액만 깔끔하게 덮어쓰기
         displayData[baseBuildingKey].rep = ledgerRepTotal;
         displayData[baseBuildingKey].cur = ledgerCurTotal;
     }
@@ -1957,7 +1950,6 @@ window.renderVerificationTable = function() {
         totPast.acq += past.acq; totPast.rep += past.rep; totPast.cur += past.cur;
         totCur.acq += curr.acq;  totCur.rep += curr.rep;  totCur.cur += curr.cur;
 
-        // 증감률 백분율(소수점 1자리) 산출
         const calcRatio = (b, a) => {
             if (a === 0 && b === 0) return "-";
             if (a === 0 && b > 0) return "신규";
@@ -1968,7 +1960,6 @@ window.renderVerificationTable = function() {
         const rRep = calcRatio(curr.rep, past.rep);
         const rCur = calcRatio(curr.cur, past.cur);
 
-        // 150% 이상, 70% 이하 기준 하이라이트
         const getStyle = (ratioStr) => {
             if (ratioStr === "신규") return "background: #d1ecf1; color: #0c5460; font-weight: bold;";
             if (ratioStr === "-") return "color: #999;";
@@ -2003,7 +1994,6 @@ window.renderVerificationTable = function() {
     const grandRepRatio = formatGrandRatio(totCur.rep, totPast.rep);
     const grandCurRatio = formatGrandRatio(totCur.cur, totPast.cur);
 
-    // 총계 합산 글자색 및 배경색이 글로벌 CSS에 먹히지 않도록 !important 고정
     tbody.innerHTML += `
         <tr style="background: #2C2C2C !important; font-weight: bold; font-size: 14px;">
             <td style="text-align: center; border-right: 1px solid #555; color: #FFCC00 !important;">총계 합산</td>
@@ -2020,34 +2010,6 @@ window.renderVerificationTable = function() {
     `;
 };
 
-    // [수정] 총계 합산 증감률 백분율 산출
-    const formatGrandRatio = (b, a) => {
-        if (a === 0 && b === 0) return "-";
-        if (a === 0 && b > 0) return "신규";
-        return ((b / a) * 100).toFixed(1) + "%";
-    };
-    const grandAcqRatio = formatGrandRatio(totCur.acq, totPast.acq);
-    const grandRepRatio = formatGrandRatio(totCur.rep, totPast.rep);
-    const grandCurRatio = formatGrandRatio(totCur.cur, totPast.cur);
-
-    // [수정] 총계 합산 글자가 보이지 않는 문제 해결 (각 <td>에 color: #FFCC00 강제 적용)
-    tbody.innerHTML += `
-        <tr style="background: #2C2C2C; font-weight: bold; font-size: 14px;">
-            <td style="text-align: center; border-right: 1px solid #555; color: #FFCC00;">총계 합산</td>
-            <td style="text-align: right; color: #FFCC00;">${totPast.acq.toLocaleString('ko-KR')}</td>
-            <td style="text-align: right; color: #FFCC00;">${totPast.rep.toLocaleString('ko-KR')}</td>
-            <td style="text-align: right; border-right: 1px solid #555; color: #FFCC00;">${totPast.cur.toLocaleString('ko-KR')}</td>
-            <td style="text-align: right; color: #FFCC00;">${totCur.acq.toLocaleString('ko-KR')}</td>
-            <td style="text-align: right; color: #FFCC00;">${totCur.rep.toLocaleString('ko-KR')}</td>
-            <td style="text-align: right; border-right: 1px solid #555; color: #FFCC00;">${totCur.cur.toLocaleString('ko-KR')}</td>
-            <td style="text-align: center; color: #FFCC00;">${grandAcqRatio}</td>
-            <td style="text-align: center; color: #FFCC00;">${grandRepRatio}</td>
-            <td style="text-align: center; color: #FFCC00;">${grandCurRatio}</td>
-        </tr>
-    `;
-};
-
-// [3단계] 엑셀 업로드 시 임시 저장 후 팝업 오픈
 window.loadPastVerificationExcel = function(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -2068,7 +2030,6 @@ window.loadPastVerificationExcel = function(event) {
 
             if (Object.keys(window.verifState.tempParsed).length === 0) throw new Error("데이터를 찾을 수 없습니다.");
             
-            // 팝업창 세팅 및 띄우기
             window.openVerifPastModal(workbook.SheetNames.find(n => n.includes('총괄표')) || workbook.SheetNames[0]);
             
         } catch(err) {
@@ -2103,7 +2064,6 @@ window.updateVerifPastHeaders = function() {
         cur: document.getElementById('verifColCur')
     };
 
-    // 옵션 초기화
     Object.values(selects).forEach(el => el.innerHTML = '');
 
     let maxCols = 0;
@@ -2117,7 +2077,6 @@ window.updateVerifPastHeaders = function() {
         Object.values(selects).forEach(el => el.innerHTML += optionHtml);
     }
 
-    // 시스템 자동 추천 로직 (표 상단 1~15행 스캔)
     let auto = { acc: -1, acq: -1, rep: -1, cur: -1 };
     for (let r = 0; r < Math.min(15, data.length); r++) {
         for (let c = 0; c < data[r].length; c++) {
@@ -2152,17 +2111,13 @@ window.applyVerifPastMapping = function() {
         const row = rawData[i];
         const accName = String(row[colAcc] || '').trim();
 
-        // 합계, 총계 행은 건너뛰기
         if (!accName || accName.includes('합계') || accName.includes('총계')) continue;
-        
-        // 헤더명 텍스트(예: "자산계정")가 포함된 행은 건너뛰기 (실제 숫자가 시작되는 곳부터 취합)
         if (accName.includes('계정') || String(row[colAcq] || '').includes('가액')) continue;
 
         const acqVal = Number(String(row[colAcq] || '').replace(/,/g, '')) || 0;
         const repVal = Number(String(row[colRep] || '').replace(/,/g, '')) || 0;
         const curVal = Number(String(row[colCur] || '').replace(/,/g, '')) || 0;
 
-        // 세 값이 모두 0이면 유효하지 않은 데이터로 간주
         if (acqVal === 0 && repVal === 0 && curVal === 0) continue;
 
         if (!window.verifState.pastData[accName]) {
