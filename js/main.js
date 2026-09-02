@@ -2008,12 +2008,13 @@ window.renderVerificationTable = function() {
         const rRep = calcRatio(curr.rep, past.rep);
         const rCur = calcRatio(curr.cur, past.cur);
 
+        // 1.1배 이상(110%), 0.9배 이하(90%) 로직으로 변경
         const getStyle = (ratioStr) => {
             if (ratioStr === "신규") return "background: #d1ecf1; color: #0c5460; font-weight: bold;";
             if (ratioStr === "-") return "color: #999;";
             const val = parseFloat(ratioStr.replace('%', ''));
-            if (val >= 150) return "background: #fff3cd; color: #856404; font-weight: bold;";
-            if (val <= 70) return "background: #f8d7da; color: #721c24; font-weight: bold;";
+            if (val >= 110) return "background: #fff3cd; color: #856404; font-weight: bold;";
+            if (val <= 90) return "background: #f8d7da; color: #721c24; font-weight: bold;";
             return "color: #333;";
         };
 
@@ -2197,8 +2198,11 @@ window.applyVerifPastMapping = function() {
                     let matchedLoc = registeredLocations.find(l => l.includes(rowLoc) || rowLoc.includes(l));
                     if (matchedLoc) targetSite = matchedLoc;
                 } else {
-                    if (registeredLocations.length === 1) targetSite = registeredLocations[0];
-                    else if (currentView !== '전체 합산') targetSite = currentView;
+                    if (registeredLocations.length === 1) {
+                        targetSite = registeredLocations[0];
+                    } else if (currentView !== '전체 합산') {
+                        targetSite = currentView;
+                    }
                 }
             }
 
