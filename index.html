@@ -882,22 +882,23 @@
             </div>
         </div>
 
-        <!-- 2단계: 건물 평가 기준 선택 -->
+        <!-- 2단계: 사업장별 건물 자산 평가 기준 연동 (자동화 및 개별화) -->
         <div class="card" style="flex: 1; margin-bottom: 0;">
-            <div class="card-header" style="background:#f8f9fa;"><span><i class="fa-solid fa-building-shield"></i> 2단계: 건물 자산 합산 기준 선택</span></div>
-            <div class="card-body" style="padding: 20px;">
-                <p style="font-size: 13px; color: #666; margin-bottom: 15px;">'명세서(물가보정)'의 <b style="color:#1C5691;">건물 계정 평가액</b>에 추가로 합산할 대장 기준을 <b style="color:#d32f2f;">1개만</b> 선택하세요.</p>
-                <div style="display: flex; flex-wrap: wrap; gap: 15px;">
-                    <label style="cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: bold; color: #1C5691;">
-                        <input type="radio" name="verifBuildingMode" value="title" checked onchange="window.renderVerificationTable()" style="width:16px; height:16px;"> 표제부 기준
-                    </label>
-                    <label style="cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: bold; color: #1C5691;">
-                        <input type="radio" name="verifBuildingMode" value="floor" onchange="window.renderVerificationTable()" style="width:16px; height:16px;"> 층별 기준
-                    </label>
-                    <label style="cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: bold; color: #1C5691;">
-                        <input type="radio" name="verifBuildingMode" value="kfpa" onchange="window.renderVerificationTable()" style="width:16px; height:16px;"> 화협 기준
-                    </label>
-                </div>
+            <div class="card-header" style="background:#f8f9fa;"><span><i class="fa-solid fa-building-shield"></i> 2단계: 개별 사업장 건물 가액 원천 설정</span></div>
+            <div class="card-body" style="padding: 0; max-height: 120px; overflow-y: auto;">
+                <table class="data-table" style="margin: 0; border: none; font-size: 12px;">
+                    <thead style="position: sticky; top: 0; z-index: 5;">
+                        <tr>
+                            <th style="background:#e9ecef; border-bottom:1px solid #ccc; padding:6px;">소재지명</th>
+                            <th style="background:#e9ecef; border-bottom:1px solid #ccc; padding:6px;">대장평가 여부</th>
+                            <th style="background:#e9ecef; border-bottom:1px solid #ccc; padding:6px;">화협평가 여부</th>
+                            <th style="background:#e9ecef; border-bottom:1px solid #ccc; padding:6px;">적용할 건물가액 원천</th>
+                        </tr>
+                    </thead>
+                    <tbody id="verifStep2Tbody">
+                        <tr><td colspan="4" style="text-align:center; color:#999; padding:20px;">우측의 [데이터 최신화]를 누르시면 자동 구성됩니다.</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -908,10 +909,14 @@
         <div class="card-header" style="background: #2C2C2C; color: #FFCC00; border: none; display: flex; justify-content: space-between; align-items: center;">
             <span><i class="fa-solid fa-magnifying-glass-chart"></i> 3·4단계: 자산계정별 가액 변동 검산 및 이상치 분석</span>
             
-            <div style="display: flex; gap: 10px;">
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button type="button" class="btn-dark" style="background: #6f42c1; border: none; padding: 6px 15px; font-size: 13px;" onclick="window.openSiteMappingModal()">
+                    <i class="fa-solid fa-code-branch"></i> 명세서 소재지 매핑 보드
+                </button>
+                <div style="width:1px; height:20px; background:#555; margin: 0 5px;"></div> <!-- 구분선 -->
                 <input type="file" id="verifPastExcel" accept=".xlsx, .xls" style="display: none;" onchange="window.loadPastVerificationExcel(event)">
                 <button type="button" class="btn-dark" style="background: #28a745; border: none; padding: 6px 15px; font-size: 13px;" onclick="document.getElementById('verifPastExcel').click()">
-                    <i class="fa-solid fa-file-import"></i> 과거 총괄표 엑셀 불러오기
+                    <i class="fa-solid fa-file-import"></i> 과거 엑셀 불러오기
                 </button>
                 <button type="button" class="btn-dark" style="background: #17A2B8; border: none; padding: 6px 15px; font-size: 13px;" onclick="window.initVerificationScreen()">
                     <i class="fa-solid fa-rotate-right"></i> 데이터 최신화

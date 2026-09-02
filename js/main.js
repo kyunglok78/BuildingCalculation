@@ -747,13 +747,14 @@ window.saveProject = function() {
         });
 
         const projectData = {
-            version: "2.1", contractor: contractorName, evalYear: evalYear, locations: locations, 
+            version: "2.3", contractor: contractorName, evalYear: evalYear, locations: locations, 
             sidebarStates: sidebarStates, 
             unitCostPath: document.getElementById('unitCostPath') ? document.getElementById('unitCostPath').value : "",
             priceIndexPath: document.getElementById('priceIndexPath') ? document.getElementById('priceIndexPath').value : "",
             tempKfpaDataStore: window.tempKfpaDataStore || {}, targetKfpaSite: window.targetKfpaSite || "", targetKfpaAddress: window.targetKfpaAddress || "",
             kbState: window.kbState, inflationSheets: window.kbState.inflationSheets || null,
-            indexData: window.kbState.indexData || null, infState: window.infState || null 
+            indexData: window.kbState.indexData || null, infState: window.infState || null,
+            verifState: window.verifState // ★ 핵심: 검산 모듈 데이터 완벽 보존
         };
 
         const jsonString = JSON.stringify(projectData);
@@ -783,6 +784,9 @@ window.loadProject = function(event) {
             if (projectData.kbState) window.kbState = projectData.kbState;
             if (projectData.inflationSheets) window.kbState.inflationSheets = projectData.inflationSheets;
             if (projectData.indexData) window.kbState.indexData = projectData.indexData;
+            
+            // ★ 핵심: 검산 모듈 상태 완벽 복구
+            if (projectData.verifState) window.verifState = projectData.verifState;
             
             if (projectData.tempKfpaDataStore) window.tempKfpaDataStore = projectData.tempKfpaDataStore; else window.tempKfpaDataStore = {};
             if (projectData.targetKfpaSite) window.targetKfpaSite = projectData.targetKfpaSite;
@@ -846,9 +850,9 @@ window.loadProject = function(event) {
                 if (typeof updateMenuState === 'function') updateMenuState();
             }
 
-            alert("✅ 가액평가 데이터가 복구되었습니다. 화면을 초기화합니다.");
+            alert("✅ 가액평가 데이터가 완벽하게 복구되었습니다. 화면을 초기화합니다.");
             
-            // ★ 핵심 해결: 복구된 2.1.1 대장 데이터를 화면에 다시 그려주는 명령 추가
+            // ★ 핵심: 대장 데이터 및 검산 데이터 복구 후 화면 재렌더링 강제 실행
             if (window.kbState && window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
                 const emptyMsg = document.getElementById('emptyStateMsg');
                 const dataCont = document.getElementById('fetchedDataContainer');
@@ -861,8 +865,8 @@ window.loadProject = function(event) {
             if (typeof window.infInitTabs === 'function' && window.infState && window.infState.tabs && window.infState.tabs.length > 0) {
                 window.infInitTabs(); if (typeof window.infRenderTable === 'function') window.infRenderTable();
             }
+            if (typeof window.initVerificationScreen === 'function') window.initVerificationScreen();
             
-            // 초기 화면(1.1)으로 이동
             setTimeout(() => { if (typeof switchSection === 'function') switchSection('sec-1-1'); }, 100);
             
         } catch (err) { alert("⚠️ 파일 형식이 잘못되었거나 손상된 파일입니다.\n(에러 상세: " + err.message + ")"); }
@@ -1764,25 +1768,28 @@ document.addEventListener('click', function(e) {
 });
 
 // ============================================================================
-// [섹션 10] 3.1 가액평가 데이터 검산 및 무결성 종합 비교 모듈 (다중 사업장 및 스마트 매핑 탑재)
+// [섹션 10] 3.1 가액평가 데이터 검산 및 무결성 종합 비교 모듈 (엔터프라이즈 통합 매핑 탑재)
 // ============================================================================
 
 window.verifState = {
     pastData: {},    
     currentData: {}, 
-    reasons: {},     // 증감사유 보관소: { '전체 합산': { '건물': '사유...', ... }, '소재지1': {...} }
+    reasons: {},     
     totalAcqOriginal: 0,
     totalAcqCurrent: 0,
     tempParsed: {},  
     customOrder: [], 
-    currentView: '전체 합산' 
+    currentView: '전체 합산',
+    siteMapping: {},     // 미등록 명세서 시트 병합 관계 보관소 (예: {'정밀본사공통': '1공장'})
+    buildingSource: {}   // 각 사업장별 적용할 건물 가액 원천 보관소 (예: {'1공장': 'kfpa', '2공장': 'title'})
 };
 
-// ★ 핵심 버그 픽스: 브라우저에 남아있는 구형 모달창 강제 삭제 후 최신 버전으로 재생성
-const oldVerifModal = document.getElementById('verifPastModal');
-if (oldVerifModal) oldVerifModal.remove();
+// 중복 모달 강제 제거 (안전성 보장)
+const oldVerifModal = document.getElementById('verifPastModal'); if (oldVerifModal) oldVerifModal.remove();
+const oldMapModal = document.getElementById('verifSiteMappingModal'); if (oldMapModal) oldMapModal.remove();
 
 (function initVerifModule() {
+    // 1. 과거 데이터 연동 마법사 모달
     if (!document.getElementById('verifPastModal')) {
         const modalHtml = `
         <div class="modal-overlay" id="verifPastModal" style="display:none; z-index: 1050; justify-content: center; align-items: center;">
@@ -1792,19 +1799,16 @@ if (oldVerifModal) oldVerifModal.remove();
                     <i class="fa-solid fa-xmark modal-close" style="cursor:pointer; font-size:18px;" onclick="document.getElementById('verifPastModal').style.display='none'"></i>
                 </div>
                 <div class="modal-body" style="padding: 25px; background:#f4f5f7;">
-                    
                     <div style="background:#fff; padding:15px; border:1px solid #ddd; border-radius:4px; margin-bottom:15px;">
                         <label style="font-weight:bold; font-size:14px; color:#333; display:block; margin-bottom:10px;">① 과거 데이터 엑셀 양식 선택</label>
                         <div style="display:flex; gap:15px; margin-bottom:15px; padding:10px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:4px;">
                             <label style="cursor:pointer; font-weight:bold; color:#166534;"><input type="radio" name="verifPastType" value="single" checked onchange="window.updateVerifPastHeaders()"> 단일 시트 (사업장 구분 열 지정)</label>
                             <label style="cursor:pointer; font-weight:bold; color:#1C5691;"><input type="radio" name="verifPastType" value="multi" onchange="window.updateVerifPastHeaders()"> 다중 시트 (시트명=소재지명 자동매칭)</label>
                         </div>
-
                         <div id="verifSingleSheetWrap">
                             <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">② 작업할 시트 선택 (단일 시트용)</label>
                             <select id="verifPastSheet" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc; margin-bottom: 15px; background:#f8f9fa;" onchange="window.updateVerifPastHeaders(true)"></select>
                         </div>
-
                         <label style="font-weight:bold; font-size:14px; color:#333; display:block; margin-bottom:10px; border-top:1px dashed #ccc; padding-top:15px;">③ 추출할 데이터 열(기둥) 지정</label>
                         <div style="display: flex; flex-wrap: wrap; gap: 15px;">
                             <div style="flex: 1 1 30%;" id="verifColLocWrap">
@@ -1829,7 +1833,6 @@ if (oldVerifModal) oldVerifModal.remove();
                             </div>
                         </div>
                     </div>
-
                     <div style="text-align: right;">
                         <button type="button" class="btn-dark" style="background:#28a745; padding:10px 25px; border:none; font-weight:bold;" onclick="window.applyVerifPastMapping()">⚡ 연동 확정 및 검산 실행</button>
                     </div>
@@ -1837,6 +1840,35 @@ if (oldVerifModal) oldVerifModal.remove();
             </div>
         </div>`;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+
+    // 2. 명세서 소재지 매핑 보드 (미등록 시트 병합) 모달
+    if (!document.getElementById('verifSiteMappingModal')) {
+        const mapModal = `
+        <div class="modal-overlay" id="verifSiteMappingModal" style="display:none; z-index: 1050; justify-content: center; align-items: center;">
+            <div class="modal-content" style="width: 550px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+                <div class="modal-header" style="background:#6f42c1; color:white; padding:15px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight:bold;"><i class="fa-solid fa-code-branch"></i> 명세서 미등록 소재지 병합 보드</span>
+                    <i class="fa-solid fa-xmark modal-close" style="cursor:pointer;" onclick="document.getElementById('verifSiteMappingModal').style.display='none'"></i>
+                </div>
+                <div class="modal-body" style="padding: 20px; background:#f4f5f7;">
+                    <p style="font-size:13px; color:#555; margin-bottom:15px;">
+                        명세서 원본에 존재하는 사업장(시트) 중, <b>[1.1 일반정보]에 미등록된 이름</b>들입니다.<br>
+                        어느 공장의 자산으로 편입시켜 검산할지 짝지어주세요.
+                    </p>
+                    <div style="max-height:300px; overflow-y:auto; border:1px solid #ccc;">
+                        <table class="data-table" style="margin:0; background:#fff;">
+                            <thead style="background:#eee;"><tr><th>명세서 상의 미등록 시트명</th><th>편입시킬 기준 사업장</th></tr></thead>
+                            <tbody id="verifSiteMappingTbody"></tbody>
+                        </table>
+                    </div>
+                    <div style="text-align: right; margin-top:15px;">
+                        <button type="button" class="btn-dark" style="background:#6f42c1; padding:8px 20px; border:none; font-weight:bold;" onclick="window.applySiteMapping()">⚡ 병합 확정 및 재계산</button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+        document.body.insertAdjacentHTML('beforeend', mapModal);
     }
 })();
 
@@ -1853,23 +1885,87 @@ window.initVerificationScreen = function() {
     window.verifState.currentData = { '전체 합산': {} };
     if(!window.verifState.pastData) window.verifState.pastData = { '전체 합산': {} };
     if(!window.verifState.reasons) window.verifState.reasons = { '전체 합산': {} };
+    if(!window.verifState.siteMapping) window.verifState.siteMapping = {};
+    if(!window.verifState.buildingSource) window.verifState.buildingSource = {};
     
     window.verifState.totalAcqOriginal = 0;
     window.verifState.totalAcqCurrent = 0;
 
-    const locInputs = document.querySelectorAll('#locationTbody .loc-name');
-    const locations = Array.from(locInputs).map(input => input.value.trim()).filter(Boolean);
-    locations.forEach(loc => {
+    // 1. 1.1에 등록된 소재지 환경(Config) 확보
+    const locInputs = document.querySelectorAll('#locationTbody tr');
+    const locationsConfig = [];
+    locInputs.forEach(row => {
+        const name = row.querySelector('.loc-name') ? row.querySelector('.loc-name').value.trim() : '';
+        if (name) {
+            locationsConfig.push({
+                name: name,
+                ledger: row.querySelector('.chk-ledger') ? row.querySelector('.chk-ledger').checked : false,
+                kfpa: row.querySelector('.chk-kfpa') ? row.querySelector('.chk-kfpa').checked : false
+            });
+        }
+    });
+    const registeredLocations = locationsConfig.map(l => l.name);
+
+    registeredLocations.forEach(loc => {
         window.verifState.currentData[loc] = {};
         if(!window.verifState.pastData[loc]) window.verifState.pastData[loc] = {};
         if(!window.verifState.reasons[loc]) window.verifState.reasons[loc] = {};
     });
 
+    // 2. 2단계 UI (건물 가액 원천) 동적 렌더링 - 엣지 케이스 완벽 대응
+    const step2Tbody = document.getElementById('verifStep2Tbody');
+    if (step2Tbody) {
+        step2Tbody.innerHTML = '';
+        locationsConfig.forEach(loc => {
+            let defaultSource = window.verifState.buildingSource[loc.name];
+            let selectHtml = '';
+            
+            if (loc.ledger && loc.kfpa) {
+                if(!defaultSource || defaultSource === 'none') defaultSource = 'title';
+                selectHtml = `<select onchange="window.verifState.buildingSource['${loc.name}'] = this.value; window.renderVerificationTable();" style="padding:4px; font-weight:bold; color:#1C5691; border:1px solid #ccc; width:100%;">
+                    <option value="title" ${defaultSource==='title'?'selected':''}>표제부 기준 적용</option>
+                    <option value="floor" ${defaultSource==='floor'?'selected':''}>층별 기준 적용</option>
+                    <option value="kfpa" ${defaultSource==='kfpa'?'selected':''}>화협 기준 적용</option>
+                </select>`;
+            } else if (loc.ledger) {
+                if(!defaultSource || defaultSource === 'kfpa' || defaultSource === 'none') defaultSource = 'title';
+                selectHtml = `<select onchange="window.verifState.buildingSource['${loc.name}'] = this.value; window.renderVerificationTable();" style="padding:4px; font-weight:bold; color:#1C5691; border:1px solid #ccc; width:100%;">
+                    <option value="title" ${defaultSource==='title'?'selected':''}>표제부 기준 적용</option>
+                    <option value="floor" ${defaultSource==='floor'?'selected':''}>층별 기준 적용</option>
+                </select>`;
+            } else if (loc.kfpa) {
+                defaultSource = 'kfpa';
+                selectHtml = `<span style="color:#d32f2f; font-weight:bold;">화협 기준 (단일)</span>`;
+            } else {
+                defaultSource = 'none';
+                selectHtml = `<span style="color:#999;">건물 평가 대상 아님</span>`;
+            }
+            window.verifState.buildingSource[loc.name] = defaultSource;
+
+            step2Tbody.innerHTML += `
+                <tr style="background:#fff; border-bottom:1px solid #eee;">
+                    <td style="text-align:center; font-weight:bold; color:#333;">${loc.name}</td>
+                    <td style="text-align:center;">${loc.ledger ? '<span style="color:#28a745; font-weight:bold;">O</span>' : '<span style="color:#dc3545;">X</span>'}</td>
+                    <td style="text-align:center;">${loc.kfpa ? '<span style="color:#28a745; font-weight:bold;">O</span>' : '<span style="color:#dc3545;">X</span>'}</td>
+                    <td style="text-align:center;">${selectHtml}</td>
+                </tr>
+            `;
+        });
+    }
+
     const wiz = window.infState && window.infState.wizard ? window.infState.wizard.mapped : {};
     
+    // 3. 데이터 합산 처리 (미등록 시트 병합 매핑 적용)
     if (window.infState && window.infState.data) {
         for (const tabName in window.infState.data) {
-            let targetSite = locations.includes(tabName) ? tabName : '전체 합산';
+            
+            // 병합 대상인지 확인
+            let targetSite = tabName;
+            if (window.verifState.siteMapping[tabName]) {
+                targetSite = window.verifState.siteMapping[tabName];
+            } else if (!registeredLocations.includes(tabName)) {
+                targetSite = '전체 합산'; // 매핑되지 않은 미등록 시트는 전체 총계에만 더해짐
+            }
             
             const raw = window.infState.data[tabName].raw || window.infState.data[tabName] || [];
             const accIdx = wiz['자산계정']; const priceIdx = wiz['취득가액'];
@@ -1901,7 +1997,7 @@ window.initVerificationScreen = function() {
                     window.verifState.currentData['전체 합산'][accName].rep += repVal;
                     window.verifState.currentData['전체 합산'][accName].cur += curVal;
 
-                    if (targetSite !== '전체 합산') {
+                    if (targetSite !== '전체 합산' && window.verifState.currentData[targetSite]) {
                         if (!window.verifState.currentData[targetSite][accName]) window.verifState.currentData[targetSite][accName] = { acq: 0, rep: 0, cur: 0 };
                         window.verifState.currentData[targetSite][accName].acq += acqVal;
                         window.verifState.currentData[targetSite][accName].rep += repVal;
@@ -1930,18 +2026,73 @@ window.initVerificationScreen = function() {
     if (!document.getElementById('verifViewSelect')) {
         let viewSelectHtml = `<select id="verifViewSelect" class="input-box" style="margin-left: 15px; padding: 4px 10px; font-weight: bold; color: #1C5691; background: #fff;" onchange="window.renderVerificationTable()">
             <option value="전체 합산">📋 전체 사업장 총계 뷰</option>`;
-        locations.forEach(loc => { viewSelectHtml += `<option value="${loc}">🏢 개별 뷰: ${loc}</option>`; });
+        registeredLocations.forEach(loc => { viewSelectHtml += `<option value="${loc}">🏢 개별 뷰: ${loc}</option>`; });
         viewSelectHtml += `</select>`;
         headerContainer.insertAdjacentHTML('beforeend', viewSelectHtml);
     } else {
         const selectEl = document.getElementById('verifViewSelect');
         const currVal = selectEl.value;
         selectEl.innerHTML = `<option value="전체 합산">📋 전체 사업장 총계 뷰</option>`;
-        locations.forEach(loc => { selectEl.innerHTML += `<option value="${loc}">🏢 개별 뷰: ${loc}</option>`; });
+        registeredLocations.forEach(loc => { selectEl.innerHTML += `<option value="${loc}">🏢 개별 뷰: ${loc}</option>`; });
         if ([...selectEl.options].map(o => o.value).includes(currVal)) selectEl.value = currVal;
     }
 
     window.renderVerificationTable();
+};
+
+window.openSiteMappingModal = function() {
+    const locInputs = document.querySelectorAll('#locationTbody .loc-name');
+    const registeredLocations = Array.from(locInputs).map(input => input.value.trim()).filter(Boolean);
+    const tbody = document.getElementById('verifSiteMappingTbody');
+    tbody.innerHTML = '';
+
+    let hasUnregistered = false;
+    if (window.infState && window.infState.data) {
+        const allTabs = Object.keys(window.infState.data);
+        allTabs.forEach(tabName => {
+            if (!registeredLocations.includes(tabName)) {
+                hasUnregistered = true;
+                let selectHtml = `<select id="map_site_${tabName}" class="input-box" style="width:100%; padding:4px;">
+                    <option value="">-- 분배 안 함 (전체 합산에만 포함) --</option>`;
+                registeredLocations.forEach(loc => {
+                    const isSelected = window.verifState.siteMapping[tabName] === loc ? 'selected' : '';
+                    selectHtml += `<option value="${loc}" ${isSelected}>${loc} (으)로 편입</option>`;
+                });
+                selectHtml += `</select>`;
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td style="font-weight:bold; color:#d32f2f; padding:8px;">${tabName}</td>
+                        <td style="padding:8px;">${selectHtml}</td>
+                    </tr>
+                `;
+            }
+        });
+    }
+
+    if (!hasUnregistered) {
+        tbody.innerHTML = `<tr><td colspan="2" style="text-align:center; padding:30px; color:#666;">명세서 원본에 존재하는 미등록 사업장이 없습니다.<br>(모두 1.1에 정상적으로 일치합니다.)</td></tr>`;
+    }
+
+    document.getElementById('verifSiteMappingModal').style.display = 'flex';
+};
+
+window.applySiteMapping = function() {
+    if (window.infState && window.infState.data) {
+        const locInputs = document.querySelectorAll('#locationTbody .loc-name');
+        const registeredLocations = Array.from(locInputs).map(input => input.value.trim()).filter(Boolean);
+        
+        const allTabs = Object.keys(window.infState.data);
+        allTabs.forEach(tabName => {
+            if (!registeredLocations.includes(tabName)) {
+                const selectEl = document.getElementById(`map_site_${tabName}`);
+                if (selectEl) window.verifState.siteMapping[tabName] = selectEl.value;
+            }
+        });
+    }
+    document.getElementById('verifSiteMappingModal').style.display = 'none';
+    window.initVerificationScreen();
+    alert("명세서 소재지 병합이 적용되었습니다. 검산 뷰를 전환하여 결과를 확인하세요.");
 };
 
 window.moveAccountOrder = function(idx, direction) {
@@ -1951,7 +2102,6 @@ window.moveAccountOrder = function(idx, direction) {
     window.renderVerificationTable();
 };
 
-// 증감사유 실시간 메모리 저장
 window.updateVerifReason = function(accName, val) {
     const currentView = document.getElementById('verifViewSelect') ? document.getElementById('verifViewSelect').value : '전체 합산';
     if (!window.verifState.reasons[currentView]) window.verifState.reasons[currentView] = {};
@@ -1963,26 +2113,30 @@ window.renderVerificationTable = function() {
     if (!tbody) return;
 
     const currentView = document.getElementById('verifViewSelect') ? document.getElementById('verifViewSelect').value : '전체 합산';
-    const buildingModeInput = document.querySelector('input[name="verifBuildingMode"]:checked');
-    const buildingMode = buildingModeInput ? buildingModeInput.value : 'title';
-    
     const displayData = JSON.parse(JSON.stringify(window.verifState.currentData[currentView] || {}));
     const pastDisplayData = window.verifState.pastData[currentView] || {};
     const reasonDisplayData = window.verifState.reasons[currentView] || {};
 
-    if (window.kbState && window.kbState.evalData[buildingMode]) {
+    const locInputs = document.querySelectorAll('#locationTbody .loc-name');
+    const registeredLocations = Array.from(locInputs).map(input => input.value.trim()).filter(Boolean);
+
+    // ★ 핵심: 사업장별로 설정된 '건물 평가 원천'을 찾아 각각 더하기
+    if (window.kbState) {
         let ledgerRepTotal = 0, ledgerCurTotal = 0;
-        const dataObj = window.kbState.evalData[buildingMode];
         
-        for (const site in dataObj) {
+        registeredLocations.forEach(site => {
             if (currentView === '전체 합산' || currentView === site) {
-                const groups = Array.isArray(dataObj[site]) ? dataObj[site] : Object.values(dataObj[site]);
-                groups.forEach(g => {
-                    ledgerRepTotal += (parseFloat(g.재조달_합계) || 0);
-                    ledgerCurTotal += (parseFloat(g.현재_합계) || 0);
-                });
+                const sourceMode = window.verifState.buildingSource[site];
+                if (sourceMode && sourceMode !== 'none' && window.kbState.evalData[sourceMode] && window.kbState.evalData[sourceMode][site]) {
+                    const siteGroups = window.kbState.evalData[sourceMode][site];
+                    const groups = Array.isArray(siteGroups) ? siteGroups : Object.values(siteGroups);
+                    groups.forEach(g => {
+                        ledgerRepTotal += (parseFloat(g.재조달_합계) || 0);
+                        ledgerCurTotal += (parseFloat(g.현재_합계) || 0);
+                    });
+                }
             }
-        }
+        });
 
         if (!displayData['건물']) displayData['건물'] = { acq: 0, rep: 0, cur: 0 };
         displayData['건물'].rep += ledgerRepTotal;
@@ -2024,7 +2178,6 @@ window.renderVerificationTable = function() {
         const rRep = calcRatio(curr.rep, past.rep);
         const rCur = calcRatio(curr.cur, past.cur);
 
-        // ★ 1.1배 상승 / 0.9배 하락 임계치 적용
         const getStyle = (ratioStr) => {
             if (ratioStr === "신규") return "background: #d1ecf1; color: #0c5460; font-weight: bold;";
             if (ratioStr === "-") return "color: #999;";
@@ -2214,11 +2367,8 @@ window.applyVerifPastMapping = function() {
                     let matchedLoc = registeredLocations.find(l => l.includes(rowLoc) || rowLoc.includes(l));
                     if (matchedLoc) targetSite = matchedLoc;
                 } else {
-                    if (registeredLocations.length === 1) {
-                        targetSite = registeredLocations[0];
-                    } else if (currentView !== '전체 합산') {
-                        targetSite = currentView;
-                    }
+                    if (registeredLocations.length === 1) targetSite = registeredLocations[0];
+                    else if (currentView !== '전체 합산') targetSite = currentView;
                 }
             }
 
