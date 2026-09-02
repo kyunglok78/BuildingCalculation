@@ -847,11 +847,24 @@ window.loadProject = function(event) {
             }
 
             alert("✅ 가액평가 데이터가 복구되었습니다. 화면을 초기화합니다.");
+            
+            // ★ 핵심 해결: 복구된 2.1.1 대장 데이터를 화면에 다시 그려주는 명령 추가
+            if (window.kbState && window.kbState.fetchedData && Object.keys(window.kbState.fetchedData).length > 0) {
+                const emptyMsg = document.getElementById('emptyStateMsg');
+                const dataCont = document.getElementById('fetchedDataContainer');
+                if (emptyMsg) emptyMsg.style.display = 'none';
+                if (dataCont) dataCont.style.display = 'block';
+                if (typeof window.renderSlide3Tabs === 'function') window.renderSlide3Tabs();
+            }
+
             if (typeof runGroupedRenderTest === 'function') runGroupedRenderTest();
             if (typeof window.infInitTabs === 'function' && window.infState && window.infState.tabs && window.infState.tabs.length > 0) {
                 window.infInitTabs(); if (typeof window.infRenderTable === 'function') window.infRenderTable();
             }
+            
+            // 초기 화면(1.1)으로 이동
             setTimeout(() => { if (typeof switchSection === 'function') switchSection('sec-1-1'); }, 100);
+            
         } catch (err) { alert("⚠️ 파일 형식이 잘못되었거나 손상된 파일입니다.\n(에러 상세: " + err.message + ")"); }
     };
     reader.readAsText(file);
