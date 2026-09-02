@@ -1751,54 +1751,68 @@ document.addEventListener('click', function(e) {
 });
 
 // ============================================================================
-// [섹션 10] 3.1 가액평가 데이터 검산 및 무결성 종합 비교 모듈 (스마트 매핑 마법사 탑재)
+// [섹션 10] 3.1 가액평가 데이터 검산 및 무결성 종합 비교 모듈 (다중 사업장 및 스마트 매핑 탑재)
 // ============================================================================
 
 window.verifState = {
-    pastData: {},    // 업로드된 과거 엑셀 데이터 { '계정명': { acq, rep, cur } }
-    currentData: {}, // 시스템이 집계한 당해 데이터 { '계정명': { acq, rep, cur } }
+    pastData: {},    // { '전체 합산': { '건물': { acq, rep, cur } }, '소재지1': {...} }
+    currentData: {}, // { '전체 합산': { '건물': { acq, rep, cur } }, '소재지1': {...} }
     totalAcqOriginal: 0,
     totalAcqCurrent: 0,
     tempParsed: {},  // 엑셀 원본 임시 보관소
-    customOrder: []  // 자산계정 정렬 순서 보관
+    customOrder: [], // 자산계정 정렬 순서 보관
+    currentView: '전체 합산' // 현재 선택된 사업장 뷰
 };
 
-// 모달 동적 생성 및 좌측 메뉴 이벤트 바인딩 (안전하게 즉시 실행)
+// 모달 동적 생성 및 좌측 메뉴 이벤트 바인딩
 (function initVerifModule() {
     if (!document.getElementById('verifPastModal')) {
         const modalHtml = `
         <div class="modal-overlay" id="verifPastModal" style="display:none; z-index: 1050; justify-content: center; align-items: center;">
-            <div class="modal-content" style="width: 550px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+            <div class="modal-content" style="width: 650px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
                 <div class="modal-header" style="background:#28a745; color:white; padding:15px; display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-weight:bold;"><i class="fa-solid fa-link"></i> 과거 총괄표 데이터 매핑 마법사</span>
+                    <span style="font-weight:bold;"><i class="fa-solid fa-link"></i> 과거 데이터 스마트 매핑 마법사</span>
                     <i class="fa-solid fa-xmark modal-close" style="cursor:pointer; font-size:18px;" onclick="document.getElementById('verifPastModal').style.display='none'"></i>
                 </div>
                 <div class="modal-body" style="padding: 25px; background:#f4f5f7;">
-                    <p style="font-size:13px; color:#555; margin-bottom:20px; line-height:1.5;">
-                        👉 불러온 과거 총괄표 엑셀에서 데이터를 추출합니다.<br>알맞은 <b>시트</b>와 4가지 필수 <b>데이터 열</b>을 직접 지정해 주세요.
-                    </p>
+                    
                     <div style="background:#fff; padding:15px; border:1px solid #ddd; border-radius:4px; margin-bottom:15px;">
-                        <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">① 불러올 시트 선택</label>
-                        <select id="verifPastSheet" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc; margin-bottom: 15px; background:#f8f9fa;" onchange="window.updateVerifPastHeaders()"></select>
+                        <label style="font-weight:bold; font-size:14px; color:#333; display:block; margin-bottom:10px;">① 과거 데이터 엑셀 양식 선택</label>
+                        <div style="display:flex; gap:15px; margin-bottom:15px; padding:10px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:4px;">
+                            <label style="cursor:pointer; font-weight:bold; color:#166534;"><input type="radio" name="verifPastType" value="single" checked onchange="window.updateVerifPastHeaders()"> 단일 시트 (사업장 구분 열 지정)</label>
+                            <label style="cursor:pointer; font-weight:bold; color:#1C5691;"><input type="radio" name="verifPastType" value="multi" onchange="window.updateVerifPastHeaders()"> 다중 시트 (시트명=소재지명 자동매칭)</label>
+                        </div>
+
+                        <div id="verifSingleSheetWrap">
+                            <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">② 작업할 시트 선택 (단일 시트용)</label>
+                            <select id="verifPastSheet" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc; margin-bottom: 15px; background:#f8f9fa;" onchange="window.updateVerifPastHeaders(true)"></select>
+                        </div>
+
+                        <label style="font-weight:bold; font-size:14px; color:#333; display:block; margin-bottom:10px; border-top:1px dashed #ccc; padding-top:15px;">③ 추출할 데이터 열(기둥) 지정</label>
                         <div style="display: flex; flex-wrap: wrap; gap: 15px;">
-                            <div style="flex: 1 1 45%;">
-                                <label style="font-weight:bold; font-size:13px; color:#1C5691; display:block; margin-bottom:5px;">② 자산계정 열</label>
+                            <div style="flex: 1 1 30%;" id="verifColLocWrap">
+                                <label style="font-weight:bold; font-size:13px; color:#d32f2f; display:block; margin-bottom:5px;">[선택] 소재지 구분 열</label>
+                                <select id="verifColLoc" class="input-box" style="width:100%; padding:8px; border:1px solid #f5c6cb; background:#fff3f3;"></select>
+                            </div>
+                            <div style="flex: 1 1 30%;">
+                                <label style="font-weight:bold; font-size:13px; color:#1C5691; display:block; margin-bottom:5px;">자산계정 열</label>
                                 <select id="verifColAcc" class="input-box" style="width:100%; padding:8px; border:2px solid #1C5691;"></select>
                             </div>
-                            <div style="flex: 1 1 45%;">
-                                <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">③ 취득가액 열</label>
+                            <div style="flex: 1 1 30%;">
+                                <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">취득가액 열</label>
                                 <select id="verifColAcq" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc;"></select>
                             </div>
-                            <div style="flex: 1 1 45%;">
-                                <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">④ 재조달가액 열</label>
+                            <div style="flex: 1 1 30%;">
+                                <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">재조달가액 열</label>
                                 <select id="verifColRep" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc;"></select>
                             </div>
-                            <div style="flex: 1 1 45%;">
-                                <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">⑤ 현재가액 열</label>
+                            <div style="flex: 1 1 30%;">
+                                <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">현재가액 열</label>
                                 <select id="verifColCur" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc;"></select>
                             </div>
                         </div>
                     </div>
+
                     <div style="text-align: right;">
                         <button type="button" class="btn-dark" style="background:#28a745; padding:10px 25px; border:none; font-weight:bold;" onclick="window.applyVerifPastMapping()">⚡ 연동 확정 및 검산 실행</button>
                     </div>
@@ -1819,23 +1833,31 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 window.initVerificationScreen = function() {
-    window.verifState.currentData = {};
+    // 1. 상태 초기화 및 사업장 목록 확보
+    window.verifState.currentData = { '전체 합산': {} };
+    window.verifState.pastData = { '전체 합산': {} };
     window.verifState.totalAcqOriginal = 0;
     window.verifState.totalAcqCurrent = 0;
 
+    const locInputs = document.querySelectorAll('#locationTbody .loc-name');
+    const locations = Array.from(locInputs).map(input => input.value.trim()).filter(Boolean);
+    locations.forEach(loc => {
+        window.verifState.currentData[loc] = {};
+        window.verifState.pastData[loc] = {};
+    });
+
     const wiz = window.infState && window.infState.wizard ? window.infState.wizard.mapped : {};
     
+    // 2. 당해 평가데이터(명세서) 사업장별 분배 및 합산 집계
     if (window.infState && window.infState.data) {
-        for (const tab in window.infState.data) {
-            const tData = window.infState.data[tab];
-            const raw = tData.raw || [];
+        for (const tabName in window.infState.data) {
+            // 통합 뷰라도 탭 이름(사업장명) 기반으로 분류
+            let targetSite = locations.includes(tabName) ? tabName : '전체 합산';
             
-            const accIdx = wiz['자산계정'];
-            const priceIdx = wiz['취득가액'];
+            const raw = window.infState.data[tabName].raw || window.infState.data[tabName] || [];
+            const accIdx = wiz['자산계정']; const priceIdx = wiz['취득가액'];
             const mappedColCount = Object.keys(wiz).length;
-            const finalClassIdx = mappedColCount + 4; 
-            const repIdx = mappedColCount + 6; 
-            const curIdx = mappedColCount + 9;
+            const finalClassIdx = mappedColCount + 4; const repIdx = mappedColCount + 6; const curIdx = mappedColCount + 9;
 
             if (accIdx === undefined || priceIdx === undefined) continue;
 
@@ -1854,56 +1876,66 @@ window.initVerificationScreen = function() {
                 window.verifState.totalAcqCurrent += acqVal;
 
                 if (accName && !finalClass.includes('평가제외(만원이하)')) {
-                    if (!window.verifState.currentData[accName]) {
-                        window.verifState.currentData[accName] = { acq: 0, rep: 0, cur: 0 };
-                    }
-                    
-                    if (finalClass.includes('평가제외')) {
-                        repVal = 0; curVal = acqVal; 
-                    } else if (finalClass.includes('부보제외')) {
-                        repVal = 0; curVal = 0; 
-                    }
+                    if (finalClass.includes('평가제외')) { repVal = 0; curVal = acqVal; } 
+                    else if (finalClass.includes('부보제외')) { repVal = 0; curVal = 0; }
 
-                    window.verifState.currentData[accName].acq += acqVal;
-                    window.verifState.currentData[accName].rep += repVal;
-                    window.verifState.currentData[accName].cur += curVal;
+                    // 전체 합산 바구니에 넣기
+                    if (!window.verifState.currentData['전체 합산'][accName]) window.verifState.currentData['전체 합산'][accName] = { acq: 0, rep: 0, cur: 0 };
+                    window.verifState.currentData['전체 합산'][accName].acq += acqVal;
+                    window.verifState.currentData['전체 합산'][accName].rep += repVal;
+                    window.verifState.currentData['전체 합산'][accName].cur += curVal;
+
+                    // 개별 사업장 바구니에 넣기
+                    if (targetSite !== '전체 합산') {
+                        if (!window.verifState.currentData[targetSite][accName]) window.verifState.currentData[targetSite][accName] = { acq: 0, rep: 0, cur: 0 };
+                        window.verifState.currentData[targetSite][accName].acq += acqVal;
+                        window.verifState.currentData[targetSite][accName].rep += repVal;
+                        window.verifState.currentData[targetSite][accName].cur += curVal;
+                    }
                 }
             });
         }
     }
 
-    const acqOrigEl = document.getElementById('verifOrigAcq');
-    const acqCurEl = document.getElementById('verifCurAcq');
-    const badgeEl = document.getElementById('verifBadge');
-
+    // 3. UI 업데이트 (상단 배지)
+    const acqOrigEl = document.getElementById('verifOrigAcq'); const acqCurEl = document.getElementById('verifCurAcq'); const badgeEl = document.getElementById('verifBadge');
     if (acqOrigEl && acqCurEl && badgeEl) {
         acqOrigEl.innerText = window.verifState.totalAcqOriginal.toLocaleString('ko-KR') + ' 원';
         acqCurEl.innerText = window.verifState.totalAcqCurrent.toLocaleString('ko-KR') + ' 원';
-
         if (window.verifState.totalAcqOriginal > 0 && window.verifState.totalAcqOriginal === window.verifState.totalAcqCurrent) {
-            badgeEl.innerText = "✅ 검증 PASS (일치)";
-            badgeEl.style.cssText = "background: #d4edda; color: #155724; border: 1px solid #c3e6cb;";
+            badgeEl.innerHTML = "✅ 검증 PASS (일치)"; badgeEl.style.cssText = "background: #d4edda; color: #155724; border: 1px solid #c3e6cb;";
         } else if (window.verifState.totalAcqOriginal > 0) {
             const diff = window.verifState.totalAcqOriginal - window.verifState.totalAcqCurrent;
-            badgeEl.innerText = `❌ 검증 FAIL (차액: ${diff.toLocaleString('ko-KR')})`;
-            badgeEl.style.cssText = "background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;";
+            badgeEl.innerHTML = `❌ 검증 FAIL (차액: ${diff.toLocaleString('ko-KR')})`; badgeEl.style.cssText = "background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;";
         } else {
-            badgeEl.innerText = "데이터 대기중";
-            badgeEl.style.cssText = "background: #eee; color: #999; border: none;";
+            badgeEl.innerText = "데이터 대기중"; badgeEl.style.cssText = "background: #eee; color: #999; border: none;";
         }
+    }
+
+    // 4. 동적 뷰어 스위치(드롭다운) UI 주입
+    let headerContainer = document.querySelector('#sec-3-1 .card-header i.fa-magnifying-glass-chart').parentNode;
+    if (!document.getElementById('verifViewSelect')) {
+        let viewSelectHtml = `<select id="verifViewSelect" class="input-box" style="margin-left: 15px; padding: 4px 10px; font-weight: bold; color: #1C5691; background: #fff;" onchange="window.renderVerificationTable()">
+            <option value="전체 합산">📋 전체 사업장 총계 뷰</option>`;
+        locations.forEach(loc => { viewSelectHtml += `<option value="${loc}">🏢 개별 뷰: ${loc}</option>`; });
+        viewSelectHtml += `</select>`;
+        headerContainer.insertAdjacentHTML('beforeend', viewSelectHtml);
+    } else {
+        // 이미 있으면 목록만 갱신
+        const selectEl = document.getElementById('verifViewSelect');
+        const currVal = selectEl.value;
+        selectEl.innerHTML = `<option value="전체 합산">📋 전체 사업장 총계 뷰</option>`;
+        locations.forEach(loc => { selectEl.innerHTML += `<option value="${loc}">🏢 개별 뷰: ${loc}</option>`; });
+        if ([...selectEl.options].map(o => o.value).includes(currVal)) selectEl.value = currVal;
     }
 
     window.renderVerificationTable();
 };
 
-// 자산계정 위/아래 순서 변경 함수
 window.moveAccountOrder = function(idx, direction) {
     const arr = window.verifState.customOrder;
-    if (direction === -1 && idx > 0) { // 위로 이동
-        [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]];
-    } else if (direction === 1 && idx < arr.length - 1) { // 아래로 이동
-        [arr[idx+1], arr[idx]] = [arr[idx], arr[idx+1]];
-    }
+    if (direction === -1 && idx > 0) [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]];
+    else if (direction === 1 && idx < arr.length - 1) [arr[idx+1], arr[idx]] = [arr[idx], arr[idx+1]];
     window.renderVerificationTable();
 };
 
@@ -1911,20 +1943,23 @@ window.renderVerificationTable = function() {
     const tbody = document.getElementById('verifTbody');
     if (!tbody) return;
 
-    // 1. 선택된 대장 평가 기준 가져오기
+    // 현재 뷰어 필터 확인
+    const currentView = document.getElementById('verifViewSelect') ? document.getElementById('verifViewSelect').value : '전체 합산';
     const buildingModeInput = document.querySelector('input[name="verifBuildingMode"]:checked');
     const buildingMode = buildingModeInput ? buildingModeInput.value : 'title';
     
-    // 명세서 기반 물가보정 평가액 원본 복사
-    const displayData = JSON.parse(JSON.stringify(window.verifState.currentData));
+    // 현재 뷰(전체 or 특정 사업장)에 해당하는 데이터만 추출
+    const displayData = JSON.parse(JSON.stringify(window.verifState.currentData[currentView] || {}));
+    const pastDisplayData = window.verifState.pastData[currentView] || {};
 
-    // 2. '건물' 자산에만 대장 평가액 추가 합산 (구축물 등은 건드리지 않음)
-    if (window.kbState) {
+    // ★ 핵심: 선택된 뷰(사업장)의 대장 '건물' 평가액만 가져와서 기존 물가보정 금액에 '합산(+)'
+    if (window.kbState && window.kbState.evalData[buildingMode]) {
         let ledgerRepTotal = 0, ledgerCurTotal = 0;
         const dataObj = window.kbState.evalData[buildingMode];
         
-        if (dataObj) {
-            for (const site in dataObj) {
+        for (const site in dataObj) {
+            // 현재 뷰가 '전체'이거나, 현재 사이트와 뷰가 일치할 때만 합산
+            if (currentView === '전체 합산' || currentView === site) {
                 const groups = Array.isArray(dataObj[site]) ? dataObj[site] : Object.values(dataObj[site]);
                 groups.forEach(g => {
                     ledgerRepTotal += (parseFloat(g.재조달_합계) || 0);
@@ -1933,42 +1968,31 @@ window.renderVerificationTable = function() {
             }
         }
 
-        // 명세서에 '건물' 항목이 아예 없었더라도 생성해줌
         if (!displayData['건물']) displayData['건물'] = { acq: 0, rep: 0, cur: 0 };
-        
-        // ★ 핵심: 기존 물가보정 건물 가액에 대장 평가액을 그대로 '더하기(+)'
         displayData['건물'].rep += ledgerRepTotal;
         displayData['건물'].cur += ledgerCurTotal;
     }
 
-    const allAccountsSet = new Set([...Object.keys(displayData), ...Object.keys(window.verifState.pastData)]);
+    const allAccountsSet = new Set([...Object.keys(displayData), ...Object.keys(pastDisplayData)]);
     const allAccounts = Array.from(allAccountsSet);
 
     tbody.innerHTML = '';
 
     if (allAccounts.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding: 60px; color:#999;">데이터를 최신화하여 검산을 시작해 주세요.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding: 60px; color:#999;">데이터가 존재하지 않습니다.</td></tr>`;
         return;
     }
 
-    // 3. 자산계정 커스텀 정렬 배열 (가나다 자동정렬 해제)
+    // 커스텀 정렬 배열 관리 (위/아래 이동 보존)
     if (!window.verifState.customOrder) window.verifState.customOrder = [];
-    
-    // 신규 추가된 계정이 있으면 배열 맨 뒤에 추가
-    allAccounts.forEach(acc => {
-        if (!window.verifState.customOrder.includes(acc)) {
-            window.verifState.customOrder.push(acc);
-        }
-    });
-    // 데이터에서 삭제된 계정이 있으면 배열에서도 정리
+    allAccounts.forEach(acc => { if (!window.verifState.customOrder.includes(acc)) window.verifState.customOrder.push(acc); });
     window.verifState.customOrder = window.verifState.customOrder.filter(acc => allAccounts.includes(acc));
 
     let totPast = { acq:0, rep:0, cur:0 };
     let totCur  = { acq:0, rep:0, cur:0 };
 
-    // 커스텀 정렬 배열 순서대로 렌더링
     window.verifState.customOrder.forEach((acc, idx) => {
-        const past = window.verifState.pastData[acc] || { acq: 0, rep: 0, cur: 0 };
+        const past = pastDisplayData[acc] || { acq: 0, rep: 0, cur: 0 };
         const curr = displayData[acc] || { acq: 0, rep: 0, cur: 0 };
 
         totPast.acq += past.acq; totPast.rep += past.rep; totPast.cur += past.cur;
@@ -1993,16 +2017,13 @@ window.renderVerificationTable = function() {
             return "color: #333;";
         };
 
-        // ★ 핵심: 자산계정 좌우에 ▲ ▼ 이동 버튼 추가
         const arrowUp = idx > 0 ? `<span style="cursor:pointer; color:#999; margin-right:5px; font-size:11px;" onclick="window.moveAccountOrder(${idx}, -1)" title="위로">▲</span>` : `<span style="display:inline-block; width:13px; margin-right:5px;"></span>`;
         const arrowDown = idx < window.verifState.customOrder.length - 1 ? `<span style="cursor:pointer; color:#999; margin-left:5px; font-size:11px;" onclick="window.moveAccountOrder(${idx}, 1)" title="아래로">▼</span>` : `<span style="display:inline-block; width:13px; margin-left:5px;"></span>`;
 
         tbody.innerHTML += `
             <tr style="background: #fff; border-bottom: 1px solid #eee;">
                 <td style="text-align: center; font-weight: bold; color: #444; border-right: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center;">
-                    ${arrowUp}
-                    <span style="flex: 1; text-align: center;">${acc}</span>
-                    ${arrowDown}
+                    ${arrowUp}<span style="flex: 1; text-align: center;">${acc}</span>${arrowDown}
                 </td>
                 <td style="text-align: right; color: #666;">${past.acq === 0 ? '-' : past.acq.toLocaleString('ko-KR')}</td>
                 <td style="text-align: right; color: #666;">${past.rep === 0 ? '-' : past.rep.toLocaleString('ko-KR')}</td>
@@ -2022,11 +2043,8 @@ window.renderVerificationTable = function() {
         if (a === 0 && b > 0) return "신규";
         return ((b / a) * 100).toFixed(1) + "%";
     };
-    const grandAcqRatio = formatGrandRatio(totCur.acq, totPast.acq);
-    const grandRepRatio = formatGrandRatio(totCur.rep, totPast.rep);
-    const grandCurRatio = formatGrandRatio(totCur.cur, totPast.cur);
-
-    // ★ 핵심: 총계 합산의 모든 <td>에 배경색/글자색 !important 강제 지정
+    
+    // ★ 핵심: 총계 셀 하나하나에 배경색 강제 고정 (!important)
     tbody.innerHTML += `
         <tr style="background-color: #2C2C2C !important; font-weight: bold; font-size: 14px;">
             <td style="background-color: #2C2C2C !important; text-align: center; border-right: 1px solid #555 !important; color: #FFCC00 !important;">총계 합산</td>
@@ -2036,9 +2054,9 @@ window.renderVerificationTable = function() {
             <td style="background-color: #2C2C2C !important; text-align: right; color: #FFCC00 !important;">${totCur.acq.toLocaleString('ko-KR')}</td>
             <td style="background-color: #2C2C2C !important; text-align: right; color: #FFCC00 !important;">${totCur.rep.toLocaleString('ko-KR')}</td>
             <td style="background-color: #2C2C2C !important; text-align: right; border-right: 1px solid #555 !important; color: #FFCC00 !important;">${totCur.cur.toLocaleString('ko-KR')}</td>
-            <td style="background-color: #2C2C2C !important; text-align: center; color: #FFCC00 !important;">${grandAcqRatio}</td>
-            <td style="background-color: #2C2C2C !important; text-align: center; color: #FFCC00 !important;">${grandRepRatio}</td>
-            <td style="background-color: #2C2C2C !important; text-align: center; color: #FFCC00 !important;">${grandCurRatio}</td>
+            <td style="background-color: #2C2C2C !important; text-align: center; color: #FFCC00 !important;">${formatGrandRatio(totCur.acq, totPast.acq)}</td>
+            <td style="background-color: #2C2C2C !important; text-align: center; color: #FFCC00 !important;">${formatGrandRatio(totCur.rep, totPast.rep)}</td>
+            <td style="background-color: #2C2C2C !important; text-align: center; color: #FFCC00 !important;">${formatGrandRatio(totCur.cur, totPast.cur)}</td>
         </tr>
     `;
 };
@@ -2056,41 +2074,50 @@ window.loadPastVerificationExcel = function(event) {
             window.verifState.tempParsed = {};
             workbook.SheetNames.forEach(sheetName => {
                 const sheetJson = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {header: 1, defval: ""});
-                if (sheetJson.length > 0) {
-                    window.verifState.tempParsed[sheetName] = sheetJson;
-                }
+                if (sheetJson.length > 0) window.verifState.tempParsed[sheetName] = sheetJson;
             });
 
             if (Object.keys(window.verifState.tempParsed).length === 0) throw new Error("데이터를 찾을 수 없습니다.");
             
             window.openVerifPastModal(workbook.SheetNames.find(n => n.includes('총괄표')) || workbook.SheetNames[0]);
-            
-        } catch(err) {
-            alert("과거 총괄표 엑셀 파싱 중 오류가 발생했습니다.\n(" + err.message + ")");
-        }
+        } catch(err) { alert("과거 엑셀 파싱 중 오류가 발생했습니다.\n(" + err.message + ")"); }
     };
     reader.readAsArrayBuffer(file);
     event.target.value = '';
 };
 
 window.openVerifPastModal = function(defaultSheetName) {
-    const sheets = Object.keys(window.verifState.tempParsed);
-    const sheetSelect = document.getElementById('verifPastSheet');
-    sheetSelect.innerHTML = '';
-    
-    sheets.forEach(s => {
-        sheetSelect.innerHTML += `<option value="${s}" ${s === defaultSheetName ? 'selected' : ''}>${s}</option>`;
-    });
-    
-    window.updateVerifPastHeaders();
+    window.updateVerifPastHeaders(false);
     document.getElementById('verifPastModal').style.display = 'flex';
 };
 
-window.updateVerifPastHeaders = function() {
-    const sheet = document.getElementById('verifPastSheet').value;
-    const data = window.verifState.tempParsed[sheet] || [];
+window.updateVerifPastHeaders = function(isSheetChange = false) {
+    const pastType = document.querySelector('input[name="verifPastType"]:checked').value;
+    const sheetSelectWrap = document.getElementById('verifSingleSheetWrap');
+    const sheetSelect = document.getElementById('verifPastSheet');
+    const colLocWrap = document.getElementById('verifColLocWrap');
+    
+    // 라디오 버튼(단일/다중)에 따른 UI 토글
+    if (pastType === 'multi') {
+        sheetSelectWrap.style.display = 'none';
+        colLocWrap.style.display = 'none';
+    } else {
+        sheetSelectWrap.style.display = 'block';
+        colLocWrap.style.display = 'block';
+    }
+
+    if (!isSheetChange) {
+        const sheets = Object.keys(window.verifState.tempParsed);
+        sheetSelect.innerHTML = '';
+        sheets.forEach(s => sheetSelect.innerHTML += `<option value="${s}">${s}</option>`);
+    }
+
+    // 대표 시트 1개(단일이든 다중의 첫시트든)를 읽어서 헤더 자동 추천
+    let targetSheet = pastType === 'single' ? sheetSelect.value : Object.keys(window.verifState.tempParsed)[0];
+    const data = window.verifState.tempParsed[targetSheet] || [];
     
     const selects = {
+        loc: document.getElementById('verifColLoc'),
         acc: document.getElementById('verifColAcc'),
         acq: document.getElementById('verifColAcq'),
         rep: document.getElementById('verifColRep'),
@@ -2098,22 +2125,23 @@ window.updateVerifPastHeaders = function() {
     };
 
     Object.values(selects).forEach(el => el.innerHTML = '');
+    selects.loc.innerHTML = `<option value="">-- 사용 안 함 --</option>`; // 구분 열은 선택사항
 
     let maxCols = 0;
     data.forEach(r => { if(r.length > maxCols) maxCols = r.length; });
-    
     for (let i = 0; i < maxCols; i++) {
         let letter = String.fromCharCode(65 + (i % 26));
         if (i >= 26) letter = String.fromCharCode(64 + Math.floor(i / 26)) + letter;
         const optionHtml = `<option value="${i}">${letter} 열</option>`;
-        
         Object.values(selects).forEach(el => el.innerHTML += optionHtml);
     }
 
-    let auto = { acc: -1, acq: -1, rep: -1, cur: -1 };
+    // 휴리스틱 헤더 자동 추천
+    let auto = { loc: -1, acc: -1, acq: -1, rep: -1, cur: -1 };
     for (let r = 0; r < Math.min(15, data.length); r++) {
         for (let c = 0; c < data[r].length; c++) {
             const txt = String(data[r][c]).replace(/\s/g, '');
+            if (auto.loc === -1 && (txt.includes('사업장') || txt.includes('소재지') || txt.includes('지점'))) auto.loc = c;
             if (auto.acc === -1 && (txt.includes('자산계정') || txt.includes('계정명'))) auto.acc = c;
             if (auto.acq === -1 && txt.includes('취득가액')) auto.acq = c;
             if (auto.rep === -1 && txt.includes('재조달가액')) auto.rep = c;
@@ -2121,6 +2149,7 @@ window.updateVerifPastHeaders = function() {
         }
     }
 
+    if (auto.loc !== -1) selects.loc.value = auto.loc;
     if (auto.acc !== -1) selects.acc.value = auto.acc;
     if (auto.acq !== -1) selects.acq.value = auto.acq;
     if (auto.rep !== -1) selects.rep.value = auto.rep;
@@ -2128,39 +2157,75 @@ window.updateVerifPastHeaders = function() {
 };
 
 window.applyVerifPastMapping = function() {
-    const sheet = document.getElementById('verifPastSheet').value;
+    const pastType = document.querySelector('input[name="verifPastType"]:checked').value;
+    const colLoc = document.getElementById('verifColLoc').value;
     const colAcc = document.getElementById('verifColAcc').value;
     const colAcq = document.getElementById('verifColAcq').value;
     const colRep = document.getElementById('verifColRep').value;
     const colCur = document.getElementById('verifColCur').value;
 
-    const rawData = window.verifState.tempParsed[sheet];
-    if (!rawData || !colAcc || !colAcq || !colRep || !colCur) return alert("데이터 및 열 선택을 확인해 주세요.");
+    if (!colAcc || !colAcq || !colRep || !colCur) return alert("필수 열(계정, 가액 3종) 지정을 확인해 주세요.");
 
-    window.verifState.pastData = {};
+    const locInputs = document.querySelectorAll('#locationTbody .loc-name');
+    const registeredLocations = Array.from(locInputs).map(input => input.value.trim()).filter(Boolean);
 
-    for (let i = 0; i < rawData.length; i++) {
-        const row = rawData[i];
-        const accName = String(row[colAcc] || '').trim();
+    // 과거 데이터 보관소 완전 초기화
+    window.verifState.pastData = { '전체 합산': {} };
+    registeredLocations.forEach(loc => window.verifState.pastData[loc] = {});
 
-        if (!accName || accName.includes('합계') || accName.includes('총계')) continue;
-        if (accName.includes('계정') || String(row[colAcq] || '').includes('가액')) continue;
+    const parseRows = (rawData, targetSiteOverride = null) => {
+        for (let i = 0; i < rawData.length; i++) {
+            const row = rawData[i];
+            const accName = String(row[colAcc] || '').trim();
 
-        const acqVal = Number(String(row[colAcq] || '').replace(/,/g, '')) || 0;
-        const repVal = Number(String(row[colRep] || '').replace(/,/g, '')) || 0;
-        const curVal = Number(String(row[colCur] || '').replace(/,/g, '')) || 0;
+            if (!accName || accName.includes('합계') || accName.includes('총계')) continue;
+            if (accName.includes('계정') || String(row[colAcq] || '').includes('가액')) continue;
 
-        if (acqVal === 0 && repVal === 0 && curVal === 0) continue;
+            const acqVal = Number(String(row[colAcq] || '').replace(/,/g, '')) || 0;
+            const repVal = Number(String(row[colRep] || '').replace(/,/g, '')) || 0;
+            const curVal = Number(String(row[colCur] || '').replace(/,/g, '')) || 0;
 
-        if (!window.verifState.pastData[accName]) {
-            window.verifState.pastData[accName] = { acq: 0, rep: 0, cur: 0 };
+            if (acqVal === 0 && repVal === 0 && curVal === 0) continue;
+
+            // 사이트 타겟팅 (다중 시트명 지정, 또는 단일 시트의 열 지정)
+            let targetSite = '전체 합산';
+            if (targetSiteOverride && registeredLocations.includes(targetSiteOverride)) {
+                targetSite = targetSiteOverride;
+            } else if (pastType === 'single' && colLoc !== "") {
+                const rowLoc = String(row[colLoc] || '').trim();
+                if (registeredLocations.includes(rowLoc)) targetSite = rowLoc;
+            }
+
+            // 전체 합산 바구니에 무조건 누적
+            if (!window.verifState.pastData['전체 합산'][accName]) window.verifState.pastData['전체 합산'][accName] = { acq: 0, rep: 0, cur: 0 };
+            window.verifState.pastData['전체 합산'][accName].acq += acqVal;
+            window.verifState.pastData['전체 합산'][accName].rep += repVal;
+            window.verifState.pastData['전체 합산'][accName].cur += curVal;
+
+            // 개별 뷰 바구니에 누적
+            if (targetSite !== '전체 합산') {
+                if (!window.verifState.pastData[targetSite][accName]) window.verifState.pastData[targetSite][accName] = { acq: 0, rep: 0, cur: 0 };
+                window.verifState.pastData[targetSite][accName].acq += acqVal;
+                window.verifState.pastData[targetSite][accName].rep += repVal;
+                window.verifState.pastData[targetSite][accName].cur += curVal;
+            }
         }
-        window.verifState.pastData[accName].acq += acqVal;
-        window.verifState.pastData[accName].rep += repVal;
-        window.verifState.pastData[accName].cur += curVal;
+    };
+
+    if (pastType === 'single') {
+        const sheet = document.getElementById('verifPastSheet').value;
+        parseRows(window.verifState.tempParsed[sheet] || []);
+    } else {
+        // 다중 시트 (시트명 스캔)
+        Object.keys(window.verifState.tempParsed).forEach(sheetName => {
+            const cleanSheetName = sheetName.trim();
+            // 시트명이 등록된 소재지명과 동일하면 타겟팅하여 파싱, 아니면 전체 합산용으로만 처리
+            let override = registeredLocations.includes(cleanSheetName) ? cleanSheetName : null;
+            parseRows(window.verifState.tempParsed[sheetName], override);
+        });
     }
 
     document.getElementById('verifPastModal').style.display = 'none';
     window.renderVerificationTable();
-    alert(`✅ [${sheet}] 시트 연동 성공!\n선택하신 자산계정을 기준으로 증감률 표가 갱신되었습니다.`);
+    alert(`✅ 과거 데이터 스마트 연동 성공!\n[전체 사업장 총계] 및 각 [개별 사업장] 뷰 필터에 맞게 증감률 표가 완벽히 구성되었습니다.`);
 };
