@@ -2112,7 +2112,6 @@ window.updateVerifPastHeaders = function(isSheetChange = false) {
         sheets.forEach(s => sheetSelect.innerHTML += `<option value="${s}">${s}</option>`);
     }
 
-    // 대표 시트 1개(단일이든 다중의 첫시트든)를 읽어서 헤더 자동 추천
     let targetSheet = pastType === 'single' ? sheetSelect.value : Object.keys(window.verifState.tempParsed)[0];
     const data = window.verifState.tempParsed[targetSheet] || [];
     
@@ -2125,7 +2124,7 @@ window.updateVerifPastHeaders = function(isSheetChange = false) {
     };
 
     Object.values(selects).forEach(el => el.innerHTML = '');
-    selects.loc.innerHTML = `<option value="">-- 사용 안 함 --</option>`; // 구분 열은 선택사항
+    selects.loc.innerHTML = `<option value="">-- 사용 안 함 --</option>`;
 
     let maxCols = 0;
     data.forEach(r => { if(r.length > maxCols) maxCols = r.length; });
@@ -2136,16 +2135,16 @@ window.updateVerifPastHeaders = function(isSheetChange = false) {
         Object.values(selects).forEach(el => el.innerHTML += optionHtml);
     }
 
-    // 휴리스틱 헤더 자동 추천
+    // 휴리스틱 헤더 자동 추천 ('금액' 이라는 단어도 인식하도록 강화)
     let auto = { loc: -1, acc: -1, acq: -1, rep: -1, cur: -1 };
     for (let r = 0; r < Math.min(15, data.length); r++) {
         for (let c = 0; c < data[r].length; c++) {
             const txt = String(data[r][c]).replace(/\s/g, '');
             if (auto.loc === -1 && (txt.includes('사업장') || txt.includes('소재지') || txt.includes('지점'))) auto.loc = c;
-            if (auto.acc === -1 && (txt.includes('자산계정') || txt.includes('계정명'))) auto.acc = c;
-            if (auto.acq === -1 && txt.includes('취득가액')) auto.acq = c;
-            if (auto.rep === -1 && txt.includes('재조달가액')) auto.rep = c;
-            if (auto.cur === -1 && txt.includes('현재가액')) auto.cur = c;
+            if (auto.acc === -1 && (txt.includes('자산계정') || txt.includes('계정명') || txt.includes('자산명'))) auto.acc = c;
+            if (auto.acq === -1 && (txt.includes('취득가액') || txt.includes('취득금액'))) auto.acq = c;
+            if (auto.rep === -1 && (txt.includes('재조달가액') || txt.includes('재조달금액'))) auto.rep = c;
+            if (auto.cur === -1 && (txt.includes('현재가액') || txt.includes('현재금액'))) auto.cur = c;
         }
     }
 
@@ -2168,6 +2167,7 @@ window.applyVerifPastMapping = function() {
 
     const locInputs = document.querySelectorAll('#locationTbody .loc-name');
     const registeredLocations = Array.from(locInputs).map(input => input.value.trim()).filter(Boolean);
+    const currentView = document.getElementById('verifViewSelect') ? document.getElementById('verifViewSelect').value : '전체 합산';
 
     // 과거 데이터 보관소 완전 초기화
     window.verifState.pastData = { '전체 합산': {} };
@@ -2179,7 +2179,7 @@ window.applyVerifPastMapping = function() {
             const accName = String(row[colAcc] || '').trim();
 
             if (!accName || accName.includes('합계') || accName.includes('총계')) continue;
-            if (accName.includes('계정') || String(row[colAcq] || '').includes('가액')) continue;
+            if (accName.includes('계정') || String(row[colAcq] || '').includes('가액') || String(row[colAcq] || '').includes('금액')) continue;
 
             const acqVal = Number(String(row[colAcq] || '').replace(/,/g, '')) || 0;
             const repVal = Number(String(row[colRep] || '').replace(/,/g, '')) || 0;
@@ -2187,13 +2187,26 @@ window.applyVerifPastMapping = function() {
 
             if (acqVal === 0 && repVal === 0 && curVal === 0) continue;
 
-            // 사이트 타겟팅 (다중 시트명 지정, 또는 단일 시트의 열 지정)
+            // ★ 핵심 수정: 타겟 사이트 지능형 할당 로직
             let targetSite = '전체 합산';
-            if (targetSiteOverride && registeredLocations.includes(targetSiteOverride)) {
-                targetSite = targetSiteOverride;
-            } else if (pastType === 'single' && colLoc !== "") {
-                const rowLoc = String(row[colLoc] || '').trim();
-                if (registeredLocations.includes(rowLoc)) targetSite = rowLoc;
+            if (targetSiteOverride) {
+                let matchedLoc = registeredLocations.find(l => l.includes(targetSiteOverride) || targetSiteOverride.includes(l));
+                if (matchedLoc) targetSite = matchedLoc;
+            } else if (pastType === 'single') {
+                if (colLoc !== "") {
+                    const rowLoc = String(row[colLoc] || '').trim();
+                    let matchedLoc = registeredLocations.find(l => l.includes(rowLoc) || rowLoc.includes(l));
+                    if (matchedLoc) targetSite = matchedLoc;
+                } else {
+                    // 단일 시트인데 소재지 열을 지정하지 않았을 경우
+                    if (registeredLocations.length === 1) {
+                        // 1. 전체 사업장이 딱 1개면 묻지도 따지지도 않고 그 사업장에 할당
+                        targetSite = registeredLocations[0];
+                    } else if (currentView !== '전체 합산') {
+                        // 2. 현재 드롭다운으로 '천안공장' 등 특정 뷰를 보고 있으면 그 사업장에 할당
+                        targetSite = currentView;
+                    }
+                }
             }
 
             // 전체 합산 바구니에 무조건 누적
@@ -2202,7 +2215,7 @@ window.applyVerifPastMapping = function() {
             window.verifState.pastData['전체 합산'][accName].rep += repVal;
             window.verifState.pastData['전체 합산'][accName].cur += curVal;
 
-            // 개별 뷰 바구니에 누적
+            // 개별 뷰 바구니(예: 천안공장)에 누적
             if (targetSite !== '전체 합산') {
                 if (!window.verifState.pastData[targetSite][accName]) window.verifState.pastData[targetSite][accName] = { acq: 0, rep: 0, cur: 0 };
                 window.verifState.pastData[targetSite][accName].acq += acqVal;
@@ -2219,13 +2232,11 @@ window.applyVerifPastMapping = function() {
         // 다중 시트 (시트명 스캔)
         Object.keys(window.verifState.tempParsed).forEach(sheetName => {
             const cleanSheetName = sheetName.trim();
-            // 시트명이 등록된 소재지명과 동일하면 타겟팅하여 파싱, 아니면 전체 합산용으로만 처리
-            let override = registeredLocations.includes(cleanSheetName) ? cleanSheetName : null;
-            parseRows(window.verifState.tempParsed[sheetName], override);
+            parseRows(window.verifState.tempParsed[sheetName], cleanSheetName);
         });
     }
 
     document.getElementById('verifPastModal').style.display = 'none';
     window.renderVerificationTable();
-    alert(`✅ 과거 데이터 스마트 연동 성공!\n[전체 사업장 총계] 및 각 [개별 사업장] 뷰 필터에 맞게 증감률 표가 완벽히 구성되었습니다.`);
+    alert(`✅ 과거 데이터 연동 완료!`);
 };
