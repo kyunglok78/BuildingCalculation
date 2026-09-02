@@ -1759,7 +1759,8 @@ window.verifState = {
     currentData: {}, // 시스템이 집계한 당해 데이터 { '계정명': { acq, rep, cur } }
     totalAcqOriginal: 0,
     totalAcqCurrent: 0,
-    tempParsed: {}   // 엑셀 원본 임시 보관소
+    tempParsed: {},  // 엑셀 원본 임시 보관소
+    customOrder: []  // 자산계정 정렬 순서 보관
 };
 
 // 모달 동적 생성 및 좌측 메뉴 이벤트 바인딩 (안전하게 즉시 실행)
@@ -1895,17 +1896,33 @@ window.initVerificationScreen = function() {
     window.renderVerificationTable();
 };
 
+// 자산계정 위/아래 순서 변경 함수
+window.moveAccountOrder = function(idx, direction) {
+    const arr = window.verifState.customOrder;
+    if (direction === -1 && idx > 0) { // 위로 이동
+        [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]];
+    } else if (direction === 1 && idx < arr.length - 1) { // 아래로 이동
+        [arr[idx+1], arr[idx]] = [arr[idx], arr[idx+1]];
+    }
+    window.renderVerificationTable();
+};
+
 window.renderVerificationTable = function() {
     const tbody = document.getElementById('verifTbody');
     if (!tbody) return;
 
+    // 1. 선택된 대장 평가 기준 가져오기
     const buildingModeInput = document.querySelector('input[name="verifBuildingMode"]:checked');
     const buildingMode = buildingModeInput ? buildingModeInput.value : 'title';
+    
+    // 명세서 기반 물가보정 평가액 원본 복사
     const displayData = JSON.parse(JSON.stringify(window.verifState.currentData));
 
-    if (buildingMode !== 'inflation' && window.kbState) {
+    // 2. '건물' 자산에만 대장 평가액 추가 합산 (구축물 등은 건드리지 않음)
+    if (window.kbState) {
         let ledgerRepTotal = 0, ledgerCurTotal = 0;
         const dataObj = window.kbState.evalData[buildingMode];
+        
         if (dataObj) {
             for (const site in dataObj) {
                 const groups = Array.isArray(dataObj[site]) ? dataObj[site] : Object.values(dataObj[site]);
@@ -1916,34 +1933,41 @@ window.renderVerificationTable = function() {
             }
         }
 
-        const buildingKeys = ['건물', '구축물', '건물부속설비'];
-        const modeName = buildingMode === 'title' ? '표제부' : (buildingMode === 'floor' ? '층별' : '화협');
-        let baseBuildingKey = displayData['건물'] ? '건물' : `대장통합액(${modeName})`;
+        // 명세서에 '건물' 항목이 아예 없었더라도 생성해줌
+        if (!displayData['건물']) displayData['건물'] = { acq: 0, rep: 0, cur: 0 };
         
-        if (!displayData[baseBuildingKey]) displayData[baseBuildingKey] = { acq: 0, rep: 0, cur: 0 };
-        
-        buildingKeys.forEach(k => {
-            if (displayData[k] && k !== baseBuildingKey) { 
-                displayData[k].rep = 0; displayData[k].cur = 0; 
-            }
-        });
-
-        displayData[baseBuildingKey].rep = ledgerRepTotal;
-        displayData[baseBuildingKey].cur = ledgerCurTotal;
+        // ★ 핵심: 기존 물가보정 건물 가액에 대장 평가액을 그대로 '더하기(+)'
+        displayData['건물'].rep += ledgerRepTotal;
+        displayData['건물'].cur += ledgerCurTotal;
     }
 
-    const allAccounts = new Set([...Object.keys(displayData), ...Object.keys(window.verifState.pastData)]);
+    const allAccountsSet = new Set([...Object.keys(displayData), ...Object.keys(window.verifState.pastData)]);
+    const allAccounts = Array.from(allAccountsSet);
+
     tbody.innerHTML = '';
 
-    if (allAccounts.size === 0) {
+    if (allAccounts.length === 0) {
         tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding: 60px; color:#999;">데이터를 최신화하여 검산을 시작해 주세요.</td></tr>`;
         return;
     }
 
+    // 3. 자산계정 커스텀 정렬 배열 (가나다 자동정렬 해제)
+    if (!window.verifState.customOrder) window.verifState.customOrder = [];
+    
+    // 신규 추가된 계정이 있으면 배열 맨 뒤에 추가
+    allAccounts.forEach(acc => {
+        if (!window.verifState.customOrder.includes(acc)) {
+            window.verifState.customOrder.push(acc);
+        }
+    });
+    // 데이터에서 삭제된 계정이 있으면 배열에서도 정리
+    window.verifState.customOrder = window.verifState.customOrder.filter(acc => allAccounts.includes(acc));
+
     let totPast = { acq:0, rep:0, cur:0 };
     let totCur  = { acq:0, rep:0, cur:0 };
 
-    Array.from(allAccounts).sort().forEach(acc => {
+    // 커스텀 정렬 배열 순서대로 렌더링
+    window.verifState.customOrder.forEach((acc, idx) => {
         const past = window.verifState.pastData[acc] || { acq: 0, rep: 0, cur: 0 };
         const curr = displayData[acc] || { acq: 0, rep: 0, cur: 0 };
 
@@ -1969,9 +1993,17 @@ window.renderVerificationTable = function() {
             return "color: #333;";
         };
 
+        // ★ 핵심: 자산계정 좌우에 ▲ ▼ 이동 버튼 추가
+        const arrowUp = idx > 0 ? `<span style="cursor:pointer; color:#999; margin-right:5px; font-size:11px;" onclick="window.moveAccountOrder(${idx}, -1)" title="위로">▲</span>` : `<span style="display:inline-block; width:13px; margin-right:5px;"></span>`;
+        const arrowDown = idx < window.verifState.customOrder.length - 1 ? `<span style="cursor:pointer; color:#999; margin-left:5px; font-size:11px;" onclick="window.moveAccountOrder(${idx}, 1)" title="아래로">▼</span>` : `<span style="display:inline-block; width:13px; margin-left:5px;"></span>`;
+
         tbody.innerHTML += `
             <tr style="background: #fff; border-bottom: 1px solid #eee;">
-                <td style="text-align: center; font-weight: bold; color: #444; border-right: 1px solid #ccc;">${acc}</td>
+                <td style="text-align: center; font-weight: bold; color: #444; border-right: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center;">
+                    ${arrowUp}
+                    <span style="flex: 1; text-align: center;">${acc}</span>
+                    ${arrowDown}
+                </td>
                 <td style="text-align: right; color: #666;">${past.acq === 0 ? '-' : past.acq.toLocaleString('ko-KR')}</td>
                 <td style="text-align: right; color: #666;">${past.rep === 0 ? '-' : past.rep.toLocaleString('ko-KR')}</td>
                 <td style="text-align: right; color: #666; border-right: 1px solid #ccc;">${past.cur === 0 ? '-' : past.cur.toLocaleString('ko-KR')}</td>
@@ -1994,18 +2026,19 @@ window.renderVerificationTable = function() {
     const grandRepRatio = formatGrandRatio(totCur.rep, totPast.rep);
     const grandCurRatio = formatGrandRatio(totCur.cur, totPast.cur);
 
+    // ★ 핵심: 총계 합산의 모든 <td>에 배경색/글자색 !important 강제 지정
     tbody.innerHTML += `
-        <tr style="background: #2C2C2C !important; font-weight: bold; font-size: 14px;">
-            <td style="text-align: center; border-right: 1px solid #555; color: #FFCC00 !important;">총계 합산</td>
-            <td style="text-align: right; color: #FFCC00 !important;">${totPast.acq.toLocaleString('ko-KR')}</td>
-            <td style="text-align: right; color: #FFCC00 !important;">${totPast.rep.toLocaleString('ko-KR')}</td>
-            <td style="text-align: right; border-right: 1px solid #555; color: #FFCC00 !important;">${totPast.cur.toLocaleString('ko-KR')}</td>
-            <td style="text-align: right; color: #FFCC00 !important;">${totCur.acq.toLocaleString('ko-KR')}</td>
-            <td style="text-align: right; color: #FFCC00 !important;">${totCur.rep.toLocaleString('ko-KR')}</td>
-            <td style="text-align: right; border-right: 1px solid #555; color: #FFCC00 !important;">${totCur.cur.toLocaleString('ko-KR')}</td>
-            <td style="text-align: center; color: #FFCC00 !important;">${grandAcqRatio}</td>
-            <td style="text-align: center; color: #FFCC00 !important;">${grandRepRatio}</td>
-            <td style="text-align: center; color: #FFCC00 !important;">${grandCurRatio}</td>
+        <tr style="background-color: #2C2C2C !important; font-weight: bold; font-size: 14px;">
+            <td style="background-color: #2C2C2C !important; text-align: center; border-right: 1px solid #555 !important; color: #FFCC00 !important;">총계 합산</td>
+            <td style="background-color: #2C2C2C !important; text-align: right; color: #FFCC00 !important;">${totPast.acq.toLocaleString('ko-KR')}</td>
+            <td style="background-color: #2C2C2C !important; text-align: right; color: #FFCC00 !important;">${totPast.rep.toLocaleString('ko-KR')}</td>
+            <td style="background-color: #2C2C2C !important; text-align: right; border-right: 1px solid #555 !important; color: #FFCC00 !important;">${totPast.cur.toLocaleString('ko-KR')}</td>
+            <td style="background-color: #2C2C2C !important; text-align: right; color: #FFCC00 !important;">${totCur.acq.toLocaleString('ko-KR')}</td>
+            <td style="background-color: #2C2C2C !important; text-align: right; color: #FFCC00 !important;">${totCur.rep.toLocaleString('ko-KR')}</td>
+            <td style="background-color: #2C2C2C !important; text-align: right; border-right: 1px solid #555 !important; color: #FFCC00 !important;">${totCur.cur.toLocaleString('ko-KR')}</td>
+            <td style="background-color: #2C2C2C !important; text-align: center; color: #FFCC00 !important;">${grandAcqRatio}</td>
+            <td style="background-color: #2C2C2C !important; text-align: center; color: #FFCC00 !important;">${grandRepRatio}</td>
+            <td style="background-color: #2C2C2C !important; text-align: center; color: #FFCC00 !important;">${grandCurRatio}</td>
         </tr>
     `;
 };
@@ -2105,7 +2138,6 @@ window.applyVerifPastMapping = function() {
     if (!rawData || !colAcc || !colAcq || !colRep || !colCur) return alert("데이터 및 열 선택을 확인해 주세요.");
 
     window.verifState.pastData = {};
-    let isParsingStarted = false;
 
     for (let i = 0; i < rawData.length; i++) {
         const row = rawData[i];
