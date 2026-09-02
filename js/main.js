@@ -1770,7 +1770,7 @@ document.addEventListener('click', function(e) {
 window.verifState = {
     pastData: {},    
     currentData: {}, 
-    reasons: {},     // 증감사유 보관소 추가: { '전체 합산': { '건물': '사유...', ... }, '소재지1': {...} }
+    reasons: {},     // 증감사유 보관소: { '전체 합산': { '건물': '사유...', ... }, '소재지1': {...} }
     totalAcqOriginal: 0,
     totalAcqCurrent: 0,
     tempParsed: {},  
@@ -1778,7 +1778,10 @@ window.verifState = {
     currentView: '전체 합산' 
 };
 
-// 모달 동적 생성 및 좌측 메뉴 이벤트 바인딩
+// ★ 핵심 버그 픽스: 브라우저에 남아있는 구형 모달창 강제 삭제 후 최신 버전으로 재생성
+const oldVerifModal = document.getElementById('verifPastModal');
+if (oldVerifModal) oldVerifModal.remove();
+
 (function initVerifModule() {
     if (!document.getElementById('verifPastModal')) {
         const modalHtml = `
@@ -1948,7 +1951,7 @@ window.moveAccountOrder = function(idx, direction) {
     window.renderVerificationTable();
 };
 
-// 증감사유 실시간 저장 로직 추가
+// 증감사유 실시간 메모리 저장
 window.updateVerifReason = function(accName, val) {
     const currentView = document.getElementById('verifViewSelect') ? document.getElementById('verifViewSelect').value : '전체 합산';
     if (!window.verifState.reasons[currentView]) window.verifState.reasons[currentView] = {};
@@ -2021,7 +2024,7 @@ window.renderVerificationTable = function() {
         const rRep = calcRatio(curr.rep, past.rep);
         const rCur = calcRatio(curr.cur, past.cur);
 
-        // 1.1배 이상(110%), 0.9배 이하(90%) 로직으로 변경
+        // ★ 1.1배 상승 / 0.9배 하락 임계치 적용
         const getStyle = (ratioStr) => {
             if (ratioStr === "신규") return "background: #d1ecf1; color: #0c5460; font-weight: bold;";
             if (ratioStr === "-") return "color: #999;";
