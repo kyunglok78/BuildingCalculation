@@ -1755,13 +1755,14 @@ document.addEventListener('click', function(e) {
 // ============================================================================
 
 window.verifState = {
-    pastData: {},    // { '전체 합산': { '건물': { acq, rep, cur } }, '소재지1': {...} }
-    currentData: {}, // { '전체 합산': { '건물': { acq, rep, cur } }, '소재지1': {...} }
+    pastData: {},    
+    currentData: {}, 
+    reasons: {},     // 증감사유 보관소 추가: { '전체 합산': { '건물': '사유...', ... }, '소재지1': {...} }
     totalAcqOriginal: 0,
     totalAcqCurrent: 0,
-    tempParsed: {},  // 엑셀 원본 임시 보관소
-    customOrder: [], // 자산계정 정렬 순서 보관
-    currentView: '전체 합산' // 현재 선택된 사업장 뷰
+    tempParsed: {},  
+    customOrder: [], 
+    currentView: '전체 합산' 
 };
 
 // 모달 동적 생성 및 좌측 메뉴 이벤트 바인딩
@@ -1833,9 +1834,10 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 window.initVerificationScreen = function() {
-    // 1. 상태 초기화 및 사업장 목록 확보
     window.verifState.currentData = { '전체 합산': {} };
-    window.verifState.pastData = { '전체 합산': {} };
+    if(!window.verifState.pastData) window.verifState.pastData = { '전체 합산': {} };
+    if(!window.verifState.reasons) window.verifState.reasons = { '전체 합산': {} };
+    
     window.verifState.totalAcqOriginal = 0;
     window.verifState.totalAcqCurrent = 0;
 
@@ -1843,15 +1845,14 @@ window.initVerificationScreen = function() {
     const locations = Array.from(locInputs).map(input => input.value.trim()).filter(Boolean);
     locations.forEach(loc => {
         window.verifState.currentData[loc] = {};
-        window.verifState.pastData[loc] = {};
+        if(!window.verifState.pastData[loc]) window.verifState.pastData[loc] = {};
+        if(!window.verifState.reasons[loc]) window.verifState.reasons[loc] = {};
     });
 
     const wiz = window.infState && window.infState.wizard ? window.infState.wizard.mapped : {};
     
-    // 2. 당해 평가데이터(명세서) 사업장별 분배 및 합산 집계
     if (window.infState && window.infState.data) {
         for (const tabName in window.infState.data) {
-            // 통합 뷰라도 탭 이름(사업장명) 기반으로 분류
             let targetSite = locations.includes(tabName) ? tabName : '전체 합산';
             
             const raw = window.infState.data[tabName].raw || window.infState.data[tabName] || [];
@@ -1879,13 +1880,11 @@ window.initVerificationScreen = function() {
                     if (finalClass.includes('평가제외')) { repVal = 0; curVal = acqVal; } 
                     else if (finalClass.includes('부보제외')) { repVal = 0; curVal = 0; }
 
-                    // 전체 합산 바구니에 넣기
                     if (!window.verifState.currentData['전체 합산'][accName]) window.verifState.currentData['전체 합산'][accName] = { acq: 0, rep: 0, cur: 0 };
                     window.verifState.currentData['전체 합산'][accName].acq += acqVal;
                     window.verifState.currentData['전체 합산'][accName].rep += repVal;
                     window.verifState.currentData['전체 합산'][accName].cur += curVal;
 
-                    // 개별 사업장 바구니에 넣기
                     if (targetSite !== '전체 합산') {
                         if (!window.verifState.currentData[targetSite][accName]) window.verifState.currentData[targetSite][accName] = { acq: 0, rep: 0, cur: 0 };
                         window.verifState.currentData[targetSite][accName].acq += acqVal;
@@ -1897,7 +1896,6 @@ window.initVerificationScreen = function() {
         }
     }
 
-    // 3. UI 업데이트 (상단 배지)
     const acqOrigEl = document.getElementById('verifOrigAcq'); const acqCurEl = document.getElementById('verifCurAcq'); const badgeEl = document.getElementById('verifBadge');
     if (acqOrigEl && acqCurEl && badgeEl) {
         acqOrigEl.innerText = window.verifState.totalAcqOriginal.toLocaleString('ko-KR') + ' 원';
@@ -1912,7 +1910,6 @@ window.initVerificationScreen = function() {
         }
     }
 
-    // 4. 동적 뷰어 스위치(드롭다운) UI 주입
     let headerContainer = document.querySelector('#sec-3-1 .card-header i.fa-magnifying-glass-chart').parentNode;
     if (!document.getElementById('verifViewSelect')) {
         let viewSelectHtml = `<select id="verifViewSelect" class="input-box" style="margin-left: 15px; padding: 4px 10px; font-weight: bold; color: #1C5691; background: #fff;" onchange="window.renderVerificationTable()">
@@ -1921,7 +1918,6 @@ window.initVerificationScreen = function() {
         viewSelectHtml += `</select>`;
         headerContainer.insertAdjacentHTML('beforeend', viewSelectHtml);
     } else {
-        // 이미 있으면 목록만 갱신
         const selectEl = document.getElementById('verifViewSelect');
         const currVal = selectEl.value;
         selectEl.innerHTML = `<option value="전체 합산">📋 전체 사업장 총계 뷰</option>`;
@@ -1939,26 +1935,30 @@ window.moveAccountOrder = function(idx, direction) {
     window.renderVerificationTable();
 };
 
+// 증감사유 실시간 저장 로직 추가
+window.updateVerifReason = function(accName, val) {
+    const currentView = document.getElementById('verifViewSelect') ? document.getElementById('verifViewSelect').value : '전체 합산';
+    if (!window.verifState.reasons[currentView]) window.verifState.reasons[currentView] = {};
+    window.verifState.reasons[currentView][accName] = val;
+};
+
 window.renderVerificationTable = function() {
     const tbody = document.getElementById('verifTbody');
     if (!tbody) return;
 
-    // 현재 뷰어 필터 확인
     const currentView = document.getElementById('verifViewSelect') ? document.getElementById('verifViewSelect').value : '전체 합산';
     const buildingModeInput = document.querySelector('input[name="verifBuildingMode"]:checked');
     const buildingMode = buildingModeInput ? buildingModeInput.value : 'title';
     
-    // 현재 뷰(전체 or 특정 사업장)에 해당하는 데이터만 추출
     const displayData = JSON.parse(JSON.stringify(window.verifState.currentData[currentView] || {}));
     const pastDisplayData = window.verifState.pastData[currentView] || {};
+    const reasonDisplayData = window.verifState.reasons[currentView] || {};
 
-    // ★ 핵심: 선택된 뷰(사업장)의 대장 '건물' 평가액만 가져와서 기존 물가보정 금액에 '합산(+)'
     if (window.kbState && window.kbState.evalData[buildingMode]) {
         let ledgerRepTotal = 0, ledgerCurTotal = 0;
         const dataObj = window.kbState.evalData[buildingMode];
         
         for (const site in dataObj) {
-            // 현재 뷰가 '전체'이거나, 현재 사이트와 뷰가 일치할 때만 합산
             if (currentView === '전체 합산' || currentView === site) {
                 const groups = Array.isArray(dataObj[site]) ? dataObj[site] : Object.values(dataObj[site]);
                 groups.forEach(g => {
@@ -1979,11 +1979,10 @@ window.renderVerificationTable = function() {
     tbody.innerHTML = '';
 
     if (allAccounts.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding: 60px; color:#999;">데이터가 존재하지 않습니다.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding: 60px; color:#999;">데이터가 존재하지 않습니다.</td></tr>`;
         return;
     }
 
-    // 커스텀 정렬 배열 관리 (위/아래 이동 보존)
     if (!window.verifState.customOrder) window.verifState.customOrder = [];
     allAccounts.forEach(acc => { if (!window.verifState.customOrder.includes(acc)) window.verifState.customOrder.push(acc); });
     window.verifState.customOrder = window.verifState.customOrder.filter(acc => allAccounts.includes(acc));
@@ -1994,6 +1993,7 @@ window.renderVerificationTable = function() {
     window.verifState.customOrder.forEach((acc, idx) => {
         const past = pastDisplayData[acc] || { acq: 0, rep: 0, cur: 0 };
         const curr = displayData[acc] || { acq: 0, rep: 0, cur: 0 };
+        const savedReason = reasonDisplayData[acc] || '';
 
         totPast.acq += past.acq; totPast.rep += past.rep; totPast.cur += past.cur;
         totCur.acq += curr.acq;  totCur.rep += curr.rep;  totCur.cur += curr.cur;
@@ -2034,6 +2034,9 @@ window.renderVerificationTable = function() {
                 <td style="text-align: center; ${getStyle(rAcq)}">${rAcq}</td>
                 <td style="text-align: center; ${getStyle(rRep)}">${rRep}</td>
                 <td style="text-align: center; ${getStyle(rCur)}">${rCur}</td>
+                <td style="text-align: center; padding: 2px;">
+                    <input type="text" maxlength="50" value="${savedReason}" onchange="window.updateVerifReason('${acc}', this.value)" style="width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 12px; outline: none;" placeholder="증감 사유 입력...">
+                </td>
             </tr>
         `;
     });
@@ -2044,7 +2047,6 @@ window.renderVerificationTable = function() {
         return ((b / a) * 100).toFixed(1) + "%";
     };
     
-    // ★ 핵심: 총계 셀 하나하나에 배경색 강제 고정 (!important)
     tbody.innerHTML += `
         <tr style="background-color: #2C2C2C !important; font-weight: bold; font-size: 14px;">
             <td style="background-color: #2C2C2C !important; text-align: center; border-right: 1px solid #555 !important; color: #FFCC00 !important;">총계 합산</td>
@@ -2057,6 +2059,7 @@ window.renderVerificationTable = function() {
             <td style="background-color: #2C2C2C !important; text-align: center; color: #FFCC00 !important;">${formatGrandRatio(totCur.acq, totPast.acq)}</td>
             <td style="background-color: #2C2C2C !important; text-align: center; color: #FFCC00 !important;">${formatGrandRatio(totCur.rep, totPast.rep)}</td>
             <td style="background-color: #2C2C2C !important; text-align: center; color: #FFCC00 !important;">${formatGrandRatio(totCur.cur, totPast.cur)}</td>
+            <td style="background-color: #2C2C2C !important; border-right: 1px solid #555 !important;"></td>
         </tr>
     `;
 };
@@ -2097,7 +2100,6 @@ window.updateVerifPastHeaders = function(isSheetChange = false) {
     const sheetSelect = document.getElementById('verifPastSheet');
     const colLocWrap = document.getElementById('verifColLocWrap');
     
-    // 라디오 버튼(단일/다중)에 따른 UI 토글
     if (pastType === 'multi') {
         sheetSelectWrap.style.display = 'none';
         colLocWrap.style.display = 'none';
@@ -2135,7 +2137,6 @@ window.updateVerifPastHeaders = function(isSheetChange = false) {
         Object.values(selects).forEach(el => el.innerHTML += optionHtml);
     }
 
-    // 휴리스틱 헤더 자동 추천 ('금액' 이라는 단어도 인식하도록 강화)
     let auto = { loc: -1, acc: -1, acq: -1, rep: -1, cur: -1 };
     for (let r = 0; r < Math.min(15, data.length); r++) {
         for (let c = 0; c < data[r].length; c++) {
@@ -2169,7 +2170,6 @@ window.applyVerifPastMapping = function() {
     const registeredLocations = Array.from(locInputs).map(input => input.value.trim()).filter(Boolean);
     const currentView = document.getElementById('verifViewSelect') ? document.getElementById('verifViewSelect').value : '전체 합산';
 
-    // 과거 데이터 보관소 완전 초기화
     window.verifState.pastData = { '전체 합산': {} };
     registeredLocations.forEach(loc => window.verifState.pastData[loc] = {});
 
@@ -2187,7 +2187,6 @@ window.applyVerifPastMapping = function() {
 
             if (acqVal === 0 && repVal === 0 && curVal === 0) continue;
 
-            // ★ 핵심 수정: 타겟 사이트 지능형 할당 로직
             let targetSite = '전체 합산';
             if (targetSiteOverride) {
                 let matchedLoc = registeredLocations.find(l => l.includes(targetSiteOverride) || targetSiteOverride.includes(l));
@@ -2198,24 +2197,16 @@ window.applyVerifPastMapping = function() {
                     let matchedLoc = registeredLocations.find(l => l.includes(rowLoc) || rowLoc.includes(l));
                     if (matchedLoc) targetSite = matchedLoc;
                 } else {
-                    // 단일 시트인데 소재지 열을 지정하지 않았을 경우
-                    if (registeredLocations.length === 1) {
-                        // 1. 전체 사업장이 딱 1개면 묻지도 따지지도 않고 그 사업장에 할당
-                        targetSite = registeredLocations[0];
-                    } else if (currentView !== '전체 합산') {
-                        // 2. 현재 드롭다운으로 '천안공장' 등 특정 뷰를 보고 있으면 그 사업장에 할당
-                        targetSite = currentView;
-                    }
+                    if (registeredLocations.length === 1) targetSite = registeredLocations[0];
+                    else if (currentView !== '전체 합산') targetSite = currentView;
                 }
             }
 
-            // 전체 합산 바구니에 무조건 누적
             if (!window.verifState.pastData['전체 합산'][accName]) window.verifState.pastData['전체 합산'][accName] = { acq: 0, rep: 0, cur: 0 };
             window.verifState.pastData['전체 합산'][accName].acq += acqVal;
             window.verifState.pastData['전체 합산'][accName].rep += repVal;
             window.verifState.pastData['전체 합산'][accName].cur += curVal;
 
-            // 개별 뷰 바구니(예: 천안공장)에 누적
             if (targetSite !== '전체 합산') {
                 if (!window.verifState.pastData[targetSite][accName]) window.verifState.pastData[targetSite][accName] = { acq: 0, rep: 0, cur: 0 };
                 window.verifState.pastData[targetSite][accName].acq += acqVal;
@@ -2229,7 +2220,6 @@ window.applyVerifPastMapping = function() {
         const sheet = document.getElementById('verifPastSheet').value;
         parseRows(window.verifState.tempParsed[sheet] || []);
     } else {
-        // 다중 시트 (시트명 스캔)
         Object.keys(window.verifState.tempParsed).forEach(sheetName => {
             const cleanSheetName = sheetName.trim();
             parseRows(window.verifState.tempParsed[sheetName], cleanSheetName);
