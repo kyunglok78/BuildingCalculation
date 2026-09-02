@@ -1951,22 +1951,24 @@ window.renderVerificationTable = function() {
         totPast.acq += past.acq; totPast.rep += past.rep; totPast.cur += past.cur;
         totCur.acq += curr.acq;  totCur.rep += curr.rep;  totCur.cur += curr.cur;
 
+        // [수정] 증감률을 백분율(소수점 1자리)로 계산
         const calcRatio = (b, a) => {
             if (a === 0 && b === 0) return "-";
             if (a === 0 && b > 0) return "신규";
-            return (b / a).toFixed(2);
+            return ((b / a) * 100).toFixed(1) + "%";
         };
 
         const rAcq = calcRatio(curr.acq, past.acq);
         const rRep = calcRatio(curr.rep, past.rep);
         const rCur = calcRatio(curr.cur, past.cur);
 
+        // [수정] 백분율에 맞게 이상치 하이라이트 감지 조건 수정 (150% 이상, 70% 이하)
         const getStyle = (ratioStr) => {
             if (ratioStr === "신규") return "background: #d1ecf1; color: #0c5460; font-weight: bold;";
             if (ratioStr === "-") return "color: #999;";
-            const val = parseFloat(ratioStr);
-            if (val >= 1.5) return "background: #fff3cd; color: #856404; font-weight: bold;";
-            if (val <= 0.7) return "background: #f8d7da; color: #721c24; font-weight: bold;";
+            const val = parseFloat(ratioStr.replace('%', ''));
+            if (val >= 150) return "background: #fff3cd; color: #856404; font-weight: bold;";
+            if (val <= 70) return "background: #f8d7da; color: #721c24; font-weight: bold;";
             return "color: #333;";
         };
 
@@ -1986,22 +1988,29 @@ window.renderVerificationTable = function() {
         `;
     });
 
-    const grandAcqRatio = totPast.acq === 0 ? "-" : (totCur.acq / totPast.acq).toFixed(2);
-    const grandRepRatio = totPast.rep === 0 ? "-" : (totCur.rep / totPast.rep).toFixed(2);
-    const grandCurRatio = totPast.cur === 0 ? "-" : (totCur.cur / totPast.cur).toFixed(2);
+    // [수정] 총계 합산 증감률 백분율 산출
+    const formatGrandRatio = (b, a) => {
+        if (a === 0 && b === 0) return "-";
+        if (a === 0 && b > 0) return "신규";
+        return ((b / a) * 100).toFixed(1) + "%";
+    };
+    const grandAcqRatio = formatGrandRatio(totCur.acq, totPast.acq);
+    const grandRepRatio = formatGrandRatio(totCur.rep, totPast.rep);
+    const grandCurRatio = formatGrandRatio(totCur.cur, totPast.cur);
 
+    // [수정] 총계 합산 글자가 보이지 않는 문제 해결 (각 <td>에 color: #FFCC00 강제 적용)
     tbody.innerHTML += `
-        <tr style="background: #2C2C2C; color: #FFCC00; font-weight: bold; font-size: 14px;">
-            <td style="text-align: center; border-right: 1px solid #555;">총계 합산</td>
-            <td style="text-align: right;">${totPast.acq.toLocaleString('ko-KR')}</td>
-            <td style="text-align: right;">${totPast.rep.toLocaleString('ko-KR')}</td>
-            <td style="text-align: right; border-right: 1px solid #555;">${totPast.cur.toLocaleString('ko-KR')}</td>
-            <td style="text-align: right;">${totCur.acq.toLocaleString('ko-KR')}</td>
-            <td style="text-align: right;">${totCur.rep.toLocaleString('ko-KR')}</td>
-            <td style="text-align: right; border-right: 1px solid #555;">${totCur.cur.toLocaleString('ko-KR')}</td>
-            <td style="text-align: center;">${grandAcqRatio}</td>
-            <td style="text-align: center;">${grandRepRatio}</td>
-            <td style="text-align: center;">${grandCurRatio}</td>
+        <tr style="background: #2C2C2C; font-weight: bold; font-size: 14px;">
+            <td style="text-align: center; border-right: 1px solid #555; color: #FFCC00;">총계 합산</td>
+            <td style="text-align: right; color: #FFCC00;">${totPast.acq.toLocaleString('ko-KR')}</td>
+            <td style="text-align: right; color: #FFCC00;">${totPast.rep.toLocaleString('ko-KR')}</td>
+            <td style="text-align: right; border-right: 1px solid #555; color: #FFCC00;">${totPast.cur.toLocaleString('ko-KR')}</td>
+            <td style="text-align: right; color: #FFCC00;">${totCur.acq.toLocaleString('ko-KR')}</td>
+            <td style="text-align: right; color: #FFCC00;">${totCur.rep.toLocaleString('ko-KR')}</td>
+            <td style="text-align: right; border-right: 1px solid #555; color: #FFCC00;">${totCur.cur.toLocaleString('ko-KR')}</td>
+            <td style="text-align: center; color: #FFCC00;">${grandAcqRatio}</td>
+            <td style="text-align: center; color: #FFCC00;">${grandRepRatio}</td>
+            <td style="text-align: center; color: #FFCC00;">${grandCurRatio}</td>
         </tr>
     `;
 };
