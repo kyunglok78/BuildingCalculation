@@ -882,19 +882,23 @@
             </div>
         </div>
 
-        <!-- 2단계: 건물 평가 기준 선택 -->
+     <!-- 2단계: 건물 평가 기준 선택 -->
         <div class="card" style="flex: 1; margin-bottom: 0;">
             <div class="card-header" style="background:#f8f9fa;"><span><i class="fa-solid fa-building-shield"></i> 2단계: 건물 자산 평가 기준 선택</span></div>
             <div class="card-body" style="padding: 20px;">
-                <p style="font-size: 13px; color: #666; margin-bottom: 15px;">최종 보고서와 검산표에 반영할 '건물'의 가액 산출 기준을 선택하세요.</p>
-                <div style="display: flex; gap: 20px;">
-                    <label style="cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: bold; color: #1C5691;">
-                        <input type="radio" name="verifBuildingMode" value="ledger" checked onchange="window.renderVerificationTable()" style="width:18px; height:18px;"> 
-                        건축물대장 기준 (신축단가/원가법)
+                <p style="font-size: 13px; color: #666; margin-bottom: 15px;">검산표에 반영할 '건물'의 가액 산출 기준을 <b style="color:#d32f2f;">1개만</b> 선택하세요.</p>
+                <div style="display: flex; flex-wrap: wrap; gap: 15px;">
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: bold; color: #1C5691;">
+                        <input type="radio" name="verifBuildingMode" value="title" checked onchange="window.renderVerificationTable()" style="width:16px; height:16px;"> 표제부 기준
                     </label>
-                    <label style="cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: bold; color: #d32f2f;">
-                        <input type="radio" name="verifBuildingMode" value="inflation" onchange="window.renderVerificationTable()" style="width:18px; height:18px;"> 
-                        명세서 기준 (물가보정법)
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: bold; color: #1C5691;">
+                        <input type="radio" name="verifBuildingMode" value="floor" onchange="window.renderVerificationTable()" style="width:16px; height:16px;"> 층별 기준
+                    </label>
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: bold; color: #1C5691;">
+                        <input type="radio" name="verifBuildingMode" value="kfpa" onchange="window.renderVerificationTable()" style="width:16px; height:16px;"> 화협 기준
+                    </label>
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: bold; color: #d32f2f;">
+                        <input type="radio" name="verifBuildingMode" value="inflation" onchange="window.renderVerificationTable()" style="width:16px; height:16px;"> 명세서(물가보정)
                     </label>
                 </div>
             </div>

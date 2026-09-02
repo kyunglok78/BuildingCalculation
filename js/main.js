@@ -1902,16 +1902,17 @@ window.renderVerificationTable = function() {
     const tbody = document.getElementById('verifTbody');
     if (!tbody) return;
 
+    // 4가지 모드(title, floor, kfpa, inflation) 중 선택된 1개 값 가져오기
     const buildingModeInput = document.querySelector('input[name="verifBuildingMode"]:checked');
-    const buildingMode = buildingModeInput ? buildingModeInput.value : 'ledger';
+    const buildingMode = buildingModeInput ? buildingModeInput.value : 'title';
     const displayData = JSON.parse(JSON.stringify(window.verifState.currentData));
 
-    if (buildingMode === 'ledger' && window.kbState) {
+    // 물가보정(inflation)이 아닐 경우 선택된 딱 1개의 대장 탭(예: title) 금액만 합산
+    if (buildingMode !== 'inflation' && window.kbState) {
         let ledgerRepTotal = 0, ledgerCurTotal = 0;
         
-        ['title', 'floor', 'kfpa'].forEach(mode => {
-            const dataObj = window.kbState.evalData[mode];
-            if (!dataObj) return;
+        const dataObj = window.kbState.evalData[buildingMode];
+        if (dataObj) {
             for (const site in dataObj) {
                 const groups = Array.isArray(dataObj[site]) ? dataObj[site] : Object.values(dataObj[site]);
                 groups.forEach(g => {
@@ -1919,16 +1920,21 @@ window.renderVerificationTable = function() {
                     ledgerCurTotal += (parseFloat(g.현재_합계) || 0);
                 });
             }
-        });
+        }
 
         const buildingKeys = ['건물', '구축물', '건물부속설비'];
-        let baseBuildingKey = displayData['건물'] ? '건물' : '건축물대장 통합액';
+        const modeName = buildingMode === 'title' ? '표제부' : (buildingMode === 'floor' ? '층별' : '화협');
+        let baseBuildingKey = displayData['건물'] ? '건물' : `대장통합액(${modeName})`;
+        
         if (!displayData[baseBuildingKey]) displayData[baseBuildingKey] = { acq: 0, rep: 0, cur: 0 };
         
         buildingKeys.forEach(k => {
-            if (displayData[k]) { displayData[k].rep = 0; displayData[k].cur = 0; }
+            if (displayData[k] && k !== baseBuildingKey) { 
+                displayData[k].rep = 0; displayData[k].cur = 0; 
+            }
         });
 
+        // 3중 중복합산 없이 딱 1개 기준액만 깔끔하게 덮어쓰기
         displayData[baseBuildingKey].rep = ledgerRepTotal;
         displayData[baseBuildingKey].cur = ledgerCurTotal;
     }
@@ -1951,7 +1957,7 @@ window.renderVerificationTable = function() {
         totPast.acq += past.acq; totPast.rep += past.rep; totPast.cur += past.cur;
         totCur.acq += curr.acq;  totCur.rep += curr.rep;  totCur.cur += curr.cur;
 
-        // [수정] 증감률을 백분율(소수점 1자리)로 계산
+        // 증감률 백분율(소수점 1자리) 산출
         const calcRatio = (b, a) => {
             if (a === 0 && b === 0) return "-";
             if (a === 0 && b > 0) return "신규";
@@ -1962,7 +1968,7 @@ window.renderVerificationTable = function() {
         const rRep = calcRatio(curr.rep, past.rep);
         const rCur = calcRatio(curr.cur, past.cur);
 
-        // [수정] 백분율에 맞게 이상치 하이라이트 감지 조건 수정 (150% 이상, 70% 이하)
+        // 150% 이상, 70% 이하 기준 하이라이트
         const getStyle = (ratioStr) => {
             if (ratioStr === "신규") return "background: #d1ecf1; color: #0c5460; font-weight: bold;";
             if (ratioStr === "-") return "color: #999;";
@@ -1987,6 +1993,32 @@ window.renderVerificationTable = function() {
             </tr>
         `;
     });
+
+    const formatGrandRatio = (b, a) => {
+        if (a === 0 && b === 0) return "-";
+        if (a === 0 && b > 0) return "신규";
+        return ((b / a) * 100).toFixed(1) + "%";
+    };
+    const grandAcqRatio = formatGrandRatio(totCur.acq, totPast.acq);
+    const grandRepRatio = formatGrandRatio(totCur.rep, totPast.rep);
+    const grandCurRatio = formatGrandRatio(totCur.cur, totPast.cur);
+
+    // 총계 합산 글자색 및 배경색이 글로벌 CSS에 먹히지 않도록 !important 고정
+    tbody.innerHTML += `
+        <tr style="background: #2C2C2C !important; font-weight: bold; font-size: 14px;">
+            <td style="text-align: center; border-right: 1px solid #555; color: #FFCC00 !important;">총계 합산</td>
+            <td style="text-align: right; color: #FFCC00 !important;">${totPast.acq.toLocaleString('ko-KR')}</td>
+            <td style="text-align: right; color: #FFCC00 !important;">${totPast.rep.toLocaleString('ko-KR')}</td>
+            <td style="text-align: right; border-right: 1px solid #555; color: #FFCC00 !important;">${totPast.cur.toLocaleString('ko-KR')}</td>
+            <td style="text-align: right; color: #FFCC00 !important;">${totCur.acq.toLocaleString('ko-KR')}</td>
+            <td style="text-align: right; color: #FFCC00 !important;">${totCur.rep.toLocaleString('ko-KR')}</td>
+            <td style="text-align: right; border-right: 1px solid #555; color: #FFCC00 !important;">${totCur.cur.toLocaleString('ko-KR')}</td>
+            <td style="text-align: center; color: #FFCC00 !important;">${grandAcqRatio}</td>
+            <td style="text-align: center; color: #FFCC00 !important;">${grandRepRatio}</td>
+            <td style="text-align: center; color: #FFCC00 !important;">${grandCurRatio}</td>
+        </tr>
+    `;
+};
 
     // [수정] 총계 합산 증감률 백분율 산출
     const formatGrandRatio = (b, a) => {
