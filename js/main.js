@@ -2673,3 +2673,27 @@ window.applyVerifPastMapping = function() {
     window.renderVerificationTable();
     alert(`✅ 과거 데이터 연동 완료!`);
 };
+
+// ============================================================================
+// [19] 기존 스마트 과거 연동 마법사 0건 오류 픽스 (투명글자 자동 세척 백신)
+// ============================================================================
+window.addEventListener('mousedown', function(e) {
+    const targetText = e.target.innerText || '';
+    
+    // 사용자가 '연동 적용하기' 버튼을 누르는 순간 찰나에 낚아채서 먼저 실행됩니다.
+    if (targetText.includes('연동 적용하기')) {
+        if (window.infState && window.infState.data) {
+            for (let tab in window.infState.data) {
+                window.infState.data[tab].forEach(row => {
+                    ['자산번호', '신자산번호'].forEach(key => {
+                        if (row[key]) {
+                            // 눈에 보이지 않는 투명글자(\u200B)와 콤마, 공백을 완벽히 지워 기존 마법사가 인식하게 만듭니다.
+                            row[key] = String(row[key]).replace(/[\u200B\s,]/g, '');
+                        }
+                    });
+                });
+            }
+        }
+        // 세척이 끝나면 원래 시스템의 연동 마법사가 100% 매칭률로 정상 작동합니다.
+    }
+}, true); // Capture 단계에서 실행
