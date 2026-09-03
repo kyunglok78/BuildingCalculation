@@ -1364,40 +1364,44 @@ setInterval(() => {
 }, 1000);
 
 // ============================================================================
-// [16] 전역 클릭 제어기 (열 매핑 렉 제로 CSS 인젝션 & 튕김 방지 & 자동연동)
+// [16] 전역 클릭 제어기 (열 매핑 렉 제로 CSS 인젝션 & 꼬임 방지 안전장치)
 // ============================================================================
 document.addEventListener('click', function(e) {
-    // 1. 평가제외 버튼 누르면 1만원 이하 로직 자동 실행
+    // 1. 평가제외 버튼 자동 연동
     const btnExclude = e.target.closest('button');
     if (btnExclude && btnExclude.innerText.includes('평가 제외')) {
         setTimeout(() => { if(typeof window.excludeUnderTenThousand === 'function') window.excludeUnderTenThousand(true); }, 100);
     }
     
-    // 2. 열(기둥) 매핑 시 기존의 무거운 로직을 죽이고, 가장 빠른 CSS 꼼수 사용
+    // 2. 열(기둥) 매핑 시 무거운 로직 제거 및 뱃지 부유(Absolute) 처리
     const cell = e.target.closest('.infTheadGlobal th, .infTheadGlobal td');
     if (cell && window.infState && window.infState.wizard && window.infState.wizard.phase === 'mapping') {
         e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
 
         const targetName = window.infState.wizard.activeTarget;
-        if (!targetName) { alert('먼저 매핑할 버튼을 선택하세요.'); return; }
+        if (!targetName) { alert('먼저 상단에서 매핑할 파란색 버튼(예: 취득가액)을 선택하세요.'); return; }
 
         const tr = cell.closest('tr');
-        // [버그 수정 1] 행 번호(1번째 기둥)를 제외하여 실제 데이터 인덱스 매칭 (-1 처리)
-        const colIndex = Array.from(tr.children).indexOf(cell) - 1;
-        
-        if (colIndex < 0) return; // '행 번호' 열 자체를 클릭한 경우 무시
+        const colIndex = Array.from(tr.children).indexOf(cell) - 1; // 행 번호 제외
+        if (colIndex < 0) return;
 
         // 상태 저장
         if (!window.infState.wizard.mapped) window.infState.wizard.mapped = {};
         window.infState.wizard.mapped[targetName] = colIndex;
-
         const safeTargetName = targetName.replace(/[^a-zA-Z0-9가-힣]/g, '');
 
-        // 기존 뱃지 제거 및 새 뱃지 삽입
+        // ★ 핵심: 표 레이아웃 재계산(Reflow) 완벽 차단을 위한 Absolute 뱃지 삽입
         document.querySelectorAll(`.badge-${safeTargetName}`).forEach(el => el.remove());
-        cell.innerHTML += `<span class="badge-${safeTargetName}" style="display:block; font-size:11px; color:white; background:#1C5691; border-radius:3px; margin-top:4px; padding:3px;">${targetName} ✓</span>`;
+        
+        const badge = document.createElement('span');
+        badge.className = `badge-${safeTargetName}`;
+        badge.innerText = `${targetName} ✓`;
+        badge.style.cssText = "position:absolute; top:2px; right:2px; font-size:11px; color:white; background:#1C5691; border-radius:3px; padding:2px 5px; box-shadow:0 1px 3px rgba(0,0,0,0.3); z-index:10; white-space:nowrap; pointer-events:none;";
+        
+        cell.style.position = 'relative';
+        cell.appendChild(badge);
 
-        // CSS로 기둥 한 번에 색칠
+        // CSS로 기둥 한 번에 색칠 (렉 제로)
         let styleTag = document.getElementById('fast-mapping-style');
         if (!styleTag) {
             styleTag = document.createElement('style');
@@ -1406,26 +1410,40 @@ document.addEventListener('click', function(e) {
         }
         let newStyles = '';
         for (const [name, idx] of Object.entries(window.infState.wizard.mapped)) {
-            // [버그 수정 연동] CSS nth-child는 1부터 시작 + 행 번호 기둥 1개 포함이므로 idx + 2
             newStyles += `.infTbodyGlobal tr td:nth-child(${idx + 2}) { background-color: #e6f2ff !important; } `;
         }
         styleTag.innerHTML = newStyles;
 
-        // 버튼 UI 갱신 (현재 매핑 완료된 버튼 상태 변경)
-        const btn = Array.from(document.querySelectorAll('#infMappingButtons button')).find(b => b.innerText.trim() === targetName);
+        // 기존 버튼 회색(완료) 처리
+        const btn = Array.from(document.querySelectorAll('#infMappingButtons button')).find(b => b.innerText.replace('✓','').trim() === targetName);
         if (btn) {
             btn.innerText = `${targetName} ✓`;
-            btn.style.cssText = 'background:#e2e8f0 !important; color:#64748b !important; border:2px solid #cbd5e1 !important;'; 
+            btn.style.cssText = 'background:#e2e8f0 !important; color:#64748b !important; border:2px solid #cbd5e1 !important; transform: none; box-shadow: none;'; 
         }
 
-        // 다음 매핑 대상 자동 탐색 및 활성화
-        const unmapped = window.infState.wizard.columns.find(col => window.infState.wizard.mapped[col] === undefined);
-        window.infState.wizard.activeTarget = unmapped || ''; 
+        // ★ 오지랖 방지 로직: 무조건 현재 위치보다 '뒤'에 있는 미매핑 항목만 찾음 (역주행 금지)
+        const currentIndex = window.infState.wizard.columns.indexOf(targetName);
+        let nextTarget = '';
+        for (let i = currentIndex + 1; i < window.infState.wizard.columns.length; i++) {
+            if (window.infState.wizard.mapped[window.infState.wizard.columns[i]] === undefined) {
+                nextTarget = window.infState.wizard.columns[i];
+                break;
+            }
+        }
+        window.infState.wizard.activeTarget = nextTarget; 
 
+        // 모든 버튼 기본 스타일 초기화 (완료된 것 제외)
+        document.querySelectorAll('#infMappingButtons button').forEach(b => {
+            if (!b.innerText.includes('✓')) {
+                b.style.cssText = 'background: #ffffff !important; color: #333 !important; border: 1px solid #ccc !important; opacity: 1 !important; cursor: pointer;';
+            }
+        });
+
+        // 다음 타겟을 매우 강렬하게(빨간색) 하이라이트하여 실수 방지
         if (window.infState.wizard.activeTarget) {
             const nextBtn = Array.from(document.querySelectorAll('#infMappingButtons button')).find(b => b.innerText.trim() === window.infState.wizard.activeTarget);
             if (nextBtn) {
-                nextBtn.style.cssText = 'background:#1C5691 !important; color:white !important; border:2px solid #1C5691 !important; font-weight:bold !important; box-shadow:0 0 8px rgba(28,86,145,0.4);';
+                nextBtn.style.cssText = 'background:#d32f2f !important; color:white !important; border:2px solid #d32f2f !important; font-weight:bold !important; box-shadow:0 0 12px rgba(211,47,47,0.5); transform: scale(1.05); transition: 0.2s;';
             }
         }
 
@@ -1435,74 +1453,67 @@ document.addEventListener('click', function(e) {
         const textEl = document.getElementById('infWizardText');
         if (textEl) {
             if (window.infState.wizard.activeTarget) {
-                textEl.innerHTML = `<span style="color:#28A745;">✅ [${targetName}] 매핑 완료! 이어서 <b>[${window.infState.wizard.activeTarget}]</b> 열의 상단을 클릭해 매칭하세요.</span>`;
+                textEl.innerHTML = `<span style="color:#28A745;">✅ [${targetName}] 매핑 완료! 이어서 <b style="color:#d32f2f;">[${window.infState.wizard.activeTarget}]</b> 열을 클릭해 주세요. (엑셀에 없는 항목이면 다른 버튼을 먼저 누르세요)</span>`;
             } else {
-                textEl.innerHTML = '<span style="color:#28A745;">✅ 모든 항목 매핑이 완료되었습니다! 우측의 [열 매핑 완료 ▶] 버튼을 눌러주세요.</span>';
+                textEl.innerHTML = '<span style="color:#28A745;">✅ 매핑이 끝났습니다! 우측의 [열 매핑 완료 ▶] 버튼을 눌러주세요.</span>';
             }
         }
     }
     
-    // 3. 매핑 해제 시 오류 방지 및 완벽 초기화
+    // 3. 매핑 해제 시 오류 방지 (수동 타겟 지정 포함)
     const btnMap = e.target.closest('#infMappingButtons button');
-    if (btnMap && btnMap.innerText.includes('✓')) {
-        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+    if (btnMap) {
+        // 이미 완료된 버튼(✓)을 누르면 매핑 해제
+        if (btnMap.innerText.includes('✓')) {
+            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
 
-        const targetName = btnMap.innerText.replace('✓', '').trim();
-        if (window.infState && window.infState.wizard && window.infState.wizard.mapped) {
-            delete window.infState.wizard.mapped[targetName];
-        }
-        
-        const safeTargetName = targetName.replace(/[^a-zA-Z0-9가-힣]/g, '');
-        document.querySelectorAll(`.badge-${safeTargetName}`).forEach(el => el.remove());
-        
-        let styleTag = document.getElementById('fast-mapping-style');
-        if (styleTag && window.infState && window.infState.wizard && window.infState.wizard.mapped) {
-            let newStyles = '';
-            for (const [name, idx] of Object.entries(window.infState.wizard.mapped)) {
-                // [버그 수정 연동] 해제 시 다시 그릴 때도 idx + 2
-                newStyles += `.infTbodyGlobal tr td:nth-child(${idx + 2}) { background-color: #e6f2ff !important; } `;
+            const targetName = btnMap.innerText.replace('✓', '').trim();
+            if (window.infState && window.infState.wizard && window.infState.wizard.mapped) {
+                delete window.infState.wizard.mapped[targetName];
             }
-            styleTag.innerHTML = newStyles;
+            
+            const safeTargetName = targetName.replace(/[^a-zA-Z0-9가-힣]/g, '');
+            document.querySelectorAll(`.badge-${safeTargetName}`).forEach(el => el.remove());
+            
+            let styleTag = document.getElementById('fast-mapping-style');
+            if (styleTag && window.infState && window.infState.wizard && window.infState.wizard.mapped) {
+                let newStyles = '';
+                for (const [name, idx] of Object.entries(window.infState.wizard.mapped)) {
+                    newStyles += `.infTbodyGlobal tr td:nth-child(${idx + 2}) { background-color: #e6f2ff !important; } `;
+                }
+                styleTag.innerHTML = newStyles;
+            }
+
+            btnMap.innerText = targetName; 
+            window.infState.wizard.activeTarget = targetName;
+        } else {
+            // 안 된 버튼을 누르면 해당 버튼을 강제 타겟으로 지정 (오지랖 무시)
+            window.infState.wizard.activeTarget = btnMap.innerText.trim();
         }
 
-        btnMap.innerText = targetName; 
-        
+        // 전체 버튼 스타일 리셋 후 현재 타겟만 강렬하게 강조
         document.querySelectorAll('#infMappingButtons button').forEach(b => {
-            if (!b.innerText.includes('✓')) b.style.cssText = 'background: #ffffff !important; color: #333 !important; border: 1px solid #ccc !important; opacity: 1 !important; cursor: pointer;';
+            if (!b.innerText.includes('✓')) {
+                b.style.cssText = 'background: #ffffff !important; color: #333 !important; border: 1px solid #ccc !important; opacity: 1 !important; cursor: pointer; transform: none; box-shadow: none;';
+            }
         });
 
-        if (window.infState && window.infState.wizard) {
-            window.infState.wizard.activeTarget = targetName;
+        if (window.infState && window.infState.wizard && window.infState.wizard.activeTarget) {
             window.infState.wizard.phase = 'mapping'; 
-            btnMap.style.cssText = 'background:#1C5691 !important; color:white !important; border:2px solid #1C5691 !important; font-weight:bold !important; box-shadow:0 0 8px rgba(28,86,145,0.4);';
+            const activeBtn = Array.from(document.querySelectorAll('#infMappingButtons button')).find(b => b.innerText.trim() === window.infState.wizard.activeTarget);
+            if(activeBtn) {
+                activeBtn.style.cssText = 'background:#d32f2f !important; color:white !important; border:2px solid #d32f2f !important; font-weight:bold !important; box-shadow:0 0 12px rgba(211,47,47,0.5); transform: scale(1.05); transition: 0.2s;';
+            }
         }
         
         const finishBtn = document.getElementById('btnFinishMapping');
         if (finishBtn) finishBtn.style.display = 'none';
         
         const textEl = document.getElementById('infWizardText');
-        if (textEl) textEl.innerHTML = `🎯 <b>[${targetName}]</b> 항목 매핑이 해제되었습니다. 엑셀 열 상단을 다시 클릭해 매칭하세요!`;
+        if (textEl) textEl.innerHTML = `🎯 현재 지정할 타겟은 <b style="color:#d32f2f;">[${window.infState.wizard.activeTarget}]</b> 입니다. 명세서에서 알맞은 기둥을 클릭하세요!`;
     }
 }, true);
 
-// 4. 시스템 멋대로 다음 단계 넘어가는 현상(Auto-Proceed) 원천 차단
-if (typeof window.infFinishMapping === 'function' && !window.infFinishMapping.isPatchedFast) {
-    const origFinish = window.infFinishMapping;
-    window.infFinishMapping = function(force) {
-        if (force === true) {
-            origFinish.apply(this, arguments); 
-        } else {
-            const finishBtn = document.getElementById('btnFinishMapping');
-            if (finishBtn) {
-                finishBtn.style.display = 'inline-block';
-                finishBtn.onclick = function() { window.infFinishMapping(true); }; 
-            }
-            const textEl = document.getElementById('infWizardText');
-            if (textEl) textEl.innerHTML = '<span style="color:#28A745;">✅ 매핑이 완료되었습니다! 우측의 [열 매핑 완료 ▶] 버튼을 직접 눌러야 다음으로 이동합니다.</span>';
-        }
-    };
-    window.infFinishMapping.isPatchedFast = true;
-}
 
 // ============================================================================
 // [17] 초간단 명세서 행 즉시 삭제 (Ctrl + 마이너스)
