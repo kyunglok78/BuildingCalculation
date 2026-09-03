@@ -2690,7 +2690,7 @@ document.addEventListener('change', function(e) {
 document.addEventListener('click', function(e) {
     const btn = e.target.closest('button');
     if (btn && btn.innerText.includes('연동 적용하기')) {
-        if (!window.lastUploadedPastFile) return; // 캡처된 파일이 없으면 기존 로직에 맡김
+        if (!window.lastUploadedPastFile) return; // 캡처된 파일이 없으면 통과
         
         // 기존 시스템의 불안전한 내장 매칭 로직을 완전히 정지시킵니다.
         e.preventDefault();
@@ -2776,7 +2776,7 @@ document.addEventListener('click', function(e) {
                 if (typeof window.infRenderTable === 'function') window.infRenderTable();
                 
                 // 성공 알림 (딥클린 엔진 시그니처 표출)
-                alert(`🚀 [딥클린 엔진] 데이터 연동 완료!\n선택하신 시트에서 총 ${matchCount}건의 자산이 완벽하게 매칭되었습니다.\n\n(※ 0건일 경우, 선택하신 시트에 해당 자산번호가 진짜로 존재하는지 확인해 주세요!)`);
+                alert(`🚀 [딥클린 엔진] 데이터 연동 완료!\n선택하신 시트에서 총 ${matchCount}건의 자산이 완벽하게 매칭되었습니다.`);
                 
             } catch (err) {
                 alert("엑셀 데이터 매칭 중 오류가 발생했습니다.\n(" + err.message + ")");
