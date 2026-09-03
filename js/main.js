@@ -1768,7 +1768,7 @@ document.addEventListener('click', function(e) {
 });
 
 // ============================================================================
-// [섹션 10] 3.1 가액평가 데이터 검산 및 무결성 종합 비교 모듈 (수직 전개 및 드릴다운 탑재)
+// [섹션 10] 3.1 가액평가 데이터 검산 및 무결성 종합 비교 모듈 (상단 포커스 뷰 드릴다운 탑재)
 // ============================================================================
 
 window.verifState = {
@@ -1779,9 +1779,10 @@ window.verifState = {
     totalAcqCurrent: 0,
     tempParsed: {},  
     customOrder: [], 
-    currentView: '전체 합산', // 호환성을 위해 속성 유지
+    currentView: '전체 합산', 
     siteMapping: {},     
-    buildingSource: {}   
+    buildingSource: {},
+    preparedSiteData: {} // 포커스 뷰 출력을 위한 계산 완료 데이터 보관소
 };
 
 // 중복 모달 강제 제거
@@ -1887,6 +1888,7 @@ window.initVerificationScreen = function() {
     if(!window.verifState.reasons) window.verifState.reasons = { '전체 합산': {} };
     if(!window.verifState.siteMapping) window.verifState.siteMapping = {};
     if(!window.verifState.buildingSource) window.verifState.buildingSource = {};
+    if(!window.verifState.preparedSiteData) window.verifState.preparedSiteData = {};
     
     window.verifState.totalAcqOriginal = 0;
     window.verifState.totalAcqCurrent = 0;
@@ -2020,10 +2022,6 @@ window.initVerificationScreen = function() {
         }
     }
 
-    // 기존 드롭다운 필터 요소 삭제 (이제 수직으로 모두 노출하므로 불필요)
-    const oldSelect = document.getElementById('verifViewSelect');
-    if(oldSelect) oldSelect.remove();
-
     window.renderVerificationTable();
 };
 
@@ -2100,13 +2098,98 @@ window.updateVerifReason = function(site, accName, val) {
     window.verifState.reasons[site][accName] = val;
 };
 
-// 트리 구조(아코디언) 펼치기/접기 함수
-window.toggleVerifSub = function(idx, el) {
-    const rows = document.querySelectorAll('.verif-subrow-' + idx);
-    if (rows.length === 0) return;
-    const isHidden = rows[0].style.display === 'none';
-    rows.forEach(r => { r.style.display = isHidden ? 'table-row' : 'none'; });
-    if(el) el.innerText = isHidden ? '▼' : '▶';
+// ★ 핵심: 상단 포커스 뷰 (드릴다운) 표출 함수
+window.showFocusView = function(accName) {
+    const container = document.getElementById('verifFocusContainer');
+    const row = document.getElementById('verifFocusRow');
+    if (!container || !row) return;
+
+    // 이미 열려있는 자산을 다시 누르면 닫기 기능
+    if (row.style.display === 'table-row' && container.dataset.acc === accName) {
+        row.style.display = 'none';
+        container.dataset.acc = '';
+        document.querySelectorAll('.grand-row').forEach(tr => tr.style.background = '#fff');
+        return;
+    }
+
+    container.dataset.acc = accName;
+    const locInputs = document.querySelectorAll('#locationTbody .loc-name');
+    const registeredLocations = Array.from(locInputs).map(input => input.value.trim()).filter(Boolean);
+
+    let html = `
+        <div style="padding: 15px 25px; border: 2px solid #007bff; border-radius: 6px; margin: 15px; background: #fff; box-shadow: 0 4px 15px rgba(0,123,255,0.15);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px; border-bottom: 2px solid #007bff; padding-bottom: 10px;">
+                <h4 style="margin:0; color:#007bff; font-weight:900; font-size:16px;">
+                    <i class="fa-solid fa-magnifying-glass-location"></i> [${accName}] 사업장별 세부 합산 내역
+                </h4>
+                <button type="button" style="background:none; border:none; font-size:20px; color:#999; cursor:pointer;" onclick="document.getElementById('verifFocusRow').style.display='none'; document.querySelectorAll('.grand-row').forEach(tr => tr.style.background = '#fff');">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <table class="data-table" style="margin:0; width:100%;">
+                <thead style="background:#f4f8fb;">
+                    <tr>
+                        <th style="color:#1C5691;">소재지명</th>
+                        <th style="color:#666;">과거 취득가액</th>
+                        <th style="color:#666;">과거 현재가액</th>
+                        <th style="color:#1C5691;">당해 취득가액</th>
+                        <th style="color:#1C5691;">당해 재조달가액</th>
+                        <th style="color:#1C5691;">당해 현재가액</th>
+                        <th style="color:#d32f2f;">현재 증감률</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    let hasValidData = false;
+    registeredLocations.forEach(site => {
+        let sitePast = window.verifState.pastData[site] && window.verifState.pastData[site][accName] ? window.verifState.pastData[site][accName] : {acq:0, rep:0, cur:0};
+        // 계산 완료된 preparedSiteData에서 가져옴 (건물 값 자동반영 완료 상태)
+        let siteCurr = window.verifState.preparedSiteData[site] && window.verifState.preparedSiteData[site][accName] ? window.verifState.preparedSiteData[site][accName] : {acq:0, rep:0, cur:0};
+
+        if (sitePast.acq === 0 && sitePast.cur === 0 && siteCurr.acq === 0 && siteCurr.cur === 0) return;
+        hasValidData = true;
+
+        const calcRatio = (b, a) => {
+            if (a === 0 && b === 0) return "-";
+            if (a === 0 && b > 0) return "신규";
+            return ((b / a) * 100).toFixed(1) + "%";
+        };
+        const rCur = calcRatio(siteCurr.cur, sitePast.cur);
+        const getStyle = (ratioStr) => {
+            if (ratioStr === "신규") return "color: #0c5460; font-weight: bold;";
+            if (ratioStr === "-") return "color: #999;";
+            const val = parseFloat(ratioStr.replace('%', ''));
+            if (val >= 110) return "color: #d32f2f; font-weight: bold;";
+            if (val <= 90) return "color: #0056b3; font-weight: bold;";
+            return "color: #333;";
+        };
+
+        html += `
+            <tr style="background:#fff; border-bottom:1px solid #eee;">
+                <td style="text-align:center; font-weight:bold; color:#555;">${site}</td>
+                <td style="text-align:right; color:#888;">${sitePast.acq === 0 ? '-' : sitePast.acq.toLocaleString('ko-KR')}</td>
+                <td style="text-align:right; color:#888;">${sitePast.cur === 0 ? '-' : sitePast.cur.toLocaleString('ko-KR')}</td>
+                <td style="text-align:right; color:#1C5691;">${siteCurr.acq === 0 ? '-' : siteCurr.acq.toLocaleString('ko-KR')}</td>
+                <td style="text-align:right; color:#1C5691;">${siteCurr.rep === 0 ? '-' : siteCurr.rep.toLocaleString('ko-KR')}</td>
+                <td style="text-align:right; color:#1C5691; font-weight:900;">${siteCurr.cur === 0 ? '-' : siteCurr.cur.toLocaleString('ko-KR')}</td>
+                <td style="text-align:center; ${getStyle(rCur)}">${rCur}</td>
+            </tr>
+        `;
+    });
+
+    if (!hasValidData) {
+        html += `<tr><td colspan="7" style="text-align:center; padding:30px; color:#999;">해당 자산의 사업장별 세부 데이터가 없습니다.</td></tr>`;
+    }
+
+    html += `</tbody></table></div>`;
+    container.innerHTML = html;
+    row.style.display = 'table-row';
+    
+    // 클릭된 행 하이라이트 표시
+    document.querySelectorAll('.grand-row').forEach(tr => tr.style.background = '#fff');
+    const activeTr = document.getElementById('grand_row_' + accName);
+    if (activeTr) activeTr.style.background = '#e6f2ff';
 };
 
 window.renderVerificationTable = function() {
@@ -2121,41 +2204,45 @@ window.renderVerificationTable = function() {
     const locInputs = document.querySelectorAll('#locationTbody .loc-name');
     const registeredLocations = Array.from(locInputs).map(input => input.value.trim()).filter(Boolean);
 
-    // 2. 사업장별 설정된 대장 원천(표제부/화협)에서 '건물' 평가액 도출 및 합산
-    if (window.kbState) {
-        let grandLedgerRep = 0, grandLedgerCur = 0;
+    // 2. 사업장별 설정된 대장 원천(표제부/화협)에서 '건물' 평가액 도출 및 계산 완료 데이터 보관소에 저장
+    const preparedSiteData = {};
+    let grandLedgerRep = 0, grandLedgerCur = 0;
+
+    registeredLocations.forEach(site => {
+        preparedSiteData[site] = JSON.parse(JSON.stringify(currentDataClone[site] || {}));
+        const sourceMode = window.verifState.buildingSource[site];
         
-        registeredLocations.forEach(site => {
-            const sourceMode = window.verifState.buildingSource[site];
-            if (sourceMode && sourceMode !== 'none' && window.kbState.evalData[sourceMode] && window.kbState.evalData[sourceMode][site]) {
-                let siteRep = 0, siteCur = 0;
-                const siteGroups = window.kbState.evalData[sourceMode][site];
-                const groups = Array.isArray(siteGroups) ? siteGroups : Object.values(siteGroups);
-                groups.forEach(g => {
-                    siteRep += (parseFloat(g.재조달_합계) || 0);
-                    siteCur += (parseFloat(g.현재_합계) || 0);
-                });
-                
-                if (!currentDataClone[site]) currentDataClone[site] = {};
-                if (!currentDataClone[site]['건물']) currentDataClone[site]['건물'] = { acq: 0, rep: 0, cur: 0 };
-                currentDataClone[site]['건물'].rep += siteRep;
-                currentDataClone[site]['건물'].cur += siteCur;
+        if (sourceMode && sourceMode !== 'none' && window.kbState.evalData[sourceMode] && window.kbState.evalData[sourceMode][site]) {
+            let siteRep = 0, siteCur = 0;
+            const siteGroups = window.kbState.evalData[sourceMode][site];
+            const groups = Array.isArray(siteGroups) ? siteGroups : Object.values(siteGroups);
+            groups.forEach(g => {
+                siteRep += (parseFloat(g.재조달_합계) || 0);
+                siteCur += (parseFloat(g.현재_합계) || 0);
+            });
+            
+            if (!preparedSiteData[site]['건물']) preparedSiteData[site]['건물'] = { acq: 0, rep: 0, cur: 0 };
+            preparedSiteData[site]['건물'].rep += siteRep;
+            preparedSiteData[site]['건물'].cur += siteCur;
 
-                grandLedgerRep += siteRep;
-                grandLedgerCur += siteCur;
-            }
-        });
+            grandLedgerRep += siteRep;
+            grandLedgerCur += siteCur;
+        }
+    });
+    
+    // 포커스 뷰에서 즉시 꺼내 쓸 수 있도록 전역 보관
+    window.verifState.preparedSiteData = preparedSiteData;
 
-        if (!currentDataClone['전체 합산']) currentDataClone['전체 합산'] = {};
-        if (!currentDataClone['전체 합산']['건물']) currentDataClone['전체 합산']['건물'] = { acq: 0, rep: 0, cur: 0 };
-        currentDataClone['전체 합산']['건물'].rep += grandLedgerRep;
-        currentDataClone['전체 합산']['건물'].cur += grandLedgerCur;
-    }
+    // 전체 합산 데이터에 건물값 더하기
+    if (!currentDataClone['전체 합산']) currentDataClone['전체 합산'] = {};
+    if (!currentDataClone['전체 합산']['건물']) currentDataClone['전체 합산']['건물'] = { acq: 0, rep: 0, cur: 0 };
+    currentDataClone['전체 합산']['건물'].rep += grandLedgerRep;
+    currentDataClone['전체 합산']['건물'].cur += grandLedgerCur;
 
     // 3. 자산계정 목록 취합 및 정렬 상태 업데이트
     let allAccountsSet = new Set();
-    Object.keys(currentDataClone).forEach(site => Object.keys(currentDataClone[site]).forEach(acc => allAccountsSet.add(acc)));
-    Object.keys(pastDataClone).forEach(site => Object.keys(pastDataClone[site]).forEach(acc => allAccountsSet.add(acc)));
+    Object.keys(currentDataClone['전체 합산']).forEach(acc => allAccountsSet.add(acc));
+    Object.keys(pastDataClone['전체 합산'] || {}).forEach(acc => allAccountsSet.add(acc));
     
     const allAccounts = Array.from(allAccountsSet);
     if (allAccounts.length === 0) {
@@ -2183,79 +2270,19 @@ window.renderVerificationTable = function() {
         return "color: #333;";
     };
 
-    tbody.innerHTML = '';
-
     // =========================================================
-    // 파트 1: 개별 사업장 테이블 렌더링 (전체 총계는 하단으로)
+    // 상단 포커스 뷰 (드릴다운 컨테이너) 및 전체 합산 표 렌더링
     // =========================================================
-    registeredLocations.forEach(site => {
-        const siteData = currentDataClone[site] || {};
-        const sitePast = pastDataClone[site] || {};
-        const siteReason = reasonDataClone[site] || {};
-        
-        let siteTotPast = { acq: 0, rep: 0, cur: 0 };
-        let siteTotCur  = { acq: 0, rep: 0, cur: 0 };
-        let hasSiteData = false;
-
-        let siteHtml = `<tr><td colspan="11" style="background:#e9ecef; font-weight:bold; font-size:15px; color:#1C5691; text-align:left; padding:10px 20px;"><i class="fa-solid fa-building"></i> 개별 사업장 뷰 : ${site}</td></tr>`;
-
-        window.verifState.customOrder.forEach((acc, idx) => {
-            const past = sitePast[acc] || { acq: 0, rep: 0, cur: 0 };
-            const curr = siteData[acc] || { acq: 0, rep: 0, cur: 0 };
-            
-            // 해당 공장에 데이터가 0이면 건너뜀 (표가 무의미하게 길어지는 것 방지)
-            if (past.acq === 0 && past.rep === 0 && past.cur === 0 && curr.acq === 0 && curr.rep === 0 && curr.cur === 0) return;
-            hasSiteData = true;
-
-            siteTotPast.acq += past.acq; siteTotPast.rep += past.rep; siteTotPast.cur += past.cur;
-            siteTotCur.acq += curr.acq;  siteTotCur.rep += curr.rep;  siteTotCur.cur += curr.cur;
-
-            const rAcq = calcRatio(curr.acq, past.acq); const rRep = calcRatio(curr.rep, past.rep); const rCur = calcRatio(curr.cur, past.cur);
-            const savedReason = siteReason[acc] || '';
-
-            siteHtml += `
-                <tr style="background: #fff; border-bottom: 1px solid #eee;">
-                    <td style="text-align: center; font-weight: bold; color: #666; border-right: 1px solid #ccc;">${acc}</td>
-                    <td style="text-align: right; color: #666;">${past.acq === 0 ? '-' : past.acq.toLocaleString('ko-KR')}</td>
-                    <td style="text-align: right; color: #666;">${past.rep === 0 ? '-' : past.rep.toLocaleString('ko-KR')}</td>
-                    <td style="text-align: right; color: #666; border-right: 1px solid #ccc;">${past.cur === 0 ? '-' : past.cur.toLocaleString('ko-KR')}</td>
-                    <td style="text-align: right; color: #1C5691; font-weight: 500;">${curr.acq === 0 ? '-' : curr.acq.toLocaleString('ko-KR')}</td>
-                    <td style="text-align: right; color: #1C5691; font-weight: 500;">${curr.rep === 0 ? '-' : curr.rep.toLocaleString('ko-KR')}</td>
-                    <td style="text-align: right; color: #1C5691; font-weight: 500; border-right: 1px solid #ccc;">${curr.cur === 0 ? '-' : curr.cur.toLocaleString('ko-KR')}</td>
-                    <td style="text-align: center; ${getStyle(rAcq)}">${rAcq}</td>
-                    <td style="text-align: center; ${getStyle(rRep)}">${rRep}</td>
-                    <td style="text-align: center; ${getStyle(rCur)}">${rCur}</td>
-                    <td style="text-align: center; padding: 2px;">
-                        <input type="text" maxlength="50" value="${savedReason}" onchange="window.updateVerifReason('${site}', '${acc}', this.value)" style="width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 12px; outline: none;" placeholder="증감 사유 입력...">
-                    </td>
-                </tr>
-            `;
-        });
-
-        if (hasSiteData) {
-            siteHtml += `
-                <tr style="background-color: #f1f5f9; font-weight: bold; font-size: 13px; border-bottom: 2px solid #ccc;">
-                    <td style="text-align: center; border-right: 1px solid #ccc; color: #333;">[${site}] 합계</td>
-                    <td style="text-align: right; color: #333;">${siteTotPast.acq.toLocaleString('ko-KR')}</td>
-                    <td style="text-align: right; color: #333;">${siteTotPast.rep.toLocaleString('ko-KR')}</td>
-                    <td style="text-align: right; border-right: 1px solid #ccc; color: #333;">${siteTotPast.cur.toLocaleString('ko-KR')}</td>
-                    <td style="text-align: right; color: #1C5691;">${siteTotCur.acq.toLocaleString('ko-KR')}</td>
-                    <td style="text-align: right; color: #1C5691;">${siteTotCur.rep.toLocaleString('ko-KR')}</td>
-                    <td style="text-align: right; border-right: 1px solid #ccc; color: #1C5691;">${siteTotCur.cur.toLocaleString('ko-KR')}</td>
-                    <td style="text-align: center; color: #333;">${calcRatio(siteTotCur.acq, siteTotPast.acq)}</td>
-                    <td style="text-align: center; color: #333;">${calcRatio(siteTotCur.rep, siteTotPast.rep)}</td>
-                    <td style="text-align: center; color: #333;">${calcRatio(siteTotCur.cur, siteTotPast.cur)}</td>
-                    <td></td>
-                </tr>
-            `;
-            tbody.innerHTML += siteHtml;
-        }
-    });
-
-    // =========================================================
-    // 파트 2: 전체 사업장 총계 뷰 (드릴다운 아코디언 탑재)
-    // =========================================================
-    tbody.innerHTML += `<tr><td colspan="11" style="background:#2C2C2C; font-weight:bold; font-size:16px; color:#FFCC00; text-align:left; padding:15px 20px;"><i class="fa-solid fa-globe"></i> 전체 사업장 총계 (계정 순서 변경 및 클릭 시 세부내역 전개)</td></tr>`;
+    tbody.innerHTML = `
+        <tr id="verifFocusRow" style="display:none; background:#f8f9fa;">
+            <td colspan="11" id="verifFocusContainer" style="padding:0; border-bottom: 3px solid #007bff;"></td>
+        </tr>
+        <tr>
+            <td colspan="11" style="background:#2C2C2C; font-weight:bold; font-size:16px; color:#FFCC00; text-align:left; padding:15px 20px;">
+                <i class="fa-solid fa-globe"></i> 전체 사업장 총계 뷰 (자산 클릭 시 상단에 공장별 내역 표출)
+            </td>
+        </tr>
+    `;
     
     const grandData = currentDataClone['전체 합산'] || {};
     const grandPast = pastDataClone['전체 합산'] || {};
@@ -2279,57 +2306,32 @@ window.renderVerificationTable = function() {
 
         // 메인 행 (클릭 시 드릴다운)
         tbody.innerHTML += `
-            <tr style="background: #fff; border-bottom: 2px solid #ccc; cursor:pointer;" title="클릭하여 각 공장별 세부 합산 내역 보기" onclick="window.toggleVerifSub('${idx}', this.querySelector('.drill-icon'))">
+            <tr id="grand_row_${acc}" class="grand-row" style="background: #fff; border-bottom: 2px solid #eee; cursor:pointer; transition: 0.2s;" title="클릭하여 공장별 세부내역 보기" onclick="window.showFocusView('${acc}')" onmouseover="if(this.style.background!=='rgb(230, 242, 255)') this.style.background='#f1f5f9';" onmouseout="if(this.style.background!=='rgb(230, 242, 255)') this.style.background='#fff';">
                 <td style="text-align: center; font-weight: bold; color: #111; border-right: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center;">
                     ${arrowUp}
-                    <span style="flex: 1; text-align: center;"><span class="drill-icon" style="color:#007bff; display:inline-block; width:15px; font-size:10px;">▶</span> ${acc}</span>
+                    <span style="flex: 1; text-align: center;"><i class="fa-solid fa-magnifying-glass" style="color:#007bff; font-size:12px; margin-right:4px;"></i> ${acc}</span>
                     ${arrowDown}
                 </td>
-                <td style="text-align: right; color: #111; font-weight:bold;">${past.acq === 0 ? '-' : past.acq.toLocaleString('ko-KR')}</td>
-                <td style="text-align: right; color: #111; font-weight:bold;">${past.rep === 0 ? '-' : past.rep.toLocaleString('ko-KR')}</td>
-                <td style="text-align: right; color: #111; font-weight:bold; border-right: 1px solid #ccc;">${past.cur === 0 ? '-' : past.cur.toLocaleString('ko-KR')}</td>
-                <td style="text-align: right; color: #1C5691; font-weight: 900; font-size:13px;">${curr.acq === 0 ? '-' : curr.acq.toLocaleString('ko-KR')}</td>
-                <td style="text-align: right; color: #1C5691; font-weight: 900; font-size:13px;">${curr.rep === 0 ? '-' : curr.rep.toLocaleString('ko-KR')}</td>
-                <td style="text-align: right; color: #1C5691; font-weight: 900; font-size:13px; border-right: 1px solid #ccc;">${curr.cur === 0 ? '-' : curr.cur.toLocaleString('ko-KR')}</td>
+                <td style="text-align: right; color: #666;">${past.acq === 0 ? '-' : past.acq.toLocaleString('ko-KR')}</td>
+                <td style="text-align: right; color: #666;">${past.rep === 0 ? '-' : past.rep.toLocaleString('ko-KR')}</td>
+                <td style="text-align: right; color: #666; border-right: 1px solid #ccc;">${past.cur === 0 ? '-' : past.cur.toLocaleString('ko-KR')}</td>
+                <td style="text-align: right; color: #1C5691; font-weight: 500;">${curr.acq === 0 ? '-' : curr.acq.toLocaleString('ko-KR')}</td>
+                <td style="text-align: right; color: #1C5691; font-weight: 500;">${curr.rep === 0 ? '-' : curr.rep.toLocaleString('ko-KR')}</td>
+                <td style="text-align: right; color: #1C5691; font-weight: 500; border-right: 1px solid #ccc;">${curr.cur === 0 ? '-' : curr.cur.toLocaleString('ko-KR')}</td>
                 <td style="text-align: center; ${getStyle(rAcq)}">${rAcq}</td>
                 <td style="text-align: center; ${getStyle(rRep)}">${rRep}</td>
                 <td style="text-align: center; ${getStyle(rCur)}">${rCur}</td>
                 <td style="text-align: center; padding: 2px;" onclick="event.stopPropagation();">
-                    <input type="text" maxlength="50" value="${savedReason}" onchange="window.updateVerifReason('전체 합산', '${acc}', this.value)" style="width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #ccc; background:#ffffe0; border-radius: 3px; font-size: 12px; font-weight:bold; outline: none;" placeholder="전체 총괄 사유 입력...">
+                    <input type="text" maxlength="50" value="${savedReason}" onchange="window.updateVerifReason('전체 합산', '${acc}', this.value)" style="width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 12px; outline: none;" placeholder="증감 사유 입력...">
                 </td>
             </tr>
         `;
-
-        // 서브 행 (각 공장별 내역 전개)
-        registeredLocations.forEach(site => {
-            const sPast = pastDataClone[site] && pastDataClone[site][acc] ? pastDataClone[site][acc] : { acq: 0, rep: 0, cur: 0 };
-            const sCurr = currentDataClone[site] && currentDataClone[site][acc] ? currentDataClone[site][acc] : { acq: 0, rep: 0, cur: 0 };
-            if (sPast.acq === 0 && sPast.rep === 0 && sPast.cur === 0 && sCurr.acq === 0 && sCurr.rep === 0 && sCurr.cur === 0) return;
-
-            const srAcq = calcRatio(sCurr.acq, sPast.acq); const srRep = calcRatio(sCurr.rep, sPast.rep); const srCur = calcRatio(sCurr.cur, sPast.cur);
-            
-            tbody.innerHTML += `
-                <tr class="verif-subrow-${idx}" style="display:none; background:#fdfdfd; border-bottom:1px solid #eee;">
-                    <td style="text-align: left; padding-left: 25px; color: #666; border-right: 1px solid #ccc; font-size:12px;">↳ ${site}</td>
-                    <td style="text-align: right; color: #888; font-size:12px;">${sPast.acq === 0 ? '-' : sPast.acq.toLocaleString('ko-KR')}</td>
-                    <td style="text-align: right; color: #888; font-size:12px;">${sPast.rep === 0 ? '-' : sPast.rep.toLocaleString('ko-KR')}</td>
-                    <td style="text-align: right; color: #888; font-size:12px; border-right: 1px solid #ccc;">${sPast.cur === 0 ? '-' : sPast.cur.toLocaleString('ko-KR')}</td>
-                    <td style="text-align: right; color: #4b89c7; font-size:12px;">${sCurr.acq === 0 ? '-' : sCurr.acq.toLocaleString('ko-KR')}</td>
-                    <td style="text-align: right; color: #4b89c7; font-size:12px;">${sCurr.rep === 0 ? '-' : sCurr.rep.toLocaleString('ko-KR')}</td>
-                    <td style="text-align: right; color: #4b89c7; font-size:12px; border-right: 1px solid #ccc;">${sCurr.cur === 0 ? '-' : sCurr.cur.toLocaleString('ko-KR')}</td>
-                    <td style="text-align: center; color:#999; font-size:11px;">${srAcq}</td>
-                    <td style="text-align: center; color:#999; font-size:11px;">${srRep}</td>
-                    <td style="text-align: center; color:#999; font-size:11px;">${srCur}</td>
-                    <td style="background:#fdfdfd;"></td>
-                </tr>
-            `;
-        });
     });
 
     // 최종 그랜드 토탈
     tbody.innerHTML += `
         <tr style="background-color: #2C2C2C !important; font-weight: bold; font-size: 14px;">
-            <td style="background-color: #2C2C2C !important; text-align: center; border-right: 1px solid #555 !important; color: #FFCC00 !important;">최종 그랜드 총계</td>
+            <td style="background-color: #2C2C2C !important; text-align: center; border-right: 1px solid #555 !important; color: #FFCC00 !important;">총계 합산</td>
             <td style="background-color: #2C2C2C !important; text-align: right; color: #FFCC00 !important;">${grandTotPast.acq.toLocaleString('ko-KR')}</td>
             <td style="background-color: #2C2C2C !important; text-align: right; color: #FFCC00 !important;">${grandTotPast.rep.toLocaleString('ko-KR')}</td>
             <td style="background-color: #2C2C2C !important; text-align: right; border-right: 1px solid #555 !important; color: #FFCC00 !important;">${grandTotPast.cur.toLocaleString('ko-KR')}</td>
@@ -2448,6 +2450,7 @@ window.applyVerifPastMapping = function() {
 
     const locInputs = document.querySelectorAll('#locationTbody .loc-name');
     const registeredLocations = Array.from(locInputs).map(input => input.value.trim()).filter(Boolean);
+    const currentView = document.getElementById('verifViewSelect') ? document.getElementById('verifViewSelect').value : '전체 합산';
 
     window.verifState.pastData = { '전체 합산': {} };
     registeredLocations.forEach(loc => window.verifState.pastData[loc] = {});
