@@ -1768,7 +1768,7 @@ document.addEventListener('click', function(e) {
 });
 
 // ============================================================================
-// [섹션 10] 3.1 가액평가 데이터 검산 및 무결성 종합 비교 모듈 (명세서 소재지 지능형 매핑 탑재)
+// [섹션 10] 3.1 가액평가 데이터 검산 및 무결성 종합 비교 모듈 (수직 전개 및 드릴다운 탑재)
 // ============================================================================
 
 window.verifState = {
@@ -1779,12 +1779,12 @@ window.verifState = {
     totalAcqCurrent: 0,
     tempParsed: {},  
     customOrder: [], 
-    currentView: '전체 합산',
-    siteMapping: {},     // 미등록 명세서 시트/소재지 텍스트 병합 관계 보관소 (예: {'정밀본사공통': '1공장', '제1공장': '1공장'})
-    buildingSource: {}   // 각 사업장별 적용할 건물 가액 원천 보관소 (예: {'1공장': 'kfpa', '2공장': 'title'})
+    currentView: '전체 합산', // 호환성을 위해 속성 유지
+    siteMapping: {},     
+    buildingSource: {}   
 };
 
-// 중복 모달 강제 제거 (안전성 보장)
+// 중복 모달 강제 제거
 const oldVerifModal = document.getElementById('verifPastModal'); if (oldVerifModal) oldVerifModal.remove();
 const oldMapModal = document.getElementById('verifSiteMappingModal'); if (oldMapModal) oldMapModal.remove();
 
@@ -1842,7 +1842,7 @@ const oldMapModal = document.getElementById('verifSiteMappingModal'); if (oldMap
         document.body.insertAdjacentHTML('beforeend', modalHtml);
     }
 
-    // 2. 명세서 소재지 매핑 보드 (미등록 시트/텍스트 병합) 모달
+    // 2. 명세서 미등록 소재지 병합 보드
     if (!document.getElementById('verifSiteMappingModal')) {
         const mapModal = `
         <div class="modal-overlay" id="verifSiteMappingModal" style="display:none; z-index: 1050; justify-content: center; align-items: center;">
@@ -1853,7 +1853,7 @@ const oldMapModal = document.getElementById('verifSiteMappingModal'); if (oldMap
                 </div>
                 <div class="modal-body" style="padding: 20px; background:#f4f5f7;">
                     <p style="font-size:13px; color:#555; margin-bottom:15px;">
-                        명세서(시트명 또는 소재지 열)에 존재하는 텍스트 중, <b>[1.1 일반정보]에 미등록된 이름</b>들입니다.<br>
+                        명세서에 존재하는 텍스트 중, <b>[1.1 일반정보]에 미등록된 이름</b>들입니다.<br>
                         어느 공장의 자산으로 편입시켜 검산할지 짝지어주세요.
                     </p>
                     <div style="max-height:300px; overflow-y:auto; border:1px solid #ccc;">
@@ -1891,7 +1891,6 @@ window.initVerificationScreen = function() {
     window.verifState.totalAcqOriginal = 0;
     window.verifState.totalAcqCurrent = 0;
 
-    // 1. 1.1에 등록된 소재지 환경 확보
     const locInputs = document.querySelectorAll('#locationTbody tr');
     const locationsConfig = [];
     locInputs.forEach(row => {
@@ -1912,7 +1911,6 @@ window.initVerificationScreen = function() {
         if(!window.verifState.reasons[loc]) window.verifState.reasons[loc] = {};
     });
 
-    // 2. 2단계 UI (건물 가액 원천) 동적 렌더링
     const step2Tbody = document.getElementById('verifStep2Tbody');
     if (step2Tbody) {
         step2Tbody.innerHTML = '';
@@ -1954,9 +1952,8 @@ window.initVerificationScreen = function() {
     }
 
     const wiz = window.infState && window.infState.wizard ? window.infState.wizard.mapped : {};
-    const locColIdx = wiz['소재지']; // ★ 핵심: 명세서 '소재지' 열 찾기
+    const locColIdx = wiz['소재지'];
     
-    // 3. 데이터 합산 처리 (행 단위 소재지 분할 및 병합 매핑 적용)
     if (window.infState && window.infState.data) {
         for (const tabName in window.infState.data) {
             const raw = window.infState.data[tabName].raw || window.infState.data[tabName] || [];
@@ -1984,26 +1981,20 @@ window.initVerificationScreen = function() {
                     if (finalClass.includes('평가제외')) { repVal = 0; curVal = acqVal; } 
                     else if (finalClass.includes('부보제외')) { repVal = 0; curVal = 0; }
 
-                    // 행별 실제 소재지 추출 (소재지 기둥이 있으면 읽고, 없으면 탭 이름 사용)
                     let rawSiteName = tabName;
                     if (locColIdx !== undefined) {
                         const val = String(row[locColIdx] || '').trim();
                         if (val && val !== '-' && val !== '소계' && val !== '총계') rawSiteName = val;
                     }
 
-                    // 매핑 테이블을 거쳐 최종 목적지 판별
                     let targetSite = window.verifState.siteMapping[rawSiteName] || rawSiteName;
-                    if (!registeredLocations.includes(targetSite)) {
-                        targetSite = '전체 합산'; // 미등록은 전체 총계에만 더해짐
-                    }
+                    if (!registeredLocations.includes(targetSite)) targetSite = '전체 합산'; 
 
-                    // 1. 전체 합산 바구니에 누적
                     if (!window.verifState.currentData['전체 합산'][accName]) window.verifState.currentData['전체 합산'][accName] = { acq: 0, rep: 0, cur: 0 };
                     window.verifState.currentData['전체 합산'][accName].acq += acqVal;
                     window.verifState.currentData['전체 합산'][accName].rep += repVal;
                     window.verifState.currentData['전체 합산'][accName].cur += curVal;
 
-                    // 2. 타겟 개별 사업장 바구니에 누적
                     if (targetSite !== '전체 합산' && window.verifState.currentData[targetSite]) {
                         if (!window.verifState.currentData[targetSite][accName]) window.verifState.currentData[targetSite][accName] = { acq: 0, rep: 0, cur: 0 };
                         window.verifState.currentData[targetSite][accName].acq += acqVal;
@@ -2029,20 +2020,9 @@ window.initVerificationScreen = function() {
         }
     }
 
-    let headerContainer = document.querySelector('#sec-3-1 .card-header i.fa-magnifying-glass-chart').parentNode;
-    if (!document.getElementById('verifViewSelect')) {
-        let viewSelectHtml = `<select id="verifViewSelect" class="input-box" style="margin-left: 15px; padding: 4px 10px; font-weight: bold; color: #1C5691; background: #fff;" onchange="window.renderVerificationTable()">
-            <option value="전체 합산">📋 전체 사업장 총계 뷰</option>`;
-        registeredLocations.forEach(loc => { viewSelectHtml += `<option value="${loc}">🏢 개별 뷰: ${loc}</option>`; });
-        viewSelectHtml += `</select>`;
-        headerContainer.insertAdjacentHTML('beforeend', viewSelectHtml);
-    } else {
-        const selectEl = document.getElementById('verifViewSelect');
-        const currVal = selectEl.value;
-        selectEl.innerHTML = `<option value="전체 합산">📋 전체 사업장 총계 뷰</option>`;
-        registeredLocations.forEach(loc => { selectEl.innerHTML += `<option value="${loc}">🏢 개별 뷰: ${loc}</option>`; });
-        if ([...selectEl.options].map(o => o.value).includes(currVal)) selectEl.value = currVal;
-    }
+    // 기존 드롭다운 필터 요소 삭제 (이제 수직으로 모두 노출하므로 불필요)
+    const oldSelect = document.getElementById('verifViewSelect');
+    if(oldSelect) oldSelect.remove();
 
     window.renderVerificationTable();
 };
@@ -2055,14 +2035,12 @@ window.openSiteMappingModal = function() {
 
     let unregSet = new Set();
     
-    // 탭 이름 및 행 데이터(소재지 열) 스캔하여 미등록 이름 모두 수집
     if (window.infState && window.infState.data) {
         const wiz = window.infState.wizard ? window.infState.wizard.mapped : {};
         const locIdx = wiz['소재지'];
         
         for (const tabName in window.infState.data) {
             unregSet.add(tabName); 
-            
             if (locIdx !== undefined) {
                 const raw = window.infState.data[tabName].raw || window.infState.data[tabName] || [];
                 raw.forEach(row => {
@@ -2075,7 +2053,6 @@ window.openSiteMappingModal = function() {
 
     let hasUnregistered = false;
     unregSet.forEach(siteName => {
-        // 시스템 예약어(통합자산명세서 등)와 정상 등록 이름 제외
         if (!registeredLocations.includes(siteName) && siteName !== '통합자산명세서' && siteName !== '명세서') {
             hasUnregistered = true;
             let selectHtml = `<select data-site="${siteName}" class="input-box map-site-select" style="width:100%; padding:4px;">
@@ -2098,7 +2075,6 @@ window.openSiteMappingModal = function() {
     if (!hasUnregistered) {
         tbody.innerHTML = `<tr><td colspan="2" style="text-align:center; padding:30px; color:#666;">명세서 원본에 존재하는 미등록 사업장(텍스트)이 없습니다.<br>(모두 1.1에 정상적으로 일치합니다.)</td></tr>`;
     }
-
     document.getElementById('verifSiteMappingModal').style.display = 'flex';
 };
 
@@ -2109,7 +2085,7 @@ window.applySiteMapping = function() {
     });
     document.getElementById('verifSiteMappingModal').style.display = 'none';
     window.initVerificationScreen();
-    alert("명세서 소재지 병합이 적용되었습니다. 뷰 필터를 전환하여 검산표를 확인하세요.");
+    alert("명세서 소재지 병합이 적용되었습니다. 검산표를 확인하세요.");
 };
 
 window.moveAccountOrder = function(idx, direction) {
@@ -2119,52 +2095,69 @@ window.moveAccountOrder = function(idx, direction) {
     window.renderVerificationTable();
 };
 
-window.updateVerifReason = function(accName, val) {
-    const currentView = document.getElementById('verifViewSelect') ? document.getElementById('verifViewSelect').value : '전체 합산';
-    if (!window.verifState.reasons[currentView]) window.verifState.reasons[currentView] = {};
-    window.verifState.reasons[currentView][accName] = val;
+window.updateVerifReason = function(site, accName, val) {
+    if (!window.verifState.reasons[site]) window.verifState.reasons[site] = {};
+    window.verifState.reasons[site][accName] = val;
+};
+
+// 트리 구조(아코디언) 펼치기/접기 함수
+window.toggleVerifSub = function(idx, el) {
+    const rows = document.querySelectorAll('.verif-subrow-' + idx);
+    if (rows.length === 0) return;
+    const isHidden = rows[0].style.display === 'none';
+    rows.forEach(r => { r.style.display = isHidden ? 'table-row' : 'none'; });
+    if(el) el.innerText = isHidden ? '▼' : '▶';
 };
 
 window.renderVerificationTable = function() {
     const tbody = document.getElementById('verifTbody');
     if (!tbody) return;
 
-    const currentView = document.getElementById('verifViewSelect') ? document.getElementById('verifViewSelect').value : '전체 합산';
-    const displayData = JSON.parse(JSON.stringify(window.verifState.currentData[currentView] || {}));
-    const pastDisplayData = window.verifState.pastData[currentView] || {};
-    const reasonDisplayData = window.verifState.reasons[currentView] || {};
+    // 1. 메모리에 저장된 데이터 복제본 준비
+    const currentDataClone = JSON.parse(JSON.stringify(window.verifState.currentData || {}));
+    const pastDataClone = window.verifState.pastData || {};
+    const reasonDataClone = window.verifState.reasons || {};
 
     const locInputs = document.querySelectorAll('#locationTbody .loc-name');
     const registeredLocations = Array.from(locInputs).map(input => input.value.trim()).filter(Boolean);
 
-    // ★ 핵심: 사업장별 설정된 원천(표제부, 화협 등)에서 건물 평가액 찾아 합산
+    // 2. 사업장별 설정된 대장 원천(표제부/화협)에서 '건물' 평가액 도출 및 합산
     if (window.kbState) {
-        let ledgerRepTotal = 0, ledgerCurTotal = 0;
+        let grandLedgerRep = 0, grandLedgerCur = 0;
         
         registeredLocations.forEach(site => {
-            if (currentView === '전체 합산' || currentView === site) {
-                const sourceMode = window.verifState.buildingSource[site];
-                if (sourceMode && sourceMode !== 'none' && window.kbState.evalData[sourceMode] && window.kbState.evalData[sourceMode][site]) {
-                    const siteGroups = window.kbState.evalData[sourceMode][site];
-                    const groups = Array.isArray(siteGroups) ? siteGroups : Object.values(siteGroups);
-                    groups.forEach(g => {
-                        ledgerRepTotal += (parseFloat(g.재조달_합계) || 0);
-                        ledgerCurTotal += (parseFloat(g.현재_합계) || 0);
-                    });
-                }
+            const sourceMode = window.verifState.buildingSource[site];
+            if (sourceMode && sourceMode !== 'none' && window.kbState.evalData[sourceMode] && window.kbState.evalData[sourceMode][site]) {
+                let siteRep = 0, siteCur = 0;
+                const siteGroups = window.kbState.evalData[sourceMode][site];
+                const groups = Array.isArray(siteGroups) ? siteGroups : Object.values(siteGroups);
+                groups.forEach(g => {
+                    siteRep += (parseFloat(g.재조달_합계) || 0);
+                    siteCur += (parseFloat(g.현재_합계) || 0);
+                });
+                
+                if (!currentDataClone[site]) currentDataClone[site] = {};
+                if (!currentDataClone[site]['건물']) currentDataClone[site]['건물'] = { acq: 0, rep: 0, cur: 0 };
+                currentDataClone[site]['건물'].rep += siteRep;
+                currentDataClone[site]['건물'].cur += siteCur;
+
+                grandLedgerRep += siteRep;
+                grandLedgerCur += siteCur;
             }
         });
 
-        if (!displayData['건물']) displayData['건물'] = { acq: 0, rep: 0, cur: 0 };
-        displayData['건물'].rep += ledgerRepTotal;
-        displayData['건물'].cur += ledgerCurTotal;
+        if (!currentDataClone['전체 합산']) currentDataClone['전체 합산'] = {};
+        if (!currentDataClone['전체 합산']['건물']) currentDataClone['전체 합산']['건물'] = { acq: 0, rep: 0, cur: 0 };
+        currentDataClone['전체 합산']['건물'].rep += grandLedgerRep;
+        currentDataClone['전체 합산']['건물'].cur += grandLedgerCur;
     }
 
-    const allAccountsSet = new Set([...Object.keys(displayData), ...Object.keys(pastDisplayData)]);
+    // 3. 자산계정 목록 취합 및 정렬 상태 업데이트
+    let allAccountsSet = new Set();
+    Object.keys(currentDataClone).forEach(site => Object.keys(currentDataClone[site]).forEach(acc => allAccountsSet.add(acc)));
+    Object.keys(pastDataClone).forEach(site => Object.keys(pastDataClone[site]).forEach(acc => allAccountsSet.add(acc)));
+    
     const allAccounts = Array.from(allAccountsSet);
-
-    tbody.innerHTML = '';
-
     if (allAccounts.length === 0) {
         tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding: 60px; color:#999;">데이터가 존재하지 않습니다.</td></tr>`;
         return;
@@ -2174,78 +2167,178 @@ window.renderVerificationTable = function() {
     allAccounts.forEach(acc => { if (!window.verifState.customOrder.includes(acc)) window.verifState.customOrder.push(acc); });
     window.verifState.customOrder = window.verifState.customOrder.filter(acc => allAccounts.includes(acc));
 
-    let totPast = { acq:0, rep:0, cur:0 };
-    let totCur  = { acq:0, rep:0, cur:0 };
-
-    window.verifState.customOrder.forEach((acc, idx) => {
-        const past = pastDisplayData[acc] || { acq: 0, rep: 0, cur: 0 };
-        const curr = displayData[acc] || { acq: 0, rep: 0, cur: 0 };
-        const savedReason = reasonDisplayData[acc] || '';
-
-        totPast.acq += past.acq; totPast.rep += past.rep; totPast.cur += past.cur;
-        totCur.acq += curr.acq;  totCur.rep += curr.rep;  totCur.cur += curr.cur;
-
-        const calcRatio = (b, a) => {
-            if (a === 0 && b === 0) return "-";
-            if (a === 0 && b > 0) return "신규";
-            return ((b / a) * 100).toFixed(1) + "%";
-        };
-
-        const rAcq = calcRatio(curr.acq, past.acq);
-        const rRep = calcRatio(curr.rep, past.rep);
-        const rCur = calcRatio(curr.cur, past.cur);
-
-        const getStyle = (ratioStr) => {
-            if (ratioStr === "신규") return "background: #d1ecf1; color: #0c5460; font-weight: bold;";
-            if (ratioStr === "-") return "color: #999;";
-            const val = parseFloat(ratioStr.replace('%', ''));
-            if (val >= 110) return "background: #fff3cd; color: #856404; font-weight: bold;";
-            if (val <= 90) return "background: #f8d7da; color: #721c24; font-weight: bold;";
-            return "color: #333;";
-        };
-
-        const arrowUp = idx > 0 ? `<span style="cursor:pointer; color:#999; margin-right:5px; font-size:11px;" onclick="window.moveAccountOrder(${idx}, -1)" title="위로">▲</span>` : `<span style="display:inline-block; width:13px; margin-right:5px;"></span>`;
-        const arrowDown = idx < window.verifState.customOrder.length - 1 ? `<span style="cursor:pointer; color:#999; margin-left:5px; font-size:11px;" onclick="window.moveAccountOrder(${idx}, 1)" title="아래로">▼</span>` : `<span style="display:inline-block; width:13px; margin-left:5px;"></span>`;
-
-        tbody.innerHTML += `
-            <tr style="background: #fff; border-bottom: 1px solid #eee;">
-                <td style="text-align: center; font-weight: bold; color: #444; border-right: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center;">
-                    ${arrowUp}<span style="flex: 1; text-align: center;">${acc}</span>${arrowDown}
-                </td>
-                <td style="text-align: right; color: #666;">${past.acq === 0 ? '-' : past.acq.toLocaleString('ko-KR')}</td>
-                <td style="text-align: right; color: #666;">${past.rep === 0 ? '-' : past.rep.toLocaleString('ko-KR')}</td>
-                <td style="text-align: right; color: #666; border-right: 1px solid #ccc;">${past.cur === 0 ? '-' : past.cur.toLocaleString('ko-KR')}</td>
-                <td style="text-align: right; color: #1C5691; font-weight: 500;">${curr.acq === 0 ? '-' : curr.acq.toLocaleString('ko-KR')}</td>
-                <td style="text-align: right; color: #1C5691; font-weight: 500;">${curr.rep === 0 ? '-' : curr.rep.toLocaleString('ko-KR')}</td>
-                <td style="text-align: right; color: #1C5691; font-weight: 500; border-right: 1px solid #ccc;">${curr.cur === 0 ? '-' : curr.cur.toLocaleString('ko-KR')}</td>
-                <td style="text-align: center; ${getStyle(rAcq)}">${rAcq}</td>
-                <td style="text-align: center; ${getStyle(rRep)}">${rRep}</td>
-                <td style="text-align: center; ${getStyle(rCur)}">${rCur}</td>
-                <td style="text-align: center; padding: 2px;">
-                    <input type="text" maxlength="50" value="${savedReason}" onchange="window.updateVerifReason('${acc}', this.value)" style="width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 12px; outline: none;" placeholder="증감 사유 입력...">
-                </td>
-            </tr>
-        `;
-    });
-
-    const formatGrandRatio = (b, a) => {
+    // 유틸리티 함수
+    const calcRatio = (b, a) => {
         if (a === 0 && b === 0) return "-";
         if (a === 0 && b > 0) return "신규";
         return ((b / a) * 100).toFixed(1) + "%";
     };
+
+    const getStyle = (ratioStr) => {
+        if (ratioStr === "신규") return "background: #d1ecf1; color: #0c5460; font-weight: bold;";
+        if (ratioStr === "-") return "color: #999;";
+        const val = parseFloat(ratioStr.replace('%', ''));
+        if (val >= 110) return "background: #fff3cd; color: #856404; font-weight: bold;";
+        if (val <= 90) return "background: #f8d7da; color: #721c24; font-weight: bold;";
+        return "color: #333;";
+    };
+
+    tbody.innerHTML = '';
+
+    // =========================================================
+    // 파트 1: 개별 사업장 테이블 렌더링 (전체 총계는 하단으로)
+    // =========================================================
+    registeredLocations.forEach(site => {
+        const siteData = currentDataClone[site] || {};
+        const sitePast = pastDataClone[site] || {};
+        const siteReason = reasonDataClone[site] || {};
+        
+        let siteTotPast = { acq: 0, rep: 0, cur: 0 };
+        let siteTotCur  = { acq: 0, rep: 0, cur: 0 };
+        let hasSiteData = false;
+
+        let siteHtml = `<tr><td colspan="11" style="background:#e9ecef; font-weight:bold; font-size:15px; color:#1C5691; text-align:left; padding:10px 20px;"><i class="fa-solid fa-building"></i> 개별 사업장 뷰 : ${site}</td></tr>`;
+
+        window.verifState.customOrder.forEach((acc, idx) => {
+            const past = sitePast[acc] || { acq: 0, rep: 0, cur: 0 };
+            const curr = siteData[acc] || { acq: 0, rep: 0, cur: 0 };
+            
+            // 해당 공장에 데이터가 0이면 건너뜀 (표가 무의미하게 길어지는 것 방지)
+            if (past.acq === 0 && past.rep === 0 && past.cur === 0 && curr.acq === 0 && curr.rep === 0 && curr.cur === 0) return;
+            hasSiteData = true;
+
+            siteTotPast.acq += past.acq; siteTotPast.rep += past.rep; siteTotPast.cur += past.cur;
+            siteTotCur.acq += curr.acq;  siteTotCur.rep += curr.rep;  siteTotCur.cur += curr.cur;
+
+            const rAcq = calcRatio(curr.acq, past.acq); const rRep = calcRatio(curr.rep, past.rep); const rCur = calcRatio(curr.cur, past.cur);
+            const savedReason = siteReason[acc] || '';
+
+            siteHtml += `
+                <tr style="background: #fff; border-bottom: 1px solid #eee;">
+                    <td style="text-align: center; font-weight: bold; color: #666; border-right: 1px solid #ccc;">${acc}</td>
+                    <td style="text-align: right; color: #666;">${past.acq === 0 ? '-' : past.acq.toLocaleString('ko-KR')}</td>
+                    <td style="text-align: right; color: #666;">${past.rep === 0 ? '-' : past.rep.toLocaleString('ko-KR')}</td>
+                    <td style="text-align: right; color: #666; border-right: 1px solid #ccc;">${past.cur === 0 ? '-' : past.cur.toLocaleString('ko-KR')}</td>
+                    <td style="text-align: right; color: #1C5691; font-weight: 500;">${curr.acq === 0 ? '-' : curr.acq.toLocaleString('ko-KR')}</td>
+                    <td style="text-align: right; color: #1C5691; font-weight: 500;">${curr.rep === 0 ? '-' : curr.rep.toLocaleString('ko-KR')}</td>
+                    <td style="text-align: right; color: #1C5691; font-weight: 500; border-right: 1px solid #ccc;">${curr.cur === 0 ? '-' : curr.cur.toLocaleString('ko-KR')}</td>
+                    <td style="text-align: center; ${getStyle(rAcq)}">${rAcq}</td>
+                    <td style="text-align: center; ${getStyle(rRep)}">${rRep}</td>
+                    <td style="text-align: center; ${getStyle(rCur)}">${rCur}</td>
+                    <td style="text-align: center; padding: 2px;">
+                        <input type="text" maxlength="50" value="${savedReason}" onchange="window.updateVerifReason('${site}', '${acc}', this.value)" style="width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 12px; outline: none;" placeholder="증감 사유 입력...">
+                    </td>
+                </tr>
+            `;
+        });
+
+        if (hasSiteData) {
+            siteHtml += `
+                <tr style="background-color: #f1f5f9; font-weight: bold; font-size: 13px; border-bottom: 2px solid #ccc;">
+                    <td style="text-align: center; border-right: 1px solid #ccc; color: #333;">[${site}] 합계</td>
+                    <td style="text-align: right; color: #333;">${siteTotPast.acq.toLocaleString('ko-KR')}</td>
+                    <td style="text-align: right; color: #333;">${siteTotPast.rep.toLocaleString('ko-KR')}</td>
+                    <td style="text-align: right; border-right: 1px solid #ccc; color: #333;">${siteTotPast.cur.toLocaleString('ko-KR')}</td>
+                    <td style="text-align: right; color: #1C5691;">${siteTotCur.acq.toLocaleString('ko-KR')}</td>
+                    <td style="text-align: right; color: #1C5691;">${siteTotCur.rep.toLocaleString('ko-KR')}</td>
+                    <td style="text-align: right; border-right: 1px solid #ccc; color: #1C5691;">${siteTotCur.cur.toLocaleString('ko-KR')}</td>
+                    <td style="text-align: center; color: #333;">${calcRatio(siteTotCur.acq, siteTotPast.acq)}</td>
+                    <td style="text-align: center; color: #333;">${calcRatio(siteTotCur.rep, siteTotPast.rep)}</td>
+                    <td style="text-align: center; color: #333;">${calcRatio(siteTotCur.cur, siteTotPast.cur)}</td>
+                    <td></td>
+                </tr>
+            `;
+            tbody.innerHTML += siteHtml;
+        }
+    });
+
+    // =========================================================
+    // 파트 2: 전체 사업장 총계 뷰 (드릴다운 아코디언 탑재)
+    // =========================================================
+    tbody.innerHTML += `<tr><td colspan="11" style="background:#2C2C2C; font-weight:bold; font-size:16px; color:#FFCC00; text-align:left; padding:15px 20px;"><i class="fa-solid fa-globe"></i> 전체 사업장 총계 (계정 순서 변경 및 클릭 시 세부내역 전개)</td></tr>`;
     
+    const grandData = currentDataClone['전체 합산'] || {};
+    const grandPast = pastDataClone['전체 합산'] || {};
+    const grandReason = reasonDataClone['전체 합산'] || {};
+
+    let grandTotPast = { acq: 0, rep: 0, cur: 0 };
+    let grandTotCur  = { acq: 0, rep: 0, cur: 0 };
+
+    window.verifState.customOrder.forEach((acc, idx) => {
+        const past = grandPast[acc] || { acq: 0, rep: 0, cur: 0 };
+        const curr = grandData[acc] || { acq: 0, rep: 0, cur: 0 };
+
+        grandTotPast.acq += past.acq; grandTotPast.rep += past.rep; grandTotPast.cur += past.cur;
+        grandTotCur.acq += curr.acq;  grandTotCur.rep += curr.rep;  grandTotCur.cur += curr.cur;
+
+        const rAcq = calcRatio(curr.acq, past.acq); const rRep = calcRatio(curr.rep, past.rep); const rCur = calcRatio(curr.cur, past.cur);
+        const savedReason = grandReason[acc] || '';
+
+        const arrowUp = idx > 0 ? `<span style="cursor:pointer; color:#999; margin-right:5px; font-size:11px;" onclick="event.stopPropagation(); window.moveAccountOrder(${idx}, -1)" title="위로">▲</span>` : `<span style="display:inline-block; width:13px; margin-right:5px;"></span>`;
+        const arrowDown = idx < window.verifState.customOrder.length - 1 ? `<span style="cursor:pointer; color:#999; margin-left:5px; font-size:11px;" onclick="event.stopPropagation(); window.moveAccountOrder(${idx}, 1)" title="아래로">▼</span>` : `<span style="display:inline-block; width:13px; margin-left:5px;"></span>`;
+
+        // 메인 행 (클릭 시 드릴다운)
+        tbody.innerHTML += `
+            <tr style="background: #fff; border-bottom: 2px solid #ccc; cursor:pointer;" title="클릭하여 각 공장별 세부 합산 내역 보기" onclick="window.toggleVerifSub('${idx}', this.querySelector('.drill-icon'))">
+                <td style="text-align: center; font-weight: bold; color: #111; border-right: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center;">
+                    ${arrowUp}
+                    <span style="flex: 1; text-align: center;"><span class="drill-icon" style="color:#007bff; display:inline-block; width:15px; font-size:10px;">▶</span> ${acc}</span>
+                    ${arrowDown}
+                </td>
+                <td style="text-align: right; color: #111; font-weight:bold;">${past.acq === 0 ? '-' : past.acq.toLocaleString('ko-KR')}</td>
+                <td style="text-align: right; color: #111; font-weight:bold;">${past.rep === 0 ? '-' : past.rep.toLocaleString('ko-KR')}</td>
+                <td style="text-align: right; color: #111; font-weight:bold; border-right: 1px solid #ccc;">${past.cur === 0 ? '-' : past.cur.toLocaleString('ko-KR')}</td>
+                <td style="text-align: right; color: #1C5691; font-weight: 900; font-size:13px;">${curr.acq === 0 ? '-' : curr.acq.toLocaleString('ko-KR')}</td>
+                <td style="text-align: right; color: #1C5691; font-weight: 900; font-size:13px;">${curr.rep === 0 ? '-' : curr.rep.toLocaleString('ko-KR')}</td>
+                <td style="text-align: right; color: #1C5691; font-weight: 900; font-size:13px; border-right: 1px solid #ccc;">${curr.cur === 0 ? '-' : curr.cur.toLocaleString('ko-KR')}</td>
+                <td style="text-align: center; ${getStyle(rAcq)}">${rAcq}</td>
+                <td style="text-align: center; ${getStyle(rRep)}">${rRep}</td>
+                <td style="text-align: center; ${getStyle(rCur)}">${rCur}</td>
+                <td style="text-align: center; padding: 2px;" onclick="event.stopPropagation();">
+                    <input type="text" maxlength="50" value="${savedReason}" onchange="window.updateVerifReason('전체 합산', '${acc}', this.value)" style="width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #ccc; background:#ffffe0; border-radius: 3px; font-size: 12px; font-weight:bold; outline: none;" placeholder="전체 총괄 사유 입력...">
+                </td>
+            </tr>
+        `;
+
+        // 서브 행 (각 공장별 내역 전개)
+        registeredLocations.forEach(site => {
+            const sPast = pastDataClone[site] && pastDataClone[site][acc] ? pastDataClone[site][acc] : { acq: 0, rep: 0, cur: 0 };
+            const sCurr = currentDataClone[site] && currentDataClone[site][acc] ? currentDataClone[site][acc] : { acq: 0, rep: 0, cur: 0 };
+            if (sPast.acq === 0 && sPast.rep === 0 && sPast.cur === 0 && sCurr.acq === 0 && sCurr.rep === 0 && sCurr.cur === 0) return;
+
+            const srAcq = calcRatio(sCurr.acq, sPast.acq); const srRep = calcRatio(sCurr.rep, sPast.rep); const srCur = calcRatio(sCurr.cur, sPast.cur);
+            
+            tbody.innerHTML += `
+                <tr class="verif-subrow-${idx}" style="display:none; background:#fdfdfd; border-bottom:1px solid #eee;">
+                    <td style="text-align: left; padding-left: 25px; color: #666; border-right: 1px solid #ccc; font-size:12px;">↳ ${site}</td>
+                    <td style="text-align: right; color: #888; font-size:12px;">${sPast.acq === 0 ? '-' : sPast.acq.toLocaleString('ko-KR')}</td>
+                    <td style="text-align: right; color: #888; font-size:12px;">${sPast.rep === 0 ? '-' : sPast.rep.toLocaleString('ko-KR')}</td>
+                    <td style="text-align: right; color: #888; font-size:12px; border-right: 1px solid #ccc;">${sPast.cur === 0 ? '-' : sPast.cur.toLocaleString('ko-KR')}</td>
+                    <td style="text-align: right; color: #4b89c7; font-size:12px;">${sCurr.acq === 0 ? '-' : sCurr.acq.toLocaleString('ko-KR')}</td>
+                    <td style="text-align: right; color: #4b89c7; font-size:12px;">${sCurr.rep === 0 ? '-' : sCurr.rep.toLocaleString('ko-KR')}</td>
+                    <td style="text-align: right; color: #4b89c7; font-size:12px; border-right: 1px solid #ccc;">${sCurr.cur === 0 ? '-' : sCurr.cur.toLocaleString('ko-KR')}</td>
+                    <td style="text-align: center; color:#999; font-size:11px;">${srAcq}</td>
+                    <td style="text-align: center; color:#999; font-size:11px;">${srRep}</td>
+                    <td style="text-align: center; color:#999; font-size:11px;">${srCur}</td>
+                    <td style="background:#fdfdfd;"></td>
+                </tr>
+            `;
+        });
+    });
+
+    // 최종 그랜드 토탈
     tbody.innerHTML += `
         <tr style="background-color: #2C2C2C !important; font-weight: bold; font-size: 14px;">
-            <td style="background-color: #2C2C2C !important; text-align: center; border-right: 1px solid #555 !important; color: #FFCC00 !important;">총계 합산</td>
-            <td style="background-color: #2C2C2C !important; text-align: right; color: #FFCC00 !important;">${totPast.acq.toLocaleString('ko-KR')}</td>
-            <td style="background-color: #2C2C2C !important; text-align: right; color: #FFCC00 !important;">${totPast.rep.toLocaleString('ko-KR')}</td>
-            <td style="background-color: #2C2C2C !important; text-align: right; border-right: 1px solid #555 !important; color: #FFCC00 !important;">${totPast.cur.toLocaleString('ko-KR')}</td>
-            <td style="background-color: #2C2C2C !important; text-align: right; color: #FFCC00 !important;">${totCur.acq.toLocaleString('ko-KR')}</td>
-            <td style="background-color: #2C2C2C !important; text-align: right; color: #FFCC00 !important;">${totCur.rep.toLocaleString('ko-KR')}</td>
-            <td style="background-color: #2C2C2C !important; text-align: right; border-right: 1px solid #555 !important; color: #FFCC00 !important;">${totCur.cur.toLocaleString('ko-KR')}</td>
-            <td style="background-color: #2C2C2C !important; text-align: center; color: #FFCC00 !important;">${formatGrandRatio(totCur.acq, totPast.acq)}</td>
-            <td style="background-color: #2C2C2C !important; text-align: center; color: #FFCC00 !important;">${formatGrandRatio(totCur.rep, totPast.rep)}</td>
-            <td style="background-color: #2C2C2C !important; text-align: center; color: #FFCC00 !important;">${formatGrandRatio(totCur.cur, totPast.cur)}</td>
+            <td style="background-color: #2C2C2C !important; text-align: center; border-right: 1px solid #555 !important; color: #FFCC00 !important;">최종 그랜드 총계</td>
+            <td style="background-color: #2C2C2C !important; text-align: right; color: #FFCC00 !important;">${grandTotPast.acq.toLocaleString('ko-KR')}</td>
+            <td style="background-color: #2C2C2C !important; text-align: right; color: #FFCC00 !important;">${grandTotPast.rep.toLocaleString('ko-KR')}</td>
+            <td style="background-color: #2C2C2C !important; text-align: right; border-right: 1px solid #555 !important; color: #FFCC00 !important;">${grandTotPast.cur.toLocaleString('ko-KR')}</td>
+            <td style="background-color: #2C2C2C !important; text-align: right; color: #FFCC00 !important;">${grandTotCur.acq.toLocaleString('ko-KR')}</td>
+            <td style="background-color: #2C2C2C !important; text-align: right; color: #FFCC00 !important;">${grandTotCur.rep.toLocaleString('ko-KR')}</td>
+            <td style="background-color: #2C2C2C !important; text-align: right; border-right: 1px solid #555 !important; color: #FFCC00 !important;">${grandTotCur.cur.toLocaleString('ko-KR')}</td>
+            <td style="background-color: #2C2C2C !important; text-align: center; color: #FFCC00 !important;">${calcRatio(grandTotCur.acq, grandTotPast.acq)}</td>
+            <td style="background-color: #2C2C2C !important; text-align: center; color: #FFCC00 !important;">${calcRatio(grandTotCur.rep, grandTotPast.rep)}</td>
+            <td style="background-color: #2C2C2C !important; text-align: center; color: #FFCC00 !important;">${calcRatio(grandTotCur.cur, grandTotPast.cur)}</td>
             <td style="background-color: #2C2C2C !important; border-right: 1px solid #555 !important;"></td>
         </tr>
     `;
@@ -2355,7 +2448,6 @@ window.applyVerifPastMapping = function() {
 
     const locInputs = document.querySelectorAll('#locationTbody .loc-name');
     const registeredLocations = Array.from(locInputs).map(input => input.value.trim()).filter(Boolean);
-    const currentView = document.getElementById('verifViewSelect') ? document.getElementById('verifViewSelect').value : '전체 합산';
 
     window.verifState.pastData = { '전체 합산': {} };
     registeredLocations.forEach(loc => window.verifState.pastData[loc] = {});
@@ -2376,7 +2468,6 @@ window.applyVerifPastMapping = function() {
 
             let targetSite = '전체 합산';
             if (targetSiteOverride) {
-                // 매핑 보드 연동
                 let mappedLoc = window.verifState.siteMapping[targetSiteOverride] || targetSiteOverride;
                 let matchedLoc = registeredLocations.find(l => l === mappedLoc || l.includes(mappedLoc) || mappedLoc.includes(l));
                 if (matchedLoc) targetSite = matchedLoc;
@@ -2388,7 +2479,6 @@ window.applyVerifPastMapping = function() {
                     if (matchedLoc) targetSite = matchedLoc;
                 } else {
                     if (registeredLocations.length === 1) targetSite = registeredLocations[0];
-                    else if (currentView !== '전체 합산') targetSite = currentView;
                 }
             }
 
