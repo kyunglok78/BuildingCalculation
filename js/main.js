@@ -2675,24 +2675,21 @@ window.applyVerifPastMapping = function() {
 };
 
 // ============================================================================
-// [19] 스마트 과거 연동 마법사 완벽 하이재킹 (Deep Clean 엔진 & 포장지 해제 탑재)
+// [19] 스마트 과거 연동 마법사 완벽 하이재킹 (Deep Clean & 배열 데이터 완벽 지원)
 // ============================================================================
 window.lastUploadedPastFile = null;
 
-// 파일이 업로드되는 순간 몰래 파일을 메모리에 캡처해 둡니다.
 document.addEventListener('change', function(e) {
     if (e.target.type === 'file' && e.target.files.length > 0) {
         window.lastUploadedPastFile = e.target.files[0];
     }
 }, true);
 
-// 내장 마법사의 '연동 적용하기' 버튼 클릭을 가로챕니다.
 document.addEventListener('click', function(e) {
     const btn = e.target.closest('button');
     if (btn && btn.innerText.includes('연동 적용하기')) {
-        if (!window.lastUploadedPastFile) return; // 캡처된 파일이 없으면 기존 로직에 맡김
+        if (!window.lastUploadedPastFile) return;
         
-        // 기존 시스템의 불안전한 내장 매칭 로직을 완전히 정지시킵니다.
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
@@ -2707,7 +2704,6 @@ document.addEventListener('click', function(e) {
         const keyText = selects[1].options[selects[1].selectedIndex].text;
         const valText = selects[2].options[selects[2].selectedIndex].text;
 
-        // 알파벳 기둥 이름을 정확한 번호(인덱스)로 변환
         const getColIdx = (str) => {
             const match = str.match(/[A-Z]+/i);
             if (!match) return 0;
@@ -2729,16 +2725,13 @@ document.addEventListener('click', function(e) {
                 const workbook = XLSX.read(data, {type: 'array'});
                 const worksheet = workbook.Sheets[sheetName];
                 
-                // 엑셀의 복잡한 헤더 병합을 무시하기 위해 순수 배열로 직접 파싱
                 const rawData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: ""});
                 const pastMap = new Map();
 
-                // 1. 과거 엑셀 원본 데이터 세척 및 Map 적재
                 rawData.forEach(row => {
                     const rawKey = String(row[keyIdx] || '');
                     const rawVal = String(row[valIdx] || '');
                     
-                    // 불순물 완벽 제거
                     const cleanKey = rawKey.replace(/[\u200B\s,]/g, '').trim().toUpperCase();
                     const cleanVal = rawVal.trim();
 
@@ -2747,38 +2740,63 @@ document.addEventListener('click', function(e) {
                     }
                 });
 
-                // 2. 현재 시스템 데이터 세척 및 1:1 대조 (에러 원인 완벽 수정)
                 let matchCount = 0;
-                if (window.infState && window.infState.data) {
+                
+                // ★ 핵심: 현재 시스템의 마법사 매핑 정보를 가져와 자산번호 열의 정확한 위치 파악
+                let assetNoIdx = -1;
+                if (window.infState && window.infState.wizard && window.infState.wizard.mapped) {
+                    assetNoIdx = window.infState.wizard.mapped['자산번호'];
+                    if (assetNoIdx === undefined) assetNoIdx = window.infState.wizard.mapped['신자산번호'];
+                }
+
+                if (window.infState && window.infState.data && assetNoIdx !== undefined && assetNoIdx !== -1) {
+                    // 과거 데이터 열(구분)이 들어갈 위치 지정 (일반적으로 매핑된 열의 끝 + 4번째 위치가 구분(assetClass) 열)
+                    const mappedColCount = Object.keys(window.infState.wizard.mapped).length;
+                    const targetClassIdx = mappedColCount + 4; // 화면에 표출되는 '구분' 열 위치
+
                     for (const tabName in window.infState.data) {
-                        
-                        // ★ 핵심 해결: 데이터가 포장지(Object)로 감싸져 있다면, 순수 데이터 배열만 추출
                         let currentTabRows = window.infState.data[tabName];
                         if (!Array.isArray(currentTabRows)) {
                             currentTabRows = currentTabRows.raw || currentTabRows.data || [];
                         }
 
-                        // 순수 데이터 배열을 반복하며 대조
-                        currentTabRows.forEach(row => {
-                            const currentKey = String(row['자산번호'] || row['신자산번호'] || '');
+                        currentTabRows.forEach((row, rowIndex) => {
+                            // 배열에서 자산번호가 위치한 인덱스의 값을 쏙 뽑아옵니다.
+                            const currentKey = Array.isArray(row) ? String(row[assetNoIdx] || '') : String(row['자산번호'] || row['신자산번호'] || '');
                             const cleanCurrentKey = currentKey.replace(/[\u200B\s,]/g, '').trim().toUpperCase();
 
                             if (cleanCurrentKey && pastMap.has(cleanCurrentKey)) {
                                 const matchedVal = pastMap.get(cleanCurrentKey);
-                                row['_assetClass'] = matchedVal; 
-                                row['구분'] = matchedVal; 
+                                
+                                // 배열 형태일 경우와 객체 형태일 경우 모두 처리
+                                if (Array.isArray(row)) {
+                                    row[targetClassIdx] = matchedVal;
+                                    // 2.3.2 화면의 입력창(input)에도 실시간으로 값 꽂아주기
+                                    const trs = document.querySelectorAll('.infTbodyGlobal tr');
+                                    if(trs.length > rowIndex) {
+                                        const td = trs[rowIndex].querySelector('td:nth-child(' + (targetClassIdx + 2) + ')');
+                                        if (td && td.querySelector('input')) {
+                                            td.querySelector('input').value = matchedVal;
+                                            td.querySelector('input').style.color = '#d32f2f'; // 매칭된 값 강조
+                                            td.querySelector('input').style.fontWeight = 'bold';
+                                        }
+                                    }
+                                } else {
+                                    row['_assetClass'] = matchedVal; 
+                                    row['구분'] = matchedVal; 
+                                }
                                 matchCount++;
                             }
                         });
                     }
+                } else {
+                    alert("시스템에 자산번호 열 매핑 정보가 없습니다. 2.3.1에서 매핑을 완료했는지 확인해주세요.");
                 }
 
-                // 모달 닫기
                 const closeIcon = modal.querySelector('i[class*="close"], i[class*="xmark"], button.close');
                 if (closeIcon) closeIcon.click();
                 else if (modal.parentElement) modal.parentElement.style.display = 'none';
 
-                // 화면 즉시 갱신
                 if (typeof window.infRenderTable === 'function') window.infRenderTable();
                 
                 alert(`🚀 [딥클린 엔진] 데이터 연동 완료!\n총 ${matchCount}건의 자산이 완벽하게 매칭되었습니다.`);
