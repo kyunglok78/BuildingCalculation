@@ -2675,7 +2675,7 @@ window.applyVerifPastMapping = function() {
 };
 
 // ============================================================================
-// [19] 스마트 과거 연동 마법사 완벽 하이재킹 (Deep Clean 엔진 탑재)
+// [19] 스마트 과거 연동 마법사 완벽 하이재킹 (Deep Clean 엔진 & 포장지 해제 탑재)
 // ============================================================================
 window.lastUploadedPastFile = null;
 
@@ -2690,7 +2690,7 @@ document.addEventListener('change', function(e) {
 document.addEventListener('click', function(e) {
     const btn = e.target.closest('button');
     if (btn && btn.innerText.includes('연동 적용하기')) {
-        if (!window.lastUploadedPastFile) return; // 캡처된 파일이 없으면 통과
+        if (!window.lastUploadedPastFile) return; // 캡처된 파일이 없으면 기존 로직에 맡김
         
         // 기존 시스템의 불안전한 내장 매칭 로직을 완전히 정지시킵니다.
         e.preventDefault();
@@ -2707,7 +2707,7 @@ document.addEventListener('click', function(e) {
         const keyText = selects[1].options[selects[1].selectedIndex].text;
         const valText = selects[2].options[selects[2].selectedIndex].text;
 
-        // "H 열", "AG 열" 등에서 알파벳만 추출하여 정확한 기둥 번호(인덱스)로 변환
+        // 알파벳 기둥 이름을 정확한 번호(인덱스)로 변환
         const getColIdx = (str) => {
             const match = str.match(/[A-Z]+/i);
             if (!match) return 0;
@@ -2729,16 +2729,16 @@ document.addEventListener('click', function(e) {
                 const workbook = XLSX.read(data, {type: 'array'});
                 const worksheet = workbook.Sheets[sheetName];
                 
-                // 엑셀의 복잡한 헤더 병합을 무시하기 위해 순수 2차원 배열로 직접 파싱
+                // 엑셀의 복잡한 헤더 병합을 무시하기 위해 순수 배열로 직접 파싱
                 const rawData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: ""});
                 const pastMap = new Map();
 
-                // 1. 엑셀 원본 데이터 세척 및 Map 적재
+                // 1. 과거 엑셀 원본 데이터 세척 및 Map 적재
                 rawData.forEach(row => {
                     const rawKey = String(row[keyIdx] || '');
                     const rawVal = String(row[valIdx] || '');
                     
-                    // 투명글자, 앞뒤 공백, 콤마 등 모든 불순물 완벽 제거 및 대문자 통일
+                    // 불순물 완벽 제거
                     const cleanKey = rawKey.replace(/[\u200B\s,]/g, '').trim().toUpperCase();
                     const cleanVal = rawVal.trim();
 
@@ -2747,14 +2747,20 @@ document.addEventListener('click', function(e) {
                     }
                 });
 
-                // 2. 현재 시스템 데이터 세척 및 1:1 대조
+                // 2. 현재 시스템 데이터 세척 및 1:1 대조 (에러 원인 완벽 수정)
                 let matchCount = 0;
                 if (window.infState && window.infState.data) {
                     for (const tabName in window.infState.data) {
-                        window.infState.data[tabName].forEach(row => {
+                        
+                        // ★ 핵심 해결: 데이터가 포장지(Object)로 감싸져 있다면, 순수 데이터 배열만 추출
+                        let currentTabRows = window.infState.data[tabName];
+                        if (!Array.isArray(currentTabRows)) {
+                            currentTabRows = currentTabRows.raw || currentTabRows.data || [];
+                        }
+
+                        // 순수 데이터 배열을 반복하며 대조
+                        currentTabRows.forEach(row => {
                             const currentKey = String(row['자산번호'] || row['신자산번호'] || '');
-                            
-                            // 현재 데이터도 똑같이 불순물 세척
                             const cleanCurrentKey = currentKey.replace(/[\u200B\s,]/g, '').trim().toUpperCase();
 
                             if (cleanCurrentKey && pastMap.has(cleanCurrentKey)) {
@@ -2767,7 +2773,7 @@ document.addEventListener('click', function(e) {
                     }
                 }
 
-                // 기존 모달 닫기
+                // 모달 닫기
                 const closeIcon = modal.querySelector('i[class*="close"], i[class*="xmark"], button.close');
                 if (closeIcon) closeIcon.click();
                 else if (modal.parentElement) modal.parentElement.style.display = 'none';
@@ -2775,8 +2781,7 @@ document.addEventListener('click', function(e) {
                 // 화면 즉시 갱신
                 if (typeof window.infRenderTable === 'function') window.infRenderTable();
                 
-                // 성공 알림 (딥클린 엔진 시그니처 표출)
-                alert(`🚀 [딥클린 엔진] 데이터 연동 완료!\n선택하신 시트에서 총 ${matchCount}건의 자산이 완벽하게 매칭되었습니다.`);
+                alert(`🚀 [딥클린 엔진] 데이터 연동 완료!\n총 ${matchCount}건의 자산이 완벽하게 매칭되었습니다.`);
                 
             } catch (err) {
                 alert("엑셀 데이터 매칭 중 오류가 발생했습니다.\n(" + err.message + ")");
