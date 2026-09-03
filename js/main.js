@@ -2675,25 +2675,113 @@ window.applyVerifPastMapping = function() {
 };
 
 // ============================================================================
-// [19] 기존 스마트 과거 연동 마법사 0건 오류 픽스 (투명글자 자동 세척 백신)
+// [19] 스마트 과거 연동 마법사 완벽 하이재킹 (Deep Clean 엔진 탑재)
 // ============================================================================
-window.addEventListener('mousedown', function(e) {
-    const targetText = e.target.innerText || '';
-    
-    // 사용자가 '연동 적용하기' 버튼을 누르는 순간 찰나에 낚아채서 먼저 실행됩니다.
-    if (targetText.includes('연동 적용하기')) {
-        if (window.infState && window.infState.data) {
-            for (let tab in window.infState.data) {
-                window.infState.data[tab].forEach(row => {
-                    ['자산번호', '신자산번호'].forEach(key => {
-                        if (row[key]) {
-                            // 눈에 보이지 않는 투명글자(\u200B)와 콤마, 공백을 완벽히 지워 기존 마법사가 인식하게 만듭니다.
-                            row[key] = String(row[key]).replace(/[\u200B\s,]/g, '');
-                        }
-                    });
-                });
-            }
-        }
-        // 세척이 끝나면 원래 시스템의 연동 마법사가 100% 매칭률로 정상 작동합니다.
+window.lastUploadedPastFile = null;
+
+// 파일이 업로드되는 순간 몰래 파일을 메모리에 캡처해 둡니다.
+document.addEventListener('change', function(e) {
+    if (e.target.type === 'file' && e.target.files.length > 0) {
+        window.lastUploadedPastFile = e.target.files[0];
     }
-}, true); // Capture 단계에서 실행
+}, true);
+
+// 내장 마법사의 '연동 적용하기' 버튼 클릭을 가로챕니다.
+document.addEventListener('click', function(e) {
+    const btn = e.target.closest('button');
+    if (btn && btn.innerText.includes('연동 적용하기')) {
+        if (!window.lastUploadedPastFile) return; // 캡처된 파일이 없으면 기존 로직에 맡김
+        
+        // 기존 시스템의 불안전한 내장 매칭 로직을 완전히 정지시킵니다.
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+
+        const modal = btn.closest('.modal-content') || btn.closest('div[style*="z-index"]');
+        if (!modal) return;
+
+        const selects = modal.querySelectorAll('select');
+        if (selects.length < 3) return;
+
+        const sheetName = selects[0].value;
+        const keyText = selects[1].options[selects[1].selectedIndex].text;
+        const valText = selects[2].options[selects[2].selectedIndex].text;
+
+        // "H 열", "AG 열" 등에서 알파벳만 추출하여 정확한 기둥 번호(인덱스)로 변환
+        const getColIdx = (str) => {
+            const match = str.match(/[A-Z]+/i);
+            if (!match) return 0;
+            let letters = match[0].toUpperCase();
+            let idx = 0;
+            for (let i = 0; i < letters.length; i++) {
+                idx = idx * 26 + (letters.charCodeAt(i) - 64);
+            }
+            return idx - 1;
+        };
+
+        const keyIdx = getColIdx(keyText);
+        const valIdx = getColIdx(valText);
+
+        const reader = new FileReader();
+        reader.onload = function(re) {
+            try {
+                const data = new Uint8Array(re.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const worksheet = workbook.Sheets[sheetName];
+                
+                // 엑셀의 복잡한 헤더 병합을 무시하기 위해 순수 2차원 배열로 직접 파싱
+                const rawData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: ""});
+                const pastMap = new Map();
+
+                // 1. 엑셀 원본 데이터 세척 및 Map 적재
+                rawData.forEach(row => {
+                    const rawKey = String(row[keyIdx] || '');
+                    const rawVal = String(row[valIdx] || '');
+                    
+                    // 투명글자, 앞뒤 공백, 콤마 등 모든 불순물 완벽 제거 및 대문자 통일
+                    const cleanKey = rawKey.replace(/[\u200B\s,]/g, '').trim().toUpperCase();
+                    const cleanVal = rawVal.trim();
+
+                    if (cleanKey && cleanVal && cleanVal !== '-' && !cleanKey.includes('자산번호') && !cleanKey.includes('합계')) {
+                        pastMap.set(cleanKey, cleanVal);
+                    }
+                });
+
+                // 2. 현재 시스템 데이터 세척 및 1:1 대조
+                let matchCount = 0;
+                if (window.infState && window.infState.data) {
+                    for (const tabName in window.infState.data) {
+                        window.infState.data[tabName].forEach(row => {
+                            const currentKey = String(row['자산번호'] || row['신자산번호'] || '');
+                            
+                            // 현재 데이터도 똑같이 불순물 세척
+                            const cleanCurrentKey = currentKey.replace(/[\u200B\s,]/g, '').trim().toUpperCase();
+
+                            if (cleanCurrentKey && pastMap.has(cleanCurrentKey)) {
+                                const matchedVal = pastMap.get(cleanCurrentKey);
+                                row['_assetClass'] = matchedVal; 
+                                row['구분'] = matchedVal; 
+                                matchCount++;
+                            }
+                        });
+                    }
+                }
+
+                // 기존 모달 닫기
+                const closeIcon = modal.querySelector('i[class*="close"], i[class*="xmark"], button.close');
+                if (closeIcon) closeIcon.click();
+                else if (modal.parentElement) modal.parentElement.style.display = 'none';
+
+                // 화면 즉시 갱신
+                if (typeof window.infRenderTable === 'function') window.infRenderTable();
+                
+                // 성공 알림 (딥클린 엔진 시그니처 표출)
+                alert(`🚀 [딥클린 엔진] 데이터 연동 완료!\n선택하신 시트에서 총 ${matchCount}건의 자산이 완벽하게 매칭되었습니다.\n\n(※ 0건일 경우, 선택하신 시트에 해당 자산번호가 진짜로 존재하는지 확인해 주세요!)`);
+                
+            } catch (err) {
+                alert("엑셀 데이터 매칭 중 오류가 발생했습니다.\n(" + err.message + ")");
+            }
+        };
+        reader.readAsArrayBuffer(window.lastUploadedPastFile);
+    }
+}, true);
