@@ -1552,17 +1552,12 @@ window.highlightEmptyRows = function() { alert("Ctrl + 마이너스(-) 단축키
 window.bulkDeleteHighlightedRows = function() { alert("Ctrl + 마이너스(-) 단축키를 이용해 직접 즉시 삭제해주세요!"); };
 
 // ============================================================================
-// [18] 과거 데이터 연동 마법사 모달창 지원 (2.3.2 자산 구분 및 예외 처리용 정밀 매칭)
+// [18] 4단계 스마트 과거 연동 마법사 (웹 자산번호 열 수동 지정 & 딥클린 엔진 통합)
 // ============================================================================
-document.addEventListener('DOMContentLoaded', function() {
-    setTimeout(() => {
-        const step2_1 = document.getElementById('step-2-1');
-        if (step2_1) step2_1.onclick = function() { document.getElementById('pastDataModal').style.display = 'flex'; };
-    }, 1000);
-});
 
 window.pastMappingTemp = { data: null, filename: "" };
 
+// 엑셀 파일 업로드 가로채기
 window.handlePastDataUpload = function(event, type) {
     const file = event.target.files[0];
     if (!file) return;
@@ -1577,9 +1572,11 @@ window.handlePastDataUpload = function(event, type) {
                 window.pastMappingTemp.data = workbook;
                 window.pastMappingTemp.filename = file.name;
 
-                // 기존 모달 닫기 및 새 정밀 매핑 모달 띄우기
-                const pastModal = document.getElementById('pastDataModal');
-                if (pastModal) pastModal.style.display = 'none';
+                // 기존 구형 모달 영구 차단
+                const oldModal = document.getElementById('pastDataModal');
+                if (oldModal) oldModal.style.display = 'none';
+
+                // 새로운 4단계 마법사 실행
                 window.showPastExcelMappingWizard(workbook);
 
             } catch(err) {
@@ -1588,7 +1585,6 @@ window.handlePastDataUpload = function(event, type) {
         };
         reader.readAsArrayBuffer(file);
     } else if (type === 'kbproj') {
-        // 기존 kbproj 연동 로직
         const reader = new FileReader();
         reader.onload = function(e) {
             try {
@@ -1601,44 +1597,55 @@ window.handlePastDataUpload = function(event, type) {
     event.target.value = '';
 };
 
+// 4단계 마법사 모달 UI 렌더링
 window.showPastExcelMappingWizard = function(workbook) {
     let mapModal = document.getElementById('pastExcelWizardModal');
-    if (!mapModal) {
-        const modalHtml = `
-        <div class="modal-overlay" id="pastExcelWizardModal" style="display:flex; z-index: 1060; justify-content: center; align-items: center;">
-            <div class="modal-content" style="width: 500px; background: #fff; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
-                <div class="modal-header" style="background:#1C5691; color:white; padding:15px; display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-weight:bold;"><i class="fa-solid fa-file-excel"></i> 2.3.2 과거 엑셀 데이터 정밀 매핑</span>
-                    <i class="fa-solid fa-xmark" style="cursor:pointer;" onclick="document.getElementById('pastExcelWizardModal').style.display='none'"></i>
+    if (mapModal) mapModal.remove(); // 열려있으면 지우고 새로 그리기
+
+    const modalHtml = `
+    <div class="modal-overlay" id="pastExcelWizardModal" style="display:flex; z-index: 9999; justify-content: center; align-items: center; background: rgba(0,0,0,0.6);">
+        <div class="modal-content" style="width: 550px; background: #fff; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); overflow: hidden;">
+            <div class="modal-header" style="background:#1C5691; color:white; padding:15px 20px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:bold; font-size: 16px;"><i class="fa-solid fa-wand-magic-sparkles"></i> 4단계 스마트 과거 연동 마법사</span>
+                <i class="fa-solid fa-xmark" style="cursor:pointer; font-size:18px;" onclick="document.getElementById('pastExcelWizardModal').style.display='none'"></i>
+            </div>
+            <div class="modal-body" style="padding: 25px; background:#f8f9fa;">
+                <div style="background:#fff; padding:20px; border:1px solid #ddd; border-radius:6px;">
+                    
+                    <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px;">① 불러올 엑셀 시트 선택</label>
+                    <select id="pastExcelSheet" class="input-box" style="width:100%; padding:10px; margin-bottom:20px; border:1px solid #ccc; background:#f0fdf4; border-radius:4px;" onchange="window.updatePastExcelCols()"></select>
+                    
+                    <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px; color:#d32f2f;">② [현재 웹 명세서] '자산번호' 열 위치 지정 (기본 C열)</label>
+                    <select id="webKeyCol" class="input-box" style="width:100%; padding:10px; margin-bottom:20px; border:2px solid #d32f2f; background:#fff3f3; border-radius:4px; font-weight:bold;"></select>
+
+                    <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px; color:#1C5691;">③ [과거 엑셀] 매칭 기준 열 (자산번호 H열)</label>
+                    <select id="pastExcelKeyCol" class="input-box" style="width:100%; padding:10px; margin-bottom:20px; border:2px solid #1C5691; background:#f0f7ff; border-radius:4px; font-weight:bold;"></select>
+                    
+                    <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px; color:#28a745;">④ [과거 엑셀] 가져올 '구분(계정)' 열 (구분 AG열)</label>
+                    <select id="pastExcelValCol" class="input-box" style="width:100%; padding:10px; border:2px solid #28a745; background:#f0fdf4; border-radius:4px; font-weight:bold;"></select>
                 </div>
-                <div class="modal-body" style="padding: 20px; background:#f8f9fa;">
-                    <div style="background:#fff; padding:15px; border:1px solid #ddd; border-radius:4px;">
-                        <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px;">① 데이터가 있는 시트 선택</label>
-                        <select id="pastExcelSheet" class="input-box" style="width:100%; padding:8px; margin-bottom:15px; border:1px solid #ccc; background:#f0fdf4;" onchange="window.updatePastExcelCols()"></select>
-                        
-                        <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px;">② 매칭 기준 열 (예: 자산번호 H열)</label>
-                        <select id="pastExcelKeyCol" class="input-box" style="width:100%; padding:8px; margin-bottom:15px; border:2px solid #1C5691;"></select>
-                        
-                        <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px;">③ 적용할 '구분(계정)' 열 (예: 구분 AG열)</label>
-                        <select id="pastExcelValCol" class="input-box" style="width:100%; padding:8px; margin-bottom:15px; border:2px solid #28a745;"></select>
-                    </div>
-                    <div style="text-align:right; margin-top:15px;">
-                        <button type="button" class="btn-dark" style="background:#1C5691; border:none; padding:10px 20px; font-weight:bold;" onclick="window.applyPastExcelMapping()">⚡ 데이터 연동 실행</button>
-                    </div>
+                <div style="text-align:right; margin-top:20px;">
+                    <button type="button" class="btn-dark" style="background:#1C5691; border:none; padding:12px 25px; font-weight:bold; border-radius:4px; font-size:14px; cursor:pointer;" onclick="window.applyPastExcelMapping()">⚡ 완벽 연동 실행</button>
                 </div>
             </div>
-        </div>`;
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-        mapModal = document.getElementById('pastExcelWizardModal');
-    } else {
-        mapModal.style.display = 'flex';
-    }
-
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // 1단계: 시트명 세팅
     const sheetSelect = document.getElementById('pastExcelSheet');
-    sheetSelect.innerHTML = '';
     workbook.SheetNames.forEach(name => {
         sheetSelect.innerHTML += `<option value="${name}">${name}</option>`;
     });
+
+    // 2단계: 웹 명세서 열 세팅 (A~AZ)
+    const webKeyCol = document.getElementById('webKeyCol');
+    for (let i = 0; i < 50; i++) {
+        let letter = String.fromCharCode(65 + (i % 26));
+        if (i >= 26) letter = String.fromCharCode(64 + Math.floor(i / 26)) + letter;
+        webKeyCol.innerHTML += `<option value="${i}">${letter} 열 (${i+1}번째 기둥)</option>`;
+    }
+    webKeyCol.value = "2"; // 명세서 기본 자산번호 위치는 C열(인덱스 2)
 
     window.updatePastExcelCols();
 };
@@ -1655,82 +1662,115 @@ window.updatePastExcelCols = function() {
 
     let maxCols = 0;
     json.forEach(r => { if(r.length > maxCols) maxCols = r.length; });
+    if(maxCols < 40) maxCols = 40; // AG열 커버를 위해 최소 40열 강제 확보
+    
     for (let i = 0; i < maxCols; i++) {
         let letter = String.fromCharCode(65 + (i % 26));
         if (i >= 26) letter = String.fromCharCode(64 + Math.floor(i / 26)) + letter;
-        const optionHtml = `<option value="${i}">${letter} 열 (${i+1})</option>`;
+        const optionHtml = `<option value="${i}">${letter} 열 (${i+1}번째 기둥)</option>`;
         keyColSelect.innerHTML += optionHtml;
         valColSelect.innerHTML += optionHtml;
     }
     
-    // 엘티정밀 파일 기준 자동 세팅 (자산번호 H열=7, 구분 AG열=32)
-    if (maxCols >= 33) {
-        keyColSelect.value = "7";
-        valColSelect.value = "32";
-    }
+    // 과거 엑셀 기본값 세팅 (자산번호 H열=7, 구분 AG열=32)
+    keyColSelect.value = "7";
+    valColSelect.value = "32";
 };
 
 window.applyPastExcelMapping = function() {
     const sheetName = document.getElementById('pastExcelSheet').value;
+    const webKeyIdx = parseInt(document.getElementById('webKeyCol').value); // 웹 자산번호 열 명시적 지정
     const keyColIdx = parseInt(document.getElementById('pastExcelKeyCol').value);
     const valColIdx = parseInt(document.getElementById('pastExcelValCol').value);
 
     const workbook = window.pastMappingTemp.data;
     const worksheet = workbook.Sheets[sheetName];
-    // 헤더 병합 이슈를 무시하기 위해 순수 배열로 직접 파싱
     const rawData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: ""});
 
     if (!window.infState || !window.infState.data) return alert("현재 명세서 데이터가 없습니다. 먼저 명세서를 업로드하세요.");
 
-    let matchCount = 0;
     const pastMap = new Map();
+    let validExcelDataCount = 0;
 
-    // 1. 과거 데이터를 Map으로 변환 (불순물 완벽 세척)
+    // 1. 엑셀 원본 데이터 세척 및 Map 적재
     rawData.forEach(row => {
         const rawKey = String(row[keyColIdx] || '');
         const rawVal = String(row[valColIdx] || '');
         
-        // ★ 핵심: 보이지 않는 투명 글자(\u200B), 공백, 콤마 완벽 제거 및 대문자 통일
+        // 투명글자, 공백, 콤마 등 불순물 완벽 제거 (딥클린)
         const cleanKey = rawKey.replace(/[\u200B\s,]/g, '').trim().toUpperCase();
         const cleanVal = rawVal.trim();
 
-        // 헤더 행이 아닌 실제 데이터만 적재
-        if (cleanKey && cleanVal && cleanVal !== '-' && !cleanKey.includes('자산번호')) {
+        if (cleanKey && cleanVal && cleanVal !== '-' && !cleanKey.includes('자산번호') && !cleanKey.includes('합계')) {
             pastMap.set(cleanKey, cleanVal);
+            validExcelDataCount++;
         }
     });
 
-    // 2. 현재 데이터에 1:1 매칭
-    for (const tabName in window.infState.data) {
-        const currentTabRows = window.infState.data[tabName];
-        
-        currentTabRows.forEach(row => {
-            // 현재 명세서의 자산번호 추출 (마법사 매핑 또는 기본 객체 키 사용)
-            const rawCurrentKey = String(row['자산번호'] || row['신자산번호'] || '');
-            
-            // ★ 핵심: 현재 데이터도 똑같이 완벽 세척하여 매칭률 100% 보장
-            const cleanCurrentKey = rawCurrentKey.replace(/[\u200B\s,]/g, '').trim().toUpperCase();
+    if (validExcelDataCount === 0) {
+        return alert("엑셀에서 유효한 데이터를 1건도 찾지 못했습니다.\n선택하신 시트명과 열(기둥) 문자가 정확한지 다시 확인해주세요.");
+    }
 
+    // 2. 명시된 웹 좌표(webKeyIdx)를 기준으로 1:1 무식한 대조
+    let matchCount = 0;
+    const mappedColCount = window.infState.wizard && window.infState.wizard.mapped ? Object.keys(window.infState.wizard.mapped).length : 7;
+    const targetClassIdx = mappedColCount + 4; // 화면 표출용 '구분' 열 (시스템 기본 위치)
+
+    for (const tabName in window.infState.data) {
+        let currentTabRows = window.infState.data[tabName];
+        if (!Array.isArray(currentTabRows)) {
+            currentTabRows = currentTabRows.raw || currentTabRows.data || [];
+        }
+
+        currentTabRows.forEach((row, rowIndex) => {
+            // 구조 무시하고, 사용자가 찍어준 웹 기둥(webKeyIdx)의 값만 무조건 빼옴
+            let currentKey = '';
+            if (Array.isArray(row)) {
+                currentKey = String(row[webKeyIdx] || '');
+            } else {
+                currentKey = String(row['자산번호'] || row['신자산번호'] || Object.values(row)[webKeyIdx] || '');
+            }
+            
+            // 웹 데이터도 불순물 완벽 세척
+            const cleanCurrentKey = currentKey.replace(/[\u200B\s,]/g, '').trim().toUpperCase();
+
+            // 순수 알맹이끼리 매칭
             if (cleanCurrentKey && pastMap.has(cleanCurrentKey)) {
-                const matchedClass = pastMap.get(cleanCurrentKey);
-                row['_assetClass'] = matchedClass; // 시스템 내부 분류 변수
-                row['구분'] = matchedClass; // 화면 표출용
+                const matchedVal = pastMap.get(cleanCurrentKey);
+                
+                if (Array.isArray(row)) {
+                    row[targetClassIdx] = matchedVal; // 내부 데이터 갱신
+                    
+                    // 화면 입력창(input) 다이렉트 갱신
+                    const trs = document.querySelectorAll('.infTbodyGlobal tr');
+                    if (trs.length > rowIndex) {
+                        const td = trs[rowIndex].querySelector('td:nth-child(' + (targetClassIdx + 2) + ')');
+                        if (td && td.querySelector('input')) {
+                            td.querySelector('input').value = matchedVal;
+                            td.querySelector('input').style.color = '#d32f2f';
+                            td.querySelector('input').style.fontWeight = 'bold';
+                            td.querySelector('input').style.background = '#fff3f3';
+                        }
+                    }
+                } else {
+                    row['_assetClass'] = matchedVal; 
+                    row['구분'] = matchedVal; 
+                }
                 matchCount++;
             }
         });
     }
 
     document.getElementById('pastExcelWizardModal').style.display = 'none';
-    
-    // 화면 재렌더링
     if (typeof window.infRenderTable === 'function') window.infRenderTable();
     
     if (matchCount > 0) {
-        alert(`🎉 과거 데이터 연동 성공!\n총 ${matchCount}건의 자산이 텍스트 클리닝을 거쳐 완벽하게 매칭 및 분류되었습니다.`);
+        alert(`🚀 [딥클린 좌표 엔진] 연동 성공!\n총 ${matchCount}건의 자산이 명시된 좌표를 따라 한 치의 오차 없이 매칭되었습니다.`);
     } else {
-        alert(`⚠️ 매칭된 자산이 없습니다.\n- 선택하신 기둥(열)이 맞는지 확인해주세요.\n- 현재 명세서와 과거 엑셀의 자산번호가 서로 다른 체계일 수 있습니다.`);
+        alert(`⚠️ 엑셀 데이터는 읽었지만 웹 명세서와 매칭된 자산이 0건입니다.\n[현재 웹 명세서]의 '자산번호 열 위치'가 정말 C열(3번째)이 맞는지 확인해 주세요.`);
     }
 };
+
 
 // ============================================================================
 // [19] 1만원 이하 소액 자산 일괄 평가제외 처리기
