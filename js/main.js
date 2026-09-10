@@ -1232,94 +1232,18 @@ window.resetRowDeletion = function() {
     } catch (error) { console.error("행 삭제 되돌리기 오류:", error); }
 };
 
-// ============================================================================
-// [15] 자산번호 원천 텍스트 변환 (렉 제로 & 콤마 영구 차단) 및 중앙 정렬
-// ============================================================================
-if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isDataPatched) {
-    const originalRender = window.infRenderTable;
-    window.infRenderTable = function() {
-        
-        // 1. 메모리 데이터 조작: 시스템이 숫자로 인식하지 못하도록 '투명 글자' 삽입
-        if (window.infState && window.infState.data) {
-            for (let tab in window.infState.data) {
-                window.infState.data[tab].forEach(row => {
-                    ['자산번호', '신자산번호'].forEach(key => {
-                        if (row[key] !== undefined && row[key] !== null) {
-                            // 콤마를 제거한 뒤 눈에 보이지 않는 공백(\u200B)을 붙여 완벽한 문자로 위장
-                            let safeStr = String(row[key]).replace(/,/g, '').replace(/\u200B/g, '').trim();
-                            row[key] = safeStr + '\u200B'; 
-                        }
-                    });
-                });
-            }
-        }
-
-        // 2. 원래 표 그리기 실행 (이제 데이터가 텍스트라 시스템이 알아서 콤마를 안 찍음)
-        originalRender.apply(this, arguments);
-        
-        // 3. 표가 다 그려진 후 딱 1번만 가운데 정렬 실행 (CCTV 철거 -> 렉 완전 해소)
-        const thead = document.querySelector('.infTheadGlobal tr');
-        const tbody = document.querySelector('.infTbodyGlobal');
-        if (thead && tbody) {
-            let assetColIdxs = [];
-            thead.querySelectorAll('th, td').forEach((th, idx) => {
-                if (th.innerText.replace(/\s/g, '').includes('자산번호')) assetColIdxs.push(idx);
-            });
-
-            if (assetColIdxs.length > 0) {
-                // DOM 렌더링 속도 향상을 위해 잠깐 숨김
-                tbody.style.display = 'none';
-                tbody.querySelectorAll('tr').forEach(tr => {
-                    const cells = tr.querySelectorAll('td');
-                    assetColIdxs.forEach(idx => {
-                        if (cells[idx]) {
-                            // 텍스트 가운데 정렬 적용 및 혹시 모를 콤마 2차 제거
-                            cells[idx].style.textAlign = 'center'; 
-                            if (cells[idx].innerText.includes(',')) {
-                                cells[idx].innerText = cells[idx].innerText.replace(/,/g, '');
-                            }
-                        }
-                    });
-                });
-                tbody.style.display = '';
-            }
-        }
-    };
-    window.infRenderTable.isDataPatched = true;
-}
-
-// 4. [Delete] -> [Ctrl] + [-] 텍스트 실시간 강제 교체 (가벼운 주기 검사)
-setInterval(() => {
-    const step1Panel = document.getElementById('infStep1Panel');
-    if (step1Panel && step1Panel.innerHTML.includes('[Delete] 키로 지우시고')) {
-        step1Panel.innerHTML = step1Panel.innerHTML.replace(/\[Delete\] 키로 지우시고/g, "<b style='color:#dc3545;'>[Ctrl] + [-] (마이너스) 키</b>로 지우시고");
-    }
-}, 1000);
 
 // ============================================================================
-// [15] 자산번호 콤마 영구 삭제 & 중앙 정렬 (CCTV 철거 -> 렉 제로 후처리 방식)
+// [15] 자산번호 콤마 영구 삭제 및 중앙 정렬 (에러 원천 차단 완벽 패치)
 // ============================================================================
 if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isDataPatchedFast) {
     const originalRender = window.infRenderTable;
     window.infRenderTable = function() {
         
-        // 1. 메모리 데이터 문자열 강제 변환 (과거 데이터와 100% 매칭되도록 공백 제거)
-        if (window.infState && window.infState.data) {
-            for (let tab in window.infState.data) {
-                window.infState.data[tab].forEach(row => {
-                    ['자산번호', '신자산번호'].forEach(key => {
-                        if (row[key] !== undefined && row[key] !== null) {
-                            row[key] = String(row[key]).replace(/,/g, '').trim();
-                        }
-                    });
-                });
-            }
-        }
-
-        // 2. 원래 표 그리기 실행
+        // 1. 에러를 유발하던 메모리 조작 코드를 다 버리고, 무조건 원래 표부터 안전하게 그립니다.
         originalRender.apply(this, arguments);
 
-        // 3. 다 그려진 직후 딱 1번만 콤마를 제거하고 CSS로 중앙 정렬 (무한루프 원천 차단)
+        // 2. 표가 다 그려진 직후, 화면(DOM)에서만 자산번호 기둥을 찾아 콤마를 걷어냅니다.
         const thead = document.querySelector('.infTheadGlobal tr');
         const tbody = document.querySelector('.infTbodyGlobal');
         if (thead && tbody) {
@@ -1329,7 +1253,7 @@ if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isData
             });
 
             if (assetColIdxs.length > 0) {
-                // CSS 인젝션을 통한 번개같은 중앙 정렬 적용
+                // CSS로 중앙 정렬 0.1초 만에 씌우기
                 let styleTag = document.getElementById('fast-align-style');
                 if (!styleTag) {
                     styleTag = document.createElement('style');
@@ -1340,7 +1264,7 @@ if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isData
                 assetColIdxs.forEach(idx => alignStyles += `.infTbodyGlobal tr td:nth-child(${idx + 1}) { text-align: center !important; } `);
                 styleTag.innerHTML = alignStyles;
 
-                // 콤마 텍스트 제거 (화면 당 딱 1번만 실행되어 렉 없음)
+                // 화면상에서 콤마 텍스트만 지우기
                 tbody.querySelectorAll('tr').forEach(tr => {
                     const cells = tr.querySelectorAll('td');
                     assetColIdxs.forEach(idx => {
@@ -1355,7 +1279,7 @@ if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isData
     window.infRenderTable.isDataPatchedFast = true;
 }
 
-// 4. [Delete] -> [Ctrl] + [-] 텍스트 실시간 강제 교체 (가벼운 주기 검사)
+// [Ctrl] + [-] 텍스트 실시간 강제 교체
 setInterval(() => {
     const step1Panel = document.getElementById('infStep1Panel');
     if (step1Panel && step1Panel.innerHTML.includes('[Delete] 키로 지우시고')) {
