@@ -1264,7 +1264,7 @@ if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isData
                 assetColIdxs.forEach(idx => alignStyles += `.infTbodyGlobal tr td:nth-child(${idx + 1}) { text-align: center !important; } `);
                 styleTag.innerHTML = alignStyles;
 
-                // 화면상에서 콤마 텍스트만 지우기
+                // 화면상에서 콤마 텍스트만 지우기 (절대 에러가 나지 않는 방식)
                 tbody.querySelectorAll('tr').forEach(tr => {
                     const cells = tr.querySelectorAll('td');
                     assetColIdxs.forEach(idx => {
@@ -1279,7 +1279,7 @@ if (typeof window.infRenderTable === 'function' && !window.infRenderTable.isData
     window.infRenderTable.isDataPatchedFast = true;
 }
 
-// [Ctrl] + [-] 텍스트 실시간 강제 교체
+// [Ctrl] + [-] 단축키 안내 문구 실시간 교체
 setInterval(() => {
     const step1Panel = document.getElementById('infStep1Panel');
     if (step1Panel && step1Panel.innerHTML.includes('[Delete] 키로 지우시고')) {
