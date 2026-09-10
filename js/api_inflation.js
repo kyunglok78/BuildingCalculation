@@ -139,10 +139,23 @@ window.infLoadExcel = function(event) {
     if(!file) return;
     const tabName = window.infState.activeTab;
     
+    // [추가된 방어 로직] 활성화된 탭 이름이 없는 상태에서 로드되는 것을 차단
+    if (!tabName) {
+        alert("선택된 사업장 탭이 없습니다. 새로고침 후 다시 시도해 주세요.");
+        event.target.value = '';
+        return;
+    }
+    
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
-            const jsonData = XLSX.utils.sheet_to_json(XLSX.read(new Uint8Array(e.target.result), {type: 'array'}).Sheets[XLSX.read(new Uint8Array(e.target.result), {type: 'array'}).SheetNames[0]], {header: 1, defval: ""});
+            // [수정된 핵심 로직] XLSX.read()를 단 한 번만 호출하여 워크북을 메모리에 할당 후 순차적으로 시트와 데이터를 추출
+            const dataArray = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(dataArray, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+            
             if(jsonData.length === 0) return alert("엑셀 파일이 비어있습니다.");
             
             window.infState.data[tabName].raw = jsonData;
@@ -215,7 +228,6 @@ window.infFinishMapping = function() {
 
     if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
 
-    // ★ [핵심 변경] 공간 최적화를 위해 '취득일'을 버리고 7개 열로 압축
     const finalColumns = ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득년도', '취득가액'];
 
     let mappedRaw = tData.raw.map(oldRow => {
