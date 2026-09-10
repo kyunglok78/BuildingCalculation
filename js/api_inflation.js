@@ -1047,47 +1047,47 @@ document.addEventListener('keydown', function(e) {
 // [섹션 6] 과거 데이터 연동 매칭 알고리즘 (스마트 마법사 UI 동적 생성 및 .kbproj 지원)
 // ============================================================================
 
-// 1. 스마트 과거 연동 마법사 HTML 동적 생성 (index.html 수정 불필요)
 document.addEventListener('DOMContentLoaded', () => {
     if (!document.getElementById('smartPastModal')) {
         const modalHtml = `
         <div class="modal-overlay" id="smartPastModal" style="display:none; z-index: 1050; justify-content: center; align-items: center;">
-            <div class="modal-content" style="width: 500px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+            <div class="modal-content" style="width: 550px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
                 <div class="modal-header" style="background:#1C5691; color:white; padding:15px; display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-weight:bold;"><i class="fa-solid fa-link"></i> 스마트 과거 데이터 연동 마법사</span>
+                    <span style="font-weight:bold; font-size: 16px;"><i class="fa-solid fa-link"></i> 4단계 스마트 과거 데이터 연동 마법사</span>
                     <i class="fa-solid fa-xmark modal-close" style="cursor:pointer; font-size:18px;" onclick="document.getElementById('smartPastModal').style.display='none'"></i>
                 </div>
                 <div class="modal-body" style="padding: 25px; background:#f4f5f7;">
                     <p style="font-size:13px; color:#555; margin-bottom:20px; line-height:1.5;">
-                        👉 불러온 파일(.xlsx 또는 .kbproj)에서 매칭할 <b>시트명</b>과 <b>자산번호 열</b>, 그리고 가져올 <b>데이터 열</b>을 직접 선택해 주세요.
+                        👉 엑셀의 복잡한 구조와 무관하게, <b>[웹 명세서의 기둥]</b>과 <b>[과거 엑셀의 기둥]</b>을 1:1로 직접 지정하여 100% 강제 연동합니다.
                     </p>
                     <div style="background:#fff; padding:15px; border:1px solid #ddd; border-radius:4px; margin-bottom:15px;">
-                        <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">① 불러올 시트(사업장) 선택</label>
-                        <select id="smartPastSheet" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc; margin-bottom: 15px;" onchange="window.updateSmartPastHeaders()"></select>
+                        
+                        <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">① 불러올 엑셀 시트 선택</label>
+                        <select id="smartPastSheet" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc; margin-bottom: 20px;" onchange="window.updateSmartPastHeaders()"></select>
 
-                        <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">② 기준 키 (자산번호 열) 선택</label>
-                        <select id="smartPastAssetCol" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc; margin-bottom: 15px;"></select>
+                        <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px; color:#d32f2f;">② [현재 웹 명세서] '자산번호' 열 위치 (C열=2)</label>
+                        <select id="webKeyCol" class="input-box" style="width:100%; padding:8px; border:2px solid #d32f2f; background:#fff3f3; margin-bottom: 20px; font-weight:bold;"></select>
 
-                        <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">③ 가져올 데이터 (물가지수/구분) 열 선택</label>
-                        <select id="smartPastValCol" class="input-box" style="width:100%; padding:8px; border:2px solid #1C5691;"></select>
+                        <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px; color:#1C5691;">③ [과거 엑셀] 매칭 기준 열 (자산번호 H열=7)</label>
+                        <select id="smartPastAssetCol" class="input-box" style="width:100%; padding:8px; border:2px solid #1C5691; background:#f0f7ff; margin-bottom: 20px; font-weight:bold;"></select>
+
+                        <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px; color:#28a745;">④ [과거 엑셀] 가져올 '구분' 열 (AG열=32)</label>
+                        <select id="smartPastValCol" class="input-box" style="width:100%; padding:8px; border:2px solid #28a745; background:#f0fdf4; font-weight:bold;"></select>
                     </div>
                     <div style="text-align: right;">
-                        <button type="button" class="btn-dark" style="background:#28a745; padding:10px 25px; border:none; font-weight:bold;" onclick="window.applySmartPastMapping()">⚡ 연동 적용하기</button>
+                        <button type="button" class="btn-dark" style="background:#28a745; padding:10px 25px; border:none; font-weight:bold;" onclick="window.applySmartPastMapping()">⚡ 좌표 강제 연동 실행</button>
                     </div>
                 </div>
             </div>
         </div>`;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
     }
-    
-    // 파일 업로드 input이 kbproj를 허용하도록 속성 업데이트
     const pastInput = document.getElementById('infPastExcelFile');
     if(pastInput) pastInput.accept = ".xlsx, .xls, .csv, .kbproj";
 });
 
-window.tempPastParsed = {}; // 파싱된 과거 데이터 임시 저장소
+window.tempPastParsed = {}; 
 
-// 2. 파일 로드 및 파싱 (Excel & KBPROJ 공용)
 window.infLoadPastData = function(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -1099,9 +1099,8 @@ window.infLoadPastData = function(event) {
         window.tempPastParsed = {};
         try {
             if (isKbproj) {
-                // [kbproj 파일 처리 로직]
                 const projData = JSON.parse(e.target.result);
-                if (!projData.infState || !projData.infState.data) throw new Error("유효한 물가보정 데이터가 없습니다.");
+                if (!projData.infState || !projData.infState.data) throw new Error("유효한 데이터가 없습니다.");
                 
                 const headers = ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득년도', '취득가액', '과거구분', '기본지정', '평가제외', '부보제외', '최종선택', '물가지수', '재조달가액', '감가율', '잔가율', '현재가액', '비고'];
                 
@@ -1123,27 +1122,19 @@ window.infLoadPastData = function(event) {
                     if(sheetData.length > 0) window.tempPastParsed[tab] = sheetData;
                 }
             } else {
-                // [엑셀 파일 처리 로직]
                 const data = new Uint8Array(e.target.result);
                 const workbook = XLSX.read(data, {type: 'array'});
                 workbook.SheetNames.forEach(sheetName => {
                     const sheet = workbook.Sheets[sheetName];
-                    // header: 1 옵션을 사용하여 데이터를 표 형태(2차원 배열)로 강제 로드
                     const sheetJson = XLSX.utils.sheet_to_json(sheet, {header: 1, defval: ""});
-                    if (sheetJson.length > 0) {
-                        window.tempPastParsed[sheetName] = sheetJson;
-                    }
+                    if (sheetJson.length > 0) window.tempPastParsed[sheetName] = sheetJson;
                 });
             }
 
-            if (Object.keys(window.tempPastParsed).length === 0) throw new Error("파일에서 연동 가능한 데이터를 찾을 수 없습니다.");
-
-            // 데이터가 준비되면 스마트 마법사 모달창 띄우기
+            if (Object.keys(window.tempPastParsed).length === 0) throw new Error("파일에서 데이터를 찾을 수 없습니다.");
             window.openSmartPastModal();
 
-        } catch (err) {
-            alert("파일 파싱 중 오류: " + err.message);
-        }
+        } catch (err) { alert("파일 파싱 중 오류: " + err.message); }
     };
 
     if (isKbproj) reader.readAsText(file);
@@ -1151,12 +1142,21 @@ window.infLoadPastData = function(event) {
     event.target.value = '';
 };
 
-// 3. 마법사 팝업창 제어 및 동적 헤더 생성
 window.openSmartPastModal = function() {
     const sheets = Object.keys(window.tempPastParsed);
     const sheetSelect = document.getElementById('smartPastSheet');
     sheetSelect.innerHTML = '';
     sheets.forEach(s => sheetSelect.innerHTML += `<option value="${s}">${s}</option>`);
+    
+    // 웹 열 번호 세팅
+    const webKeyCol = document.getElementById('webKeyCol');
+    webKeyCol.innerHTML = '';
+    for (let i = 0; i < 50; i++) {
+        let letter = String.fromCharCode(65 + (i % 26));
+        if (i >= 26) letter = String.fromCharCode(64 + Math.floor(i / 26)) + letter;
+        webKeyCol.innerHTML += `<option value="${i}">${letter} 열 (인덱스 ${i})</option>`;
+    }
+    webKeyCol.value = "2"; // C열 기본값
     
     window.updateSmartPastHeaders();
     document.getElementById('smartPastModal').style.display = 'flex';
@@ -1172,36 +1172,25 @@ window.updateSmartPastHeaders = function() {
     assetSelect.innerHTML = '';
     valSelect.innerHTML = '';
 
-    // 엑셀은 2차원 배열, kbproj는 Object 배열 형태이므로 이를 구분
     const isArrayOfArrays = data.length > 0 && Array.isArray(data[0]);
 
     if (isArrayOfArrays) {
-        // [엑셀의 경우] A, B, C... 알파벳으로 열 표시
         let maxCols = 0;
         data.forEach(r => { if(r.length > maxCols) maxCols = r.length; });
+        if(maxCols < 40) maxCols = 40; 
         
         for(let i=0; i<maxCols; i++) {
             let letter = String.fromCharCode(65 + (i % 26));
             if (i >= 26) letter = String.fromCharCode(64 + Math.floor(i / 26)) + letter;
-            const optionHtml = `<option value="${i}">${letter} 열</option>`;
+            const optionHtml = `<option value="${i}">${letter} 열 (인덱스 ${i})</option>`;
             assetSelect.innerHTML += optionHtml;
             valSelect.innerHTML += optionHtml;
         }
 
-        // 지능형 자동 매칭 (엑셀 표 상단 1~10행을 스캔하여 키워드 탐색)
-        let foundAssetCol = -1, foundValCol = -1;
-        for(let r=0; r<Math.min(10, data.length); r++) {
-            for(let c=0; c<data[r].length; c++) {
-                const cellStr = String(data[r][c]).replace(/\s/g,'');
-                if(foundAssetCol === -1 && (cellStr.includes('자산번호') || cellStr.includes('자산코드'))) foundAssetCol = c;
-                if(foundValCol === -1 && (cellStr.includes('최종구분') || cellStr.includes('과거구분') || cellStr.includes('평가결과') || cellStr.includes('물가지수'))) foundValCol = c;
-            }
-        }
-        if(foundAssetCol !== -1) assetSelect.value = foundAssetCol;
-        if(foundValCol !== -1) valSelect.value = foundValCol;
+        assetSelect.value = "7";  // H열 기본
+        valSelect.value = "32"; // AG열 기본
 
     } else {
-        // [kbproj의 경우] 데이터의 key값(자산번호, 최종선택 등)으로 표시
         const headers = data.length > 0 ? Object.keys(data[0]) : [];
         headers.forEach(h => {
             const optionHtml = `<option value="${h}">${h}</option>`;
@@ -1209,64 +1198,58 @@ window.updateSmartPastHeaders = function() {
             valSelect.innerHTML += optionHtml;
         });
 
-        // 지능형 자동 매칭 (.kbproj 용)
         const assetAuto = headers.find(h => String(h).includes('자산번호'));
         if (assetAuto) assetSelect.value = assetAuto;
-        
-        // kbproj는 이전에 평가했던 '최종선택' 또는 '과거구분' 열을 기본값으로 추천
         const valAuto = headers.find(h => String(h).includes('최종선택') || String(h).includes('과거구분'));
         if (valAuto) valSelect.value = valAuto;
     }
 };
 
-// 4. 최종 연동 적용
 window.applySmartPastMapping = function() {
     const sheet = document.getElementById('smartPastSheet').value;
+    const webKeyIdx = document.getElementById('webKeyCol').value; 
     const assetCol = document.getElementById('smartPastAssetCol').value;
     const valCol = document.getElementById('smartPastValCol').value;
 
     const pastData = window.tempPastParsed[sheet];
-    if (!pastData || !assetCol || !valCol) return alert("설정을 확인해 주세요.");
+    if (!pastData || !webKeyIdx || !assetCol || !valCol) return alert("설정을 확인해 주세요.");
 
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
-    const curAssetNumIdx = Object.keys(wiz.mapped).indexOf('자산번호');
-    const curPastClassIdx = Object.keys(wiz.mapped).length; // 0번 추가열 (과거 구분)
+    const mappedColCount = Object.keys(wiz.mapped).length || 7;
+    const curPastClassIdx = mappedColCount; 
 
     if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
     
     let matchCount = 0;
     
-    // [핵심 개선] 하이픈, 공백 제거 및 대문자 통일을 수행하는 정규화 헬퍼 함수
+    // 딥클린 (모든 공백, 콤마, 특수문자 파괴)
     const normalizeKey = (str) => {
         if (!str) return '';
-        // -, _, 공백을 모두 지우고 무조건 영문 대문자로 변환하여 비교 기준 통일
-        return String(str).toUpperCase().replace(/[-_\s]/g, '');
+        return String(str).toUpperCase().replace(/[\u200B-_\s,]/g, '');
     };
 
-    // 빠른 검색을 위한 정규화된 과거 데이터 Map 생성
     const pastMap = {};
     pastData.forEach(row => {
         const rawNum = String(row[assetCol] || '').trim();
         const normNum = normalizeKey(rawNum);
-        if (normNum) {
+        if (normNum && !normNum.includes('자산번호')) {
             pastMap[normNum] = String(row[valCol] || '').trim();
         }
     });
 
-    // 현재 표 데이터 덮어쓰기
     tData.raw.forEach((curRow, rIdx) => {
         const yearVal = String(curRow[wiz.mapped['취득년도']] || '');
         if (yearVal.includes('소계') || yearVal.includes('총계')) return;
 
-        const rawCurNum = String(curRow[curAssetNumIdx] || '').trim();
+        // 파트장님이 지정한 [웹 C열]에서 값을 강제로 뜯어옴
+        const rawCurNum = String(curRow[webKeyIdx] || '').trim();
         const normCurNum = normalizeKey(rawCurNum);
 
         if (normCurNum && pastMap[normCurNum] !== undefined) {
             const matchedVal = pastMap[normCurNum];
             curRow[curPastClassIdx] = matchedVal;
             
-            // 최종 구분 열(idx + 4)에도 함께 연동되도록 처리
             const finalIdx = curPastClassIdx + 4;
             if(typeof window.syncToFinal === 'function') {
                 window.syncToFinal(rIdx, finalIdx, matchedVal, curPastClassIdx);
@@ -1277,7 +1260,7 @@ window.applySmartPastMapping = function() {
 
     document.getElementById('smartPastModal').style.display = 'none';
     if(typeof window.infRenderTable === 'function') window.infRenderTable();
-    alert(`✅ 스마트 과거 데이터 연동 완료!\n선택하신 열의 데이터가 총 ${matchCount}건 유연 매칭되었습니다.`);
+    alert(`🚀 [좌표 기반 딥클린 매칭] 완료!\n지정하신 웹 열(${webKeyIdx})과 엑셀 열(${assetCol})을 대조하여 총 ${matchCount}건을 매칭했습니다.`);
 };
 
 // ============================================================================
