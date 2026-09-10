@@ -746,15 +746,25 @@ window.saveProject = function() {
             sidebarStates[menu.id] = { className: menu.className, badgeHtml: badge ? badge.outerHTML : '' };
         });
 
+        // [최적화 1] 용량 과부하를 막기 위해 물가보정 되돌리기(Undo) 히스토리 비우기
+        if (window.infState && window.infState.data) {
+            for (let tab in window.infState.data) {
+                if (window.infState.data[tab].history) {
+                    window.infState.data[tab].history = []; 
+                }
+            }
+        }
+
+        // [최적화 2] 물가지수 데이터(inflationSheets, indexData) 중복 저장 제거
         const projectData = {
             version: "2.3", contractor: contractorName, evalYear: evalYear, locations: locations, 
             sidebarStates: sidebarStates, 
             unitCostPath: document.getElementById('unitCostPath') ? document.getElementById('unitCostPath').value : "",
             priceIndexPath: document.getElementById('priceIndexPath') ? document.getElementById('priceIndexPath').value : "",
             tempKfpaDataStore: window.tempKfpaDataStore || {}, targetKfpaSite: window.targetKfpaSite || "", targetKfpaAddress: window.targetKfpaAddress || "",
-            kbState: window.kbState, inflationSheets: window.kbState.inflationSheets || null,
-            indexData: window.kbState.indexData || null, infState: window.infState || null,
-            verifState: window.verifState // ★ 핵심: 검산 모듈 데이터 완벽 보존
+            kbState: window.kbState, 
+            infState: window.infState || null,
+            verifState: window.verifState 
         };
 
         const jsonString = JSON.stringify(projectData);
