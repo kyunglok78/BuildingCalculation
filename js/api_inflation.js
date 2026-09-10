@@ -61,7 +61,6 @@ window.infInitTabs = function() {
     if(tabContainers.length === 0) return;
     
     tabContainers.forEach((container, cIdx) => {
-        // 혹시 남아있을 수 있는 스위치 UI 찌꺼기 제거
         const parentId = container.parentElement.id || ('sec_' + cIdx);
         const oldProgDiv = document.getElementById('progModeContainer_' + parentId);
         if(oldProgDiv) oldProgDiv.remove();
@@ -70,7 +69,6 @@ window.infInitTabs = function() {
         
         window.infState.tabs.forEach((tabName, idx) => {
             if(!window.infState.data[tabName]) {
-                // ★ 각 탭마다 현재 단계를 기억할 변수(step) 추가
                 window.infState.data[tabName] = { raw: [], history: [], selectedRows: new Set(), selectedCols: new Set(), hasSubtotal: false, step: 1 };
             }
             
@@ -93,7 +91,6 @@ window.infInitTabs = function() {
 
                 window.infState.activeTab = tabName;
                 
-                // ★ 탭을 누르면, 해당 탭이 저장해둔 단계로 화면 강제 이동 (완벽 독립 진행)
                 const targetStep = window.infState.data[tabName].step || 1;
                 if (window.infState.step !== targetStep) {
                     if (typeof switchSection === 'function') switchSection('sec-2-3-' + targetStep);
@@ -130,7 +127,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if(infMenu3) infMenu3.addEventListener('click', () => initFn(3));
 });
 
-
 // ============================================================================
 // [섹션 3] 엑셀 로드 및 1단계 매핑 마법사 로직
 // ============================================================================
@@ -139,7 +135,6 @@ window.infLoadExcel = function(event) {
     if(!file) return;
     const tabName = window.infState.activeTab;
     
-    // [추가된 방어 로직] 활성화된 탭 이름이 없는 상태에서 로드되는 것을 차단
     if (!tabName) {
         alert("선택된 사업장 탭이 없습니다. 새로고침 후 다시 시도해 주세요.");
         event.target.value = '';
@@ -149,7 +144,6 @@ window.infLoadExcel = function(event) {
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
-            // [수정된 핵심 로직] XLSX.read()를 단 한 번만 호출하여 워크북을 메모리에 할당 후 순차적으로 시트와 데이터를 추출
             const dataArray = new Uint8Array(e.target.result);
             const workbook = XLSX.read(dataArray, { type: 'array' });
             const firstSheetName = workbook.SheetNames[0];
@@ -290,11 +284,9 @@ window.infFinishMapping = function() {
     if(typeof infRenderTable === 'function') infRenderTable();
 };
 
-
 // ============================================================================
-// [섹션 4] 상태 표시/스텝 전환 및 테이블 렌더링 엔진 (다중 화면 연동)
+// [섹션 4] 상태 표시/스텝 전환 및 테이블 렌더링 엔진
 // ============================================================================
-
 window.infUpdateStatusBadges = function() {
     const step1 = document.getElementById('nav-sec-2-3-1');
     const step2 = document.getElementById('nav-sec-2-3-2');
@@ -349,7 +341,6 @@ window.infUpdateStepper = function() {
         const el4 = document.getElementById('step-2-4');
         const el5 = document.getElementById('step-2-5');
         
-        // ★ 하드코딩 삭제: 취득일 제거 여부에 따라 유동적인 컬럼수 자동 계산
         const mappedColCount = Object.keys(wiz.mapped).length || 7;
         const finalIdx = mappedColCount + 4;
         let hasFinal = false;
@@ -510,10 +501,7 @@ window.infRenderTable = function() {
 
     const data = tData.raw;
     
-    // ★ [핵심 변경 및 방어 로직] 기본적으로 7개 열로 세팅
     let finalColumns = ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득년도', '취득가액'];
-    
-    // 과거에 '취득일'이 포함된 채로 저장되었던 8개 열 프로젝트 파일을 불러왔을 때 표 깨짐을 막는 하위호환 장치
     if (wiz.mapped && wiz.mapped['취득일'] !== undefined) {
         finalColumns = ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득일', '취득년도', '취득가액'];
     }
@@ -1026,11 +1014,9 @@ document.addEventListener('keydown', function(e) {
         if(typeof window.infRenderTable === 'function') window.infRenderTable();
     }
     
-    // ★ [핵심] 행/열 삭제 로직 (Delete 키, Backspace 키 연동 및 인풋박스 삭제 시 행 날아감 방어)
     const isDeleteKey = e.key === 'Delete' || e.key === 'Backspace' || ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_'));
     
     if (isDeleteKey) {
-        // 인풋 박스(텍스트 입력칸) 안에서 글씨를 지우는 중이라면 행 전체 삭제 방지
         const activeTag = document.activeElement.tagName.toUpperCase();
         if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
 
@@ -1063,37 +1049,34 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!document.getElementById('smartPastModal')) {
         const modalHtml = `
         <div class="modal-overlay" id="smartPastModal" style="display:none; z-index: 1050; justify-content: center; align-items: center;">
-            <div class="modal-content" style="width: 550px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+            <div class="modal-content" style="width: 500px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
                 <div class="modal-header" style="background:#1C5691; color:white; padding:15px; display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-weight:bold; font-size: 16px;"><i class="fa-solid fa-link"></i> 4단계 스마트 과거 데이터 연동 마법사</span>
+                    <span style="font-weight:bold;"><i class="fa-solid fa-link"></i> 스마트 과거 데이터 연동 마법사</span>
                     <i class="fa-solid fa-xmark modal-close" style="cursor:pointer; font-size:18px;" onclick="document.getElementById('smartPastModal').style.display='none'"></i>
                 </div>
                 <div class="modal-body" style="padding: 25px; background:#f4f5f7;">
                     <p style="font-size:13px; color:#555; margin-bottom:20px; line-height:1.5;">
-                        👉 엑셀의 복잡한 구조와 무관하게, <b>[웹 명세서의 기둥]</b>과 <b>[과거 엑셀의 기둥]</b>을 1:1로 직접 지정하여 100% 강제 연동합니다.
+                        👉 불러온 파일(.xlsx 또는 .kbproj)에서 매칭할 <b>시트명</b>과 <b>자산번호 열</b>, 그리고 가져올 <b>데이터 열</b>을 직접 선택해 주세요.
                     </p>
                     <div style="background:#fff; padding:15px; border:1px solid #ddd; border-radius:4px; margin-bottom:15px;">
-                        
-                        <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">① 불러올 엑셀 시트 선택</label>
-                        <select id="smartPastSheet" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc; margin-bottom: 20px;" onchange="window.updateSmartPastHeaders()"></select>
+                        <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">① 불러올 시트(사업장) 선택</label>
+                        <select id="smartPastSheet" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc; margin-bottom: 15px;" onchange="window.updateSmartPastHeaders()"></select>
 
-                        <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px; color:#d32f2f;">② [현재 웹 명세서] '자산번호' 열 위치 (C열=2)</label>
-                        <select id="webKeyCol" class="input-box" style="width:100%; padding:8px; border:2px solid #d32f2f; background:#fff3f3; margin-bottom: 20px; font-weight:bold;"></select>
+                        <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">② 기준 키 (자산번호 열) 선택</label>
+                        <select id="smartPastAssetCol" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc; margin-bottom: 15px;"></select>
 
-                        <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px; color:#1C5691;">③ [과거 엑셀] 매칭 기준 열 (자산번호 H열=7)</label>
-                        <select id="smartPastAssetCol" class="input-box" style="width:100%; padding:8px; border:2px solid #1C5691; background:#f0f7ff; margin-bottom: 20px; font-weight:bold;"></select>
-
-                        <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px; color:#28a745;">④ [과거 엑셀] 가져올 '구분' 열 (AG열=32)</label>
-                        <select id="smartPastValCol" class="input-box" style="width:100%; padding:8px; border:2px solid #28a745; background:#f0fdf4; font-weight:bold;"></select>
+                        <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">③ 가져올 데이터 (물가지수/구분) 열 선택</label>
+                        <select id="smartPastValCol" class="input-box" style="width:100%; padding:8px; border:2px solid #1C5691;"></select>
                     </div>
                     <div style="text-align: right;">
-                        <button type="button" class="btn-dark" style="background:#28a745; padding:10px 25px; border:none; font-weight:bold;" onclick="window.applySmartPastMapping()">⚡ 좌표 강제 연동 실행</button>
+                        <button type="button" class="btn-dark" style="background:#28a745; padding:10px 25px; border:none; font-weight:bold;" onclick="window.applySmartPastMapping()">⚡ 연동 적용하기</button>
                     </div>
                 </div>
             </div>
         </div>`;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
     }
+    
     const pastInput = document.getElementById('infPastExcelFile');
     if(pastInput) pastInput.accept = ".xlsx, .xls, .csv, .kbproj";
 });
@@ -1112,7 +1095,7 @@ window.infLoadPastData = function(event) {
         try {
             if (isKbproj) {
                 const projData = JSON.parse(e.target.result);
-                if (!projData.infState || !projData.infState.data) throw new Error("유효한 데이터가 없습니다.");
+                if (!projData.infState || !projData.infState.data) throw new Error("유효한 물가보정 데이터가 없습니다.");
                 
                 const headers = ['소재지', '자산계정', '자산번호', '자산명', '국산/외산', '취득년도', '취득가액', '과거구분', '기본지정', '평가제외', '부보제외', '최종선택', '물가지수', '재조달가액', '감가율', '잔가율', '현재가액', '비고'];
                 
@@ -1139,14 +1122,18 @@ window.infLoadPastData = function(event) {
                 workbook.SheetNames.forEach(sheetName => {
                     const sheet = workbook.Sheets[sheetName];
                     const sheetJson = XLSX.utils.sheet_to_json(sheet, {header: 1, defval: ""});
-                    if (sheetJson.length > 0) window.tempPastParsed[sheetName] = sheetJson;
+                    if (sheetJson.length > 0) {
+                        window.tempPastParsed[sheetName] = sheetJson;
+                    }
                 });
             }
 
-            if (Object.keys(window.tempPastParsed).length === 0) throw new Error("파일에서 데이터를 찾을 수 없습니다.");
+            if (Object.keys(window.tempPastParsed).length === 0) throw new Error("파일에서 연동 가능한 데이터를 찾을 수 없습니다.");
             window.openSmartPastModal();
 
-        } catch (err) { alert("파일 파싱 중 오류: " + err.message); }
+        } catch (err) {
+            alert("파일 파싱 중 오류: " + err.message);
+        }
     };
 
     if (isKbproj) reader.readAsText(file);
@@ -1159,16 +1146,6 @@ window.openSmartPastModal = function() {
     const sheetSelect = document.getElementById('smartPastSheet');
     sheetSelect.innerHTML = '';
     sheets.forEach(s => sheetSelect.innerHTML += `<option value="${s}">${s}</option>`);
-    
-    // 웹 열 번호 세팅
-    const webKeyCol = document.getElementById('webKeyCol');
-    webKeyCol.innerHTML = '';
-    for (let i = 0; i < 50; i++) {
-        let letter = String.fromCharCode(65 + (i % 26));
-        if (i >= 26) letter = String.fromCharCode(64 + Math.floor(i / 26)) + letter;
-        webKeyCol.innerHTML += `<option value="${i}">${letter} 열 (인덱스 ${i})</option>`;
-    }
-    webKeyCol.value = "2"; // C열 기본값
     
     window.updateSmartPastHeaders();
     document.getElementById('smartPastModal').style.display = 'flex';
@@ -1189,18 +1166,25 @@ window.updateSmartPastHeaders = function() {
     if (isArrayOfArrays) {
         let maxCols = 0;
         data.forEach(r => { if(r.length > maxCols) maxCols = r.length; });
-        if(maxCols < 40) maxCols = 40; 
         
         for(let i=0; i<maxCols; i++) {
             let letter = String.fromCharCode(65 + (i % 26));
             if (i >= 26) letter = String.fromCharCode(64 + Math.floor(i / 26)) + letter;
-            const optionHtml = `<option value="${i}">${letter} 열 (인덱스 ${i})</option>`;
+            const optionHtml = `<option value="${i}">${letter} 열</option>`;
             assetSelect.innerHTML += optionHtml;
             valSelect.innerHTML += optionHtml;
         }
 
-        assetSelect.value = "7";  // H열 기본
-        valSelect.value = "32"; // AG열 기본
+        let foundAssetCol = -1, foundValCol = -1;
+        for(let r=0; r<Math.min(10, data.length); r++) {
+            for(let c=0; c<data[r].length; c++) {
+                const cellStr = String(data[r][c]).replace(/\s/g,'');
+                if(foundAssetCol === -1 && (cellStr.includes('자산번호') || cellStr.includes('자산코드'))) foundAssetCol = c;
+                if(foundValCol === -1 && (cellStr.includes('최종구분') || cellStr.includes('과거구분') || cellStr.includes('평가결과') || cellStr.includes('물가지수'))) foundValCol = c;
+            }
+        }
+        if(foundAssetCol !== -1) assetSelect.value = foundAssetCol;
+        if(foundValCol !== -1) valSelect.value = foundValCol;
 
     } else {
         const headers = data.length > 0 ? Object.keys(data[0]) : [];
@@ -1212,6 +1196,7 @@ window.updateSmartPastHeaders = function() {
 
         const assetAuto = headers.find(h => String(h).includes('자산번호'));
         if (assetAuto) assetSelect.value = assetAuto;
+        
         const valAuto = headers.find(h => String(h).includes('최종선택') || String(h).includes('과거구분'));
         if (valAuto) valSelect.value = valAuto;
     }
@@ -1219,33 +1204,31 @@ window.updateSmartPastHeaders = function() {
 
 window.applySmartPastMapping = function() {
     const sheet = document.getElementById('smartPastSheet').value;
-    const webKeyIdx = document.getElementById('webKeyCol').value; 
     const assetCol = document.getElementById('smartPastAssetCol').value;
     const valCol = document.getElementById('smartPastValCol').value;
 
     const pastData = window.tempPastParsed[sheet];
-    if (!pastData || !webKeyIdx || !assetCol || !valCol) return alert("설정을 확인해 주세요.");
+    if (!pastData || !assetCol || !valCol) return alert("설정을 확인해 주세요.");
 
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
-    const mappedColCount = Object.keys(wiz.mapped).length || 7;
-    const curPastClassIdx = mappedColCount; 
+    const curAssetNumIdx = Object.keys(wiz.mapped).indexOf('자산번호');
+    const curPastClassIdx = Object.keys(wiz.mapped).length;
 
     if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
     
     let matchCount = 0;
     
-    // 딥클린 (모든 공백, 콤마, 특수문자 파괴)
     const normalizeKey = (str) => {
         if (!str) return '';
-        return String(str).toUpperCase().replace(/[\u200B-_\s,]/g, '');
+        return String(str).toUpperCase().replace(/[-_\s]/g, '');
     };
 
     const pastMap = {};
     pastData.forEach(row => {
         const rawNum = String(row[assetCol] || '').trim();
         const normNum = normalizeKey(rawNum);
-        if (normNum && !normNum.includes('자산번호')) {
+        if (normNum) {
             pastMap[normNum] = String(row[valCol] || '').trim();
         }
     });
@@ -1254,8 +1237,7 @@ window.applySmartPastMapping = function() {
         const yearVal = String(curRow[wiz.mapped['취득년도']] || '');
         if (yearVal.includes('소계') || yearVal.includes('총계')) return;
 
-        // 파트장님이 지정한 [웹 C열]에서 값을 강제로 뜯어옴
-        const rawCurNum = String(curRow[webKeyIdx] || '').trim();
+        const rawCurNum = String(curRow[curAssetNumIdx] || '').trim();
         const normCurNum = normalizeKey(rawCurNum);
 
         if (normCurNum && pastMap[normCurNum] !== undefined) {
@@ -1272,14 +1254,13 @@ window.applySmartPastMapping = function() {
 
     document.getElementById('smartPastModal').style.display = 'none';
     if(typeof window.infRenderTable === 'function') window.infRenderTable();
-    alert(`🚀 [좌표 기반 딥클린 매칭] 완료!\n지정하신 웹 열(${webKeyIdx})과 엑셀 열(${assetCol})을 대조하여 총 ${matchCount}건을 매칭했습니다.`);
+    alert(`✅ 스마트 과거 데이터 연동 완료!\n선택하신 열의 데이터가 총 ${matchCount}건 유연 매칭되었습니다.`);
 };
 
 // ============================================================================
 // [섹션 7] 자산 구분 일괄 지정 (기본/평가제외/부보제외 자동화)
 // ============================================================================
 
-// ★ 안전한 룰 로드 함수: 메모리가 초기화되어도 내장된 사전을 복구합니다.
 window.getSafeMappingRules = function() {
     if (window.infState && window.infState.mappingRules) return window.infState.mappingRules;
     
@@ -1381,7 +1362,6 @@ window.applyBasicClass = function() {
         if (inputMap[acc] !== undefined && inputMap[acc] !== "") {
             row[basicClassIdx] = inputMap[acc]; 
             
-            // ★ 값이 들어가면 최종 구분 열도 함께 업데이트되도록 연동!
             const finalIdx = Object.keys(wiz.mapped).length + 4;
             if(typeof window.syncToFinal === 'function') {
                 window.syncToFinal(rIdx, finalIdx, inputMap[acc], basicClassIdx);
@@ -1421,7 +1401,6 @@ window.assignExcludeEval = function() {
         const matched = rules.find(r => accStr.includes(r.keyword.toUpperCase()) || nameStr.includes(r.keyword.toUpperCase()));
         if (matched) {
             row[targetIdx] = matched.val;
-            // ★ 값이 들어가면 최종 구분 열도 함께 업데이트되도록 연동!
             if(typeof window.syncToFinal === 'function') {
                 window.syncToFinal(rIdx, finalIdx, matched.val, targetIdx);
             }
@@ -1460,7 +1439,6 @@ window.assignExcludeCoverage = function() {
         const matched = rules.find(r => accStr.includes(r.keyword.toUpperCase()) || nameStr.includes(r.keyword.toUpperCase()));
         if (matched) {
             row[targetIdx] = matched.val;
-            // ★ 값이 들어가면 최종 구분 열도 함께 업데이트되도록 연동!
             if(typeof window.syncToFinal === 'function') {
                 window.syncToFinal(rIdx, finalIdx, matched.val, targetIdx);
             }
@@ -1518,37 +1496,6 @@ window.assignFinalClass = function() {
 // ============================================================================
 // [섹션 8] 매핑 마스터 데이터 관리 (3가지 정책 통합 관리)
 // ============================================================================
-
-// ★ 초기 엑셀 데이터 100% 내장 (기본, 평가제외, 부보제외)
-const initialRules = {
-    basic: [
-        { keyword: '건물', val: '50' },
-        { keyword: '구축물', val: '50' },
-        { keyword: '기계장치', val: '47' },
-        { keyword: '공기구', val: '47' },
-        { keyword: '공구', val: '47' }, 
-        { keyword: '기구', val: '47' }, 
-        { keyword: '시설', val: '47' },
-        { keyword: '시설장치', val: '47' },
-        { keyword: '비품', val: '평가제외(비품)' },
-        { keyword: '차량운반구', val: '47' },
-        { keyword: '건설중 자산', val: '평가제외(건설중 자산)' },
-        { keyword: '건설중자산', val: '평가제외(건설중 자산)' },
-        { keyword: '건물부속설비', val: '50' },
-        { keyword: '금형', val: '47' }
-    ],
-    evalExclude: [
-        {'keyword': 'SOFTWARE', 'val': '평가제외(S/W)'}, {'keyword': 'S.W', 'val': '평가제외(S/W)'}, {'keyword': 'PROGRAM', 'val': '평가제외(S/W)'}, {'keyword': '소프트웨어', 'val': '평가제외(S/W)'}, {'keyword': '프로그램', 'val': '평가제외(S/W)'}, {'keyword': 'S/W', 'val': '평가제외(S/W)'}, {'keyword': 'LICENSE', 'val': '평가제외(S/W)'}, {'keyword': '설계비', 'val': '평가제외(설계/감리/용역)'}, {'keyword': '감리비', 'val': '평가제외(설계/감리/용역)'}, {'keyword': '용역비', 'val': '평가제외(설계/감리/용역)'}, {'keyword': '설계', 'val': '평가제외(설계/감리/용역)'}, {'keyword': '감리', 'val': '평가제외(설계/감리/용역)'}, {'keyword': '용역', 'val': '평가제외(설계/감리/용역)'}, {'keyword': '운송비', 'val': '평가제외(운송비용)'}, {'keyword': '운송', 'val': '평가제외(운송비용)'}, {'keyword': '운임', 'val': '평가제외(운임비용)'}, {'keyword': '운임비', 'val': '평가제외(운임비용)'}, {'keyword': '조사비', 'val': '평가제외(조사비용)'}, {'keyword': '인건비', 'val': '평가제외(인건비용)'}, {'keyword': '미술품', 'val': '평가제외(미술품)'}, {'keyword': '예술품', 'val': '평가제외(예술품)'}, {'keyword': '조각상', 'val': '평가제외(조각상)'}, {'keyword': '시운전', 'val': '평가제외(건설중인자산)'}, {'keyword': '중고', 'val': '평가제외(중고자산)'}, {'keyword': '조경', 'val': '평가제외(조경)'}, {'keyword': '연못', 'val': '평가제외(조경)'}, {'keyword': '정원', 'val': '평가제외(조경)'}, {'keyword': '이전공사', 'val': '평가제외(이전/이설자산)'}, {'keyword': '이설공사', 'val': '평가제외(이전/이설자산)'}, {'keyword': '이전', 'val': '평가제외(이전/이설자산)'}, {'keyword': '이설', 'val': '평가제외(이전/이설자산)'}, {'keyword': 'OVERHAUL', 'val': '평가제외(오버홀)'}, {'keyword': '오버홀', 'val': '평가제외(오버홀)'}, {'keyword': '레이아웃변경', 'val': '평가제외(레이아웃변경)'}, {'keyword': 'LAYOUT', 'val': '평가제외(레이아웃변경)'}, {'keyword': 'LAY OUT', 'val': '평가제외(레이아웃변경)'}, {'keyword': '수리', 'val': '평가제외(수리비용)'}, {'keyword': '보수', 'val': '평가제외(보수비용)'}, {'keyword': '인허가', 'val': '평가제외(인허가비용)'}, {'keyword': '검사', 'val': '평가제외(검사)'}, {'keyword': '컨설팅업체 선정', 'val': '평가제외(업체선정용역)'}, {'keyword': '광고판', 'val': '평가제외(간판)'}, {'keyword': '아스콘작업', 'val': '평가제외(아스콘)'}, {'keyword': '임대', 'val': '평가제외(임대비)'}, {'keyword': '입목', 'val': '평가제외(입목)'}, {'keyword': '시설분담금', 'val': '평가제외(시설분담금)'}, {'keyword': '개발비', 'val': '평가제외(개발비)'}, {'keyword': '투자비', 'val': '평가제외(투자비)'}, {'keyword': 'USED', 'val': '평가제외(중고자산)'}, {'keyword': '아파트', 'val': '평가제외(주택화재보험대상)'}, {'keyword': '기숙사', 'val': '평가제외(주택화재보험대상)'}, {'keyword': '사택', 'val': '평가제외(주택화재보험대상)'}, {'keyword': '숙소', 'val': '평가제외(주택화재보험대상)'}
-    ],
-    covExclude: [
-        {'keyword': '토지', 'val': '부보제외(토지)'}, 
-        {'keyword': '취득세', 'val': '부보제외(세금)'}, {'keyword': '등록세', 'val': '부보제외(세금)'}, {'keyword': '농특세', 'val': '부보제외(세금)'}, {'keyword': '상표권', 'val': '부보제외(상표권)'}, {'keyword': '회원권', 'val': '부보제외(회원권)'}, {'keyword': '콘도', 'val': '부보제외(회원권)'}, {'keyword': '이용권', 'val': '부보제외(이용권)'}, {'keyword': '특허권', 'val': '부보제외(특허권)'}, {'keyword': '특허', 'val': '부보제외(특허권)'}, {'keyword': '철거', 'val': '부보제외(철거비용)'}, {'keyword': '복구', 'val': '부보제외(복구비용)'}, {'keyword': '이자', 'val': '부보제외(이자비용)'}, {'keyword': '부담금', 'val': '부보제외(부담금)'}, {'keyword': '분담금', 'val': '부보제외(분담금)'}, {'keyword': '사용료', 'val': '부보제외(사용료)'}, {'keyword': '수수료', 'val': '부보제외(수수료)'}, {'keyword': '양도', 'val': '부보제외(양도자산)'}, {'keyword': '실용신안', 'val': '부보제외(실용신안권)'}, {'keyword': '디자인등록', 'val': '부보제외(의장권)'}, {'keyword': '지하수개발', 'val': '부보제외(지하자산)'}, {'keyword': '수수료 및 이자, 등기비용', 'val': '부보제외(비용성격)'}, {'keyword': '한전불입금', 'val': '부보제외(한전불입금)'}, {'keyword': '무형자산', 'val': '부보제외(무형자산)'}, {'keyword': '안전진단비', 'val': '부보제외(비용성격)'}, {'keyword': '구조검토비용', 'val': '부보제외(비용성격)'}, {'keyword': '등기비', 'val': '부보제외(비용성격)'}, {'keyword': '시설부담금', 'val': '부보제외(시설부담금)'}, {'keyword': '권리금', 'val': '부보제외(권리금)'}, {'keyword': '지질조사', 'val': '부보제외(지질조사)'}, {'keyword': '도로부담금', 'val': '부보제외(도로부담금)'}, {'keyword': '측량비', 'val': '부보제외(비용성격)'}, {'keyword': '자동차보험가입대상', 'val': '부보제외(중복보험)'}, {'keyword': '주택화재보험가입대상', 'val': '부보제외(중복보험)'}
-    ]
-};
-
-// 캐시에서 가져오기 (없으면 엑셀 데이터 초기값 적용)
-window.infState.mappingRules = JSON.parse(localStorage.getItem('kb_mapping_rules_v3')) || initialRules;
-
 window.openRuleManager = function() {
     document.getElementById('ruleTypeSelect').value = 'basic';
     window.renderRuleManagerRows();
@@ -1693,7 +1640,6 @@ window.applyInflationIndex = function() {
             let indexValue = "";
             let replacementCost = 0;
 
-            // [신축단가평가 예외 처리 추가] '신축단가' 포함 시 계산 건너뜀
             if (finalVal.includes('부보제외') || finalVal.includes('신축단가')) {
                 indexValue = "-"; replacementCost = "-"; 
             } else if (finalVal.includes('평가제외')) {
@@ -1742,7 +1688,347 @@ window.applyInflationIndex = function() {
     } catch (err) { alert("계산 중 오류가 발생했습니다.\n" + err.message); }
 };
 
-// ... [중략] DEPR_REF_DATA(표준감가율 DB표) 부분은 기존과 동일하므로 생략 없이 그대로 유지하시면 됩니다 ...
+// ★ 엑셀 데이터 압축 내장 (4개 시트 - 업종감가율 100% 원본 포함)
+window.DEPR_REF_DATA = {
+    sheet1: {
+        head: `<tr><th rowspan="2" style="background:#e9ecef;">건물 구조별</th><th colspan="2" style="background:#d1e7dd;">우기 이외 (일반건물)</th><th colspan="2" style="background:#ffe69c;">창고, 공장</th><th colspan="2" style="background:#f8d7da;">특수건물 (냉장, 화학 등)</th></tr>
+               <tr><th style="background:#d1e7dd;">내용연수</th><th style="background:#d1e7dd;">감가율(%)</th><th style="background:#ffe69c;">내용연수</th><th style="background:#ffe69c;">감가율(%)</th><th style="background:#f8d7da;">내용연수</th><th style="background:#f8d7da;">감가율(%)</th></tr>`,
+        body: [
+            ["철골·철근콘크리트조, 철근콘크리트조", "75", "1.07", "57", "1.40", "38", "2.11"],
+            ["철골조, 석조, 연와석조", "60", "1.33", "45", "1.78", "30", "2.67"],
+            ["콘크리트, 연와, 벽돌, 보강블럭, 목조(한식)", "50", "1.60", "38", "2.11", "25", "3.20"],
+            ["블럭조, 경량철골, 단열판넬, 목조(절충식)", "40", "2.00", "30", "2.67", "20", "4.00"],
+            ["토조, 토벽조, 목골몰탈조", "30", "2.67", "23", "3.48", "15", "5.33"],
+            ["간이목조, 간이철재 파이프, 컨테이너", "10", "8.00", "7", "11.43", "7", "11.43"]
+        ]
+    },
+    sheet2: {
+        head: `<tr><th rowspan="2" style="background:#e9ecef;">구축물 구조별</th><th colspan="2" style="background:#d1e7dd;">일반 구축물</th><th colspan="2" style="background:#f8d7da;">가혹한 구축물 (하수도, 굴뚝 등)</th></tr>
+               <tr><th style="background:#d1e7dd;">내용연수</th><th style="background:#d1e7dd;">감가율(%)</th><th style="background:#f8d7da;">내용연수</th><th style="background:#f8d7da;">감가율(%)</th></tr>`,
+        body: [
+            ["철골·철근콘크리트조, 철근콘크리트조", "75", "1.07", "38", "2.11"],
+            ["철골조, 석조, 연와석조", "60", "1.33", "30", "2.67"],
+            ["콘크리트, 연와, 벽돌, 보강블럭조", "45", "1.78", "23", "3.48"],
+            ["블록조, 경량철골, 단열판넬, 목조", "38", "2.11", "18", "4.45"],
+            ["토조, 토벽조, 목골몰탈조", "30", "2.67", "15", "5.33"]
+        ]
+    },
+    sheet3: {
+        head: `<tr>
+            <th style="background:#e9ecef; width:22%;">대분류</th>
+            <th style="background:#e9ecef; width:22%;">중분류</th>
+            <th style="background:#e9ecef; width:36%;">소분류</th>
+            <th style="background:#d1e7dd; width:10%;">내용연수(년)</th>
+            <th style="background:#ffe69c; width:10%;">감가율(%)</th>
+        </tr>`,
+        body: [
+            ["농업, 임업 및 어업", "농업", "작물 재배업", "8", "10.0"],
+            ["", "", "축산업", "8", "10.0"],
+            ["", "", "작물재배 및 축산 복합농업", "8", "10.0"],
+            ["", "", "작물재배 및 축산 관련 서비스업", "8", "10.0"],
+            ["", "", "수렵 및 관련 서비스업", "8", "10.0"],
+            ["", "", "과수", "30", "2.67"],
+            ["", "임업", "임업", "8", "10.0"],
+            ["", "어업", "어로 어업", "10", "8.0"],
+            ["", "", "양식어업 및 어업관련 서비스업", "10", "8.0"],
+            ["광업", "석탄, 원유 및 천연가스 광업 금속 광업", "석탄 광업", "10", "8.0"],
+            ["", "", "원유 및 천영가스 채굴업", "10", "8.0"],
+            ["", "금속광업", "철 광업", "15", "5.33"],
+            ["", "", "비철금속 광업", "15", "5.33"],
+            ["", "비금속광물 광업; 연료용 제외", "토사석 광업", "15", "5.33"],
+            ["", "", "기타 비금속광물 광업", "15", "5.33"],
+            ["", "광업 지원 서비스업", "광업 지원 서비스업", "8", "10.0"],
+            ["제조업", "식료품제조업", "도축, 육류 가공 및 저장 처리업", "12", "6.67"],
+            ["", "", "수산물 가공 및 저장 처리업", "12", "6.67"],
+            ["", "", "과일, 재소 가공 및 저장 처리업", "12", "6.67"],
+            ["", "", "동물성 및 식물성 유지 제조업", "12", "6.67"],
+            ["", "", "낙농제품 및 식용빙과류 제조업", "12", "6.67"],
+            ["", "", "곡물가공품, 전분 및 전분 제품 제조업", "12", "6.67"],
+            ["", "", "기타 식품 제조업", "12", "6.67"],
+            ["", "", "동물용 사료 및 조제 식품 제조업", "12", "6.67"],
+            ["", "음료제조업", "알코올음료 제조업", "12", "6.67"],
+            ["", "", "비알콜음료 및 얼음 제조업", "12", "6.67"],
+            ["", "담배 제조업", "담배 제조업", "15", "5.33"],
+            ["", "섬유제품제조업 ; 의복제외", "방적 및 가공사 제조업", "12", "6.67"],
+            ["", "", "직물직조 및 직물제품 제조업", "12", "6.67"],
+            ["", "", "편조원단 및 편조제품 제조업", "12", "6.67"],
+            ["", "", "기타 섬유제품 제조업", "12", "6.67"],
+            ["", "", "섬유제품 염색, 정리 및 마무리 가공업", "10", "8.0"],
+            ["", "의복, 의복액세서리 및 모피제품 제조업", "봉제의복 제조업", "10", "8.0"],
+            ["", "", "모피가공 및 모피제품 제조업", "10", "8.0"],
+            ["", "", "편조 의복 제조업", "10", "8.0"],
+            ["", "", "의복 액세서리 제조업", "10", "8.0"],
+            ["", "가죽, 가방 및 신발 제조업", "가죽, 가방 및 유사제품 제조업", "12", "6.67"],
+            ["", "", "신발 및 신발부부품 제조업", "12", "6.67"],
+            ["", "", "가죽, 가방 및 유사제품 제조업 중 원피가공 및 가죽제조업", "10", "8.0"],
+            ["", "목재 및 나무제품 제조업 ;가구제외", "제재 및 목재 가공업", "12", "6.67"],
+            ["", "", "나무제품 제조업", "12", "6.67"],
+            ["", "", "코르크 및 조물 제품 제조업", "12", "6.67"],
+            ["", "펄프, 종이 및 종이제품 제조업", "펄프, 종이 및 판지 제조업", "15", "5.33"],
+            ["", "", "골판지, 종이 상자 및 종이 용기 제조업", "15", "5.33"],
+            ["", "", "기타 종이 및 판지 제품제조업", "15", "5.33"],
+            ["", "인쇄 및 기록매체 복제업", "인쇄 및 인쇄관련 산업", "10", "8.0"],
+            ["", "", "기록매체 복제업", "10", "8.0"],
+            ["", "코크스, 연탄 및 석유정제품 제조업", "코크스 및 연탄 제조업", "10", "8.0"],
+            ["", "", "석유 정제품 제조업", "10", "8.0"],
+            ["", "화학물질 및 화학제품 제조업 ;의약품 제외", "기초화학물질 제조업", "10", "8.0"],
+            ["", "", "합성 고무 및 플라스틱 물질  제조업", "10", "8.0"],
+            ["", "", "기타화학제품 제조업", "10", "8.0"],
+            ["", "", "화학섬유 제조업", "10", "8.0"],
+            ["", "", "비료 및 질소화합물 제조업", "6", "13.33"],
+            ["", "", "기타 화학제품 제조업 중 살충제 및 기타농약제조업", "6", "13.33"],
+            ["", "의료용 물질 및 의약품 제조업", "기초 의약물질 및 생물학적 제제 제조업", "6", "13.33"],
+            ["", "", "의약품 제조업", "6", "13.33"],
+            ["", "", "의료용품 및 기타의약 관련제품 제조업", "6", "13.33"],
+            ["", "고무제품 및 플라스틱제품 제조업", "고무제품 제조업", "12", "6.67"],
+            ["", "", "플라스틱제품 제조업", "12", "6.67"],
+            ["", "비금속 광물제품 제조업", "도자기 및 기타 요업제품 제조업", "12", "6.67"],
+            ["", "", "시멘트, 석회, 플라스터 및 그 제품 제조업", "12", "6.67"],
+            ["", "", "기타 비금속 광물제품 제조업", "12", "6.67"],
+            ["", "", "유리 및 유리제품 제조업", "10", "8.0"],
+            ["", "1차 금속 제조업", "1차 철강 제조업", "15", "5.33"],
+            ["", "", "1차 비철 금속제조업", "15", "5.33"],
+            ["", "", "금속 주조업", "15", "5.33"],
+            ["", "금속가공제품 제조업  ;기계 및 가구제외", "구조용 금속제품, 탱크 및 증기발생기 제조업", "15", "5.33"],
+            ["", "", "무기 및 총포탄 제조업", "15", "5.33"],
+            ["", "", "기타 금속 가공제품 제조업", "15", "5.33"],
+            ["", "전자부품, 컴퓨터, 영상, 음향 및 통신장비 제조업", "반도체 제조업", "6", "13.33"],
+            ["", "", "전자부품 제조업", "6", "13.33"],
+            ["", "", "통신 및 방송 장비 제조업", "6", "13.33"],
+            ["", "", "영상 및 음향기기 제조업", "6", "13.33"],
+            ["", "", "컴퓨터 및 주변장치 제조업", "6", "13.33"],
+            ["", "의료, 정밀, 광학기기 및 시계 제조업", "의료용 기기 제조업", "12", "6.67"],
+            ["", "", "측정, 시험, 항해, 제어 및 기타 정밀기기 제조업: 공학기기 제외", "12", "6.67"],
+            ["", "", "안경, 사진장비 및 기타 광학기기 제조업", "12", "6.67"],
+            ["", "", "시계 및 시계 부품 제조업", "12", "6.67"],
+            ["", "전기장비 제조업", "전동기, 발전기 및 전기 변환, 공급, 제어장치 제조업", "10", "8.0"],
+            ["", "", "일차전치 및 축전지 제조업", "10", "8.0"],
+            ["", "", "절연선 및 케이블 제조업", "10", "8.0"],
+            ["", "", "가정용 기기 제조업", "10", "8.0"],
+            ["", "", "기타 전기장비 제조업", "10", "8.0"],
+            ["", "기타 기계 및 장비 제조업", "일반목적용기계제조업", "12", "6.67"],
+            ["", "", "특수목적용 기계제조업", "12", "6.67"],
+            ["", "자동차 및 트레일러제조업", "자동차용 엔진 및 자동차 제조업", "10", "8.0"],
+            ["", "", "자동차 차체 및 트레일러제조업", "10", "8.0"],
+            ["", "", "자동차 부품 제조업", "10", "8.0"],
+            ["", "기타 운송장비 제조업", "선박 및 보트 건조업", "12", "6.67"],
+            ["", "", "철도장비제조업", "12", "6.67"],
+            ["", "", "항공기, 우주선 및 부품 제조업", "12", "6.67"],
+            ["", "", "그외 기타 운송장비제조업", "12", "6.67"],
+            ["", "가구제조업", "가구제조업", "12", "6.67"],
+            ["", "기타 제품 제조업", "귀금속 및 장신용품 제조업", "12", "6.67"],
+            ["", "", "악기 제조업", "12", "6.67"],
+            ["", "", "운동 및 경기 용구 제조업", "12", "6.67"],
+            ["", "", "인형, 장난감 및 오락용구 제조업", "12", "6.67"],
+            ["", "", "그외 기타 제품 제조업", "12", "6.67"],
+            ["전기, 가스, 증기 및 수도사업", "전기, 가스, 증기 및 공기조절 공급업", "전기업", "30", "2.67"],
+            ["", "", "가스 제조 및 배관 공급업", "30", "2.67"],
+            ["", "", "증기, 냉온수 및 공기조절 공급업", "30", "2.67"],
+            ["", "수도사업", "수도사업", "30", "2.67"],
+            ["하수, 폐기물 처리, 원료재생 및 환경복원업", "하수, 폐수 및 분뇨 처리업", "하수, 폐수 및 분뇨 처리업", "12", "6.67"],
+            ["", "폐기물 수집운반, 처리 및 원료재생업", "폐기물 수집운반업", "12", "6.67"],
+            ["", "", "폐기물 처리업", "12", "6.67"],
+            ["", "", "금속 및 비금속 원료 재생업", "12", "6.67"],
+            ["", "환경 정화 및 복원업", "환경 정화 및 복원업", "12", "6.67"],
+            ["건설업", "종합 건설업", "건물 건설업", "10", "8.0"],
+            ["", "", "토목 건설업", "10", "8.0"],
+            ["", "전문직별 공사업", "기반조성 및 시설물 축조관련 전문공사업", "10", "8.0"],
+            ["", "", "건물설비 설치 공사업", "10", "8.0"],
+            ["", "", "전기 및 통신 공사업", "10", "8.0"],
+            ["", "", "실내건축 및 건축마무리 공사업", "10", "8.0"],
+            ["", "", "건설장비 운영업", "10", "8.0"],
+            ["도매 및 소매업", "자동차 및 부품 판매업", "자동차 판매업", "10", "8.0"],
+            ["", "", "자동차 부품 및 내장품 판매업", "10", "8.0"],
+            ["", "", "모터사이클 및 부품 판매업", "10", "8.0"],
+            ["", "도매 및 상품중개업", "상품 중개업", "10", "8.0"],
+            ["", "", "산업용 농축산물 및 산동물 도매업", "10", "8.0"],
+            ["", "", "음,식료품 및 담배 도매업", "10", "8.0"],
+            ["", "", "기계장비 및 관련 물품 도매업", "10", "8.0"],
+            ["", "", "건축자재, 철물 및 난방장치 도매업", "10", "8.0"],
+            ["", "", "기타 전문 도매업", "10", "8.0"],
+            ["", "", "상품종합 도매업", "10", "8.0"],
+            ["", "소매업 ;자동차 제외", "종합 소매업", "10", "8.0"],
+            ["", "", "음,식료품 및 담배 소매업", "10", "8.0"],
+            ["", "", "정보통신장비 소매업", "10", "8.0"],
+            ["", "", "섬유, 위복 신발 및 가죽제품 소매업", "10", "8.0"],
+            ["", "", "기타 가정 용품 소매업", "10", "8.0"],
+            ["", "", "문화, 오락 및 여가용품 소매업", "10", "8.0"],
+            ["", "", "연료 소매업", "10", "8.0"],
+            ["", "", "기타상품 소매업", "10", "8.0"],
+            ["", "", "무점포 소매업", "10", "8.0"],
+            ["운수업", "육상운송 및 파이프라인 운송업", "철도운송업", "8", "10.0"],
+            ["", "", "육상 여객 우송업", "8", "10.0"],
+            ["", "", "도로 화물 운송업", "8", "10.0"],
+            ["", "", "소화물 전문 운송업", "8", "10.0"],
+            ["", "", "파이프 라인 운송업", "8", "10.0"],
+            ["", "", "철도운송업", "24", "3.33"],
+            ["", "수상 운송업", "해상 운송업", "15", "5.33"],
+            ["", "", "내륙 수상 및 항만내 운송업", "15", "5.33"],
+            ["", "", "외항운송업 중 외항화물운송업", "24", "3.33"],
+            ["", "항공 운송업", "정기 항공 운송업", "15", "5.33"],
+            ["", "", "부정기 항공 운송업", "15", "5.33"],
+            ["", "창고 및 운송관련 서비스업", "보관 및 창고업", "12", "6.67"],
+            ["", "", "기타 운송관련 서비스업", "12", "6.67"],
+            ["숙박 및 음식점업", "숙박업", "숙박시설 운영업", "10", "8.0"],
+            ["", "", "기타 숙박업", "10", "8.0"],
+            ["", "음식점 및 주점업", "음식점업", "10", "8.0"],
+            ["", "", "주점 및 비알콜음료점업", "10", "8.0"],
+            ["출판, 영상, 방송통신 및 정보 서비스업", "출판업", "서적, 잡지 및 기타 인쇄물 출판업", "10", "8.0"],
+            ["", "", "소프트웨어 개발 및 공급업", "10", "8.0"],
+            ["", "영상,오디오 기록물 제작 및 배급업", "영화, 비디오물, 방송프로그램 제작 및 배급업", "10", "8.0"],
+            ["", "방송업", "라디오 방송업", "10", "8.0"],
+            ["", "", "텔레비전 방송업", "10", "8.0"],
+            ["", "통신업", "우편업", "10", "8.0"],
+            ["", "", "전기통신업", "10", "8.0"],
+            ["", "컴퓨터 프로그래밍, 시스템 통합 및 관리업", "컴퓨터 프로그래밍 시스템 통합 및 관리업", "10", "8.0"],
+            ["", "정보서비스업", "자료처리, 호스팅, 포털 및 기타 인터넷 정보매개서비스업", "10", "8.0"],
+            ["", "", "기타 정보 서비스업", "10", "8.0"],
+            ["금융 및 보험업", "금융업", "은행 및 저축기관", "8", "10.0"],
+            ["", "", "투자기관", "8", "10.0"],
+            ["", "", "기타 금융업", "8", "10.0"],
+            ["", "보험 및 연금업", "보험업", "8", "10.0"],
+            ["", "", "재 보험업", "8", "10.0"],
+            ["", "", "연금 및 공제업", "8", "10.0"],
+            ["", "금융 및 보험관련 서비스업", "금융지원 서비스업", "8", "10.0"],
+            ["", "", "보험 및 연금관련 서비스업", "8", "10.0"],
+            ["부동산업 및 임대업", "부동산업", "부동산 임대 및 공급업", "10", "8.0"],
+            ["", "", "부동산 관련 서비스업", "10", "8.0"],
+            ["", "임대업 ;부동산 제외", "운송장비 임대업", "6", "13.33"],
+            ["", "", "개인 및 가정용품 임대업", "6", "13.33"],
+            ["", "", "산업용 기계 및 장비 임대업", "6", "13.33"],
+            ["", "", "무형재산권 임대업", "6", "13.33"],
+            ["전문, 과학 및 기술 서비스업", "연구개발업", "자연과학 및 공학 연구개발업", "8", "10.0"],
+            ["", "", "인문 및 사회과학 연구개발업", "8", "10.0"],
+            ["", "전문서비스업", "법무관련 서비스업", "8", "10.0"],
+            ["", "", "회계 및 세무관련 서비스업", "8", "10.0"],
+            ["", "", "광고업", "8", "10.0"],
+            ["", "", "시장조사 및 여론조사업", "8", "10.0"],
+            ["", "", "회사본부, 지주회사 및 경영 컨설팅 서비스업", "8", "10.0"],
+            ["", "건축기술, 엔지니어링 및 기타 과학기술 서비스업", "건축기술, 엔지니어링 및 관련기술 서비스업", "8", "10.0"],
+            ["", "", "기타 과학기술 서비스업", "8", "10.0"],
+            ["", "기타 전문, 과학 및 기술 서비스업", "수의업", "8", "10.0"],
+            ["", "", "전문디자인업", "8", "10.0"],
+            ["", "", "사진촬영 및 처리업", "8", "10.0"],
+            ["", "", "그외 기타전문, 과학 및 기술서비스업", "8", "10.0"],
+            ["사업시설 관리 및 사업지원 서비스업", "사업시설 관리 및 조경 서비스업", "사업시설 유지관리 서비스업", "8", "10.0"],
+            ["", "", "건물, 산업설비 청소 및 방제 서비스업", "8", "10.0"],
+            ["", "", "조경 관리 및 유지 서비스업", "8", "10.0"],
+            ["", "사업지원 서비스업", "인력공급 및 고용알선업", "8", "10.0"],
+            ["", "", "여행사 및 기타 여행보조 서비스업", "8", "10.0"],
+            ["", "", "경비, 경호 및 탐정업", "8", "10.0"],
+            ["", "", "기타 사업지원 서비스업", "8", "10.0"],
+            ["공공행정, 국방 및 사회보장 행정", "공공행정, 국방 및 사회보장 행정", "입법 및 일반 정부 행정", "10", "8.0"],
+            ["", "", "사회 및 산업정책 행정", "10", "8.0"],
+            ["", "", "외무 및 국방 행정", "10", "8.0"],
+            ["", "", "사법 및 공공질서 행정", "10", "8.0"],
+            ["", "", "사회보장 행정", "10", "8.0"],
+            ["교육 서비스업", "교육 서비스업", "초등 교육기관", "8", "10.0"],
+            ["", "", "중등 교육기관", "8", "10.0"],
+            ["", "", "고등 교육기관", "8", "10.0"],
+            ["", "", "특수학교, 외국인학교 및 대안학교", "8", "10.0"],
+            ["", "", "일반 교습 학원", "8", "10.0"],
+            ["", "", "기타 교육기관", "8", "10.0"],
+            ["", "", "교육지원 서비스업", "8", "10.0"],
+            ["보건업 및 사회복지 서비스업", "보건업", "병원", "8", "10.0"],
+            ["", "", "의원", "8", "10.0"],
+            ["", "", "공중 보건 의료업", "8", "10.0"],
+            ["", "", "기타 보건업", "8", "10.0"],
+            ["", "사회복지 서비스업", "거주 복지시설 운영업", "8", "10.0"],
+            ["", "", "비거주 복지시설 운영업", "8", "10.0"],
+            ["예술, 스포츠 및 여가관련 서비스업", "창작, 예술 및 여가관련 서비스업", "창작 및 예술관련 서비스업", "8", "10.0"],
+            ["", "", "도서관, 사적지 및 유사", "8", "10.0"],
+            ["", "", "여가관련 서비스업", "8", "10.0"],
+            ["", "스포츠 및 오락관련 서비스업", "스포츠 서비스업", "8", "10.0"],
+            ["", "", "유원지 및 테마파크 운영업", "8", "10.0"],
+            ["협회 및 단체, 수리 및 기타 개인 서비스업", "협회 및 단체", "산업 및 전문가 단체", "10", "8.0"],
+            ["", "", "노동조합", "10", "8.0"],
+            ["", "", "기타 협회 및 단체", "10", "8.0"],
+            ["", "수리업", "기계 및 장비 수리업", "8", "10.0"],
+            ["", "", "자동차 및 모터사이클 수리업", "8", "10.0"],
+            ["", "", "개인 및 가정용품수리업", "8", "10.0"],
+            ["", "기타 개인 서비스업", "미용, 욕탕 및 유사 서비스업", "8", "10.0"],
+            ["", "", "그외 기타 개인 서비스업", "8", "10.0"],
+            ["가구내 고용활동 및 달리 분류 되지 않은 자기소비 생환활동", "가구내 고용활동", "가구내 고용활동", "8", "10.0"],
+            ["", "달리 분류되지 않은 자가소비를 위한 기구의 재화 및 서비스 생산활동", "자가 소비를 위한 가사 생산 활동", "8", "10.0"],
+            ["", "", "자가 소비를 위한 서비스 활동", "8", "10.0"],
+            ["국제 및 외국기관", "국제 및 외국기관", "국제 및 외국기관", "10", "8.0"],
+            ["시험연구용 자산", "건물부속설비, 구축물, 기계장치", "", "10", "8.0"],
+            ["", "광학기기, 시험기기, 측정기기, 공구, 기타설비", "", "6", "13.33"]
+        ]
+    },
+    sheet4: {
+        head: `<tr><th style="background:#e9ecef;">세목 (공기구 종류)</th><th style="background:#d1e7dd;">내용연수(년)</th><th style="background:#ffe69c;">경년 감가율(%)</th></tr>`,
+        body: [
+            ["유압, 전동, 수동 공기구와 금속제의 공기구 등", "8", "10.0"],
+            ["금형, 주형 및 금속제모형의 틀 및 기타 이와 유사한 것", "5", "16.0"],
+            ["목형, 지형 및 비금속제모형, 틀, 필름, 활자 등", "4", "20.0"]
+        ]
+    }
+};
+
+window.switchDeprRefTab = function(tabIndex) {
+    document.querySelectorAll('.ref-tab-btn').forEach((btn, idx) => {
+        btn.className = (idx === tabIndex - 1) ? 'ref-tab-btn active' : 'ref-tab-btn';
+    });
+
+    const thead = document.getElementById('deprRefThead');
+    const tbody = document.getElementById('deprRefTbody');
+    const data = window.DEPR_REF_DATA['sheet' + tabIndex];
+    
+    const searchInput = document.getElementById('deprRefSearchInput');
+    if (searchInput) searchInput.value = '';
+
+    thead.innerHTML = data.head;
+    tbody.innerHTML = '';
+    
+    data.body.forEach((row, rIdx) => {
+        const tr = document.createElement('tr');
+        tr.id = `deprRefRow_${rIdx}`; 
+        
+        tr.dataset.searchContent = row.join(" ").toLowerCase();
+        
+        row.forEach((cell, cellIdx) => {
+            const td = document.createElement('td');
+            td.innerText = cell;
+            
+            if(tabIndex === 3) {
+                if(cellIdx > 2) {
+                    td.style.textAlign = 'center';
+                    td.style.fontWeight = 'bold';
+                } else {
+                    td.style.whiteSpace = 'normal';
+                    td.style.wordBreak = 'keep-all';
+                }
+            } else {
+                if(cellIdx > 0) td.style.textAlign = 'center'; 
+            }
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+};
+
+window.filterDeprRefTable = function() {
+    const searchInput = document.getElementById('deprRefSearchInput');
+    if(!searchInput) return;
+    
+    const keyword = searchInput.value.trim().toLowerCase();
+    const tbody = document.getElementById('deprRefTbody');
+    const rows = tbody.querySelectorAll('tr');
+    
+    rows.forEach(tr => {
+        if(keyword === "") {
+            tr.classList.remove('depr-row-hide');
+        } else {
+            const content = tr.dataset.searchContent || "";
+            if(content.includes(keyword)) {
+                tr.classList.remove('depr-row-hide');
+            } else {
+                tr.classList.add('depr-row-hide');
+            }
+        }
+    });
+};
 
 window.openDeprBatchModal = function() {
     const wiz = window.infState.wizard;
@@ -1768,6 +2054,7 @@ window.openDeprBatchModal = function() {
     tbody.innerHTML = '';
     
     const defaultDepr = { '건물': 1.78, '구축물': 1.33, '기계장치': 5.33, '공기구': 5.33, '공구와 기구': 5.33, '차량운반구': 5.33, '비품': '-' };
+    
     const defaultMinRes = { 
         '건물': 30, '건물부속설비': 30, '구축물': 20, '기계장치': 30, '금형': 30, 
         '시설장치': 20, '차량운반구': 20, '공구와기구': 20, '공구와 기구': 20, 
@@ -1791,7 +2078,9 @@ window.openDeprBatchModal = function() {
         `;
     });
 
-    if(typeof window.switchDeprRefTab === 'function') window.switchDeprRefTab(1);
+    if(typeof window.switchDeprRefTab === 'function') {
+        window.switchDeprRefTab(1);
+    }
 
     const modal = document.getElementById('deprBatchModal');
     if(modal) modal.style.display = 'flex';
@@ -1814,8 +2103,11 @@ window.applyDeprBatch = function() {
     document.querySelectorAll('[id^="deprInput_"]').forEach(input => {
         const acc = input.id.replace('deprInput_', '');
         inputMap[acc] = input.value.trim();
+        
         const minResInput = document.getElementById(`minResInput_${acc}`);
-        if (minResInput) window.infState.minResidualMap[acc] = Number(minResInput.value) || 0;
+        if (minResInput) {
+            window.infState.minResidualMap[acc] = Number(minResInput.value) || 0;
+        }
     });
 
     if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
@@ -1831,7 +2123,6 @@ window.applyDeprBatch = function() {
         if (inputMap[acc] !== undefined && inputMap[acc] !== "") {
             const inputVal = inputMap[acc];
 
-            // [신축단가평가 예외 처리 추가] '신축단가' 포함 시 감가율 강제 제외
             if (finalVal.includes('부보제외') || finalVal.includes('평가제외') || finalVal.includes('신축단가')) {
                 row[deprIdx] = '-';
             } 
@@ -1887,7 +2178,6 @@ window.applyCurrentValue = function() {
         const repCostStr = String(row[replacementIdx] || '').replace(/,/g, '');
         const deprStr = String(row[deprIdx] || '').replace(/,/g, ''); 
         
-        // [신축단가평가 예외 처리 추가] '신축단가' 포함 시 현재가액 산출 강제 제외
         if (finalVal.includes('부보제외') || finalVal.includes('신축단가') || repCostStr === '-' || repCostStr === '') { 
             row[deprIdx] = '-'; 
             row[residualIdx] = '-'; 
