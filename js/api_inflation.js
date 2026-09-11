@@ -285,8 +285,9 @@ window.infFinishMapping = function() {
 };
 
 // ============================================================================
-// [섹션 4] 상태 표시/스텝 전환 및 테이블 렌더링 엔진
+// [섹션 4] 상태 표시/스텝 전환 및 테이블 렌더링 엔진 (다중 화면 연동)
 // ============================================================================
+
 window.infUpdateStatusBadges = function() {
     const step1 = document.getElementById('nav-sec-2-3-1');
     const step2 = document.getElementById('nav-sec-2-3-2');
@@ -994,7 +995,6 @@ document.addEventListener('keydown', function(e) {
     const tData = window.infState.data[window.infState.activeTab];
     if(!tData) return;
 
-    // 되돌리기(Undo) 로직
     if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
         if(tData.history.length === 0) return alert("더 이상 되돌릴 작업이 없습니다.");
@@ -1056,17 +1056,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="modal-body" style="padding: 25px; background:#f4f5f7;">
                     <p style="font-size:13px; color:#555; margin-bottom:20px; line-height:1.5;">
-                        👉 불러온 파일(.xlsx 또는 .kbproj)에서 매칭할 <b>시트명</b>과 <b>자산번호 열</b>, 그리고 가져올 <b>데이터 열</b>을 직접 선택해 주세요.
+                        👉 불러온 파일(.xlsx 또는 .kbproj)에서 매칭할 <b>시트명</b>과 <b>기준 키 열(자산번호 또는 자산명)</b>, 그리고 가져올 <b>데이터 열</b>을 직접 선택해 주세요.
                     </p>
                     <div style="background:#fff; padding:15px; border:1px solid #ddd; border-radius:4px; margin-bottom:15px;">
                         <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">① 불러올 시트(사업장) 선택</label>
                         <select id="smartPastSheet" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc; margin-bottom: 15px;" onchange="window.updateSmartPastHeaders()"></select>
 
-                        <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">② 기준 키 (자산번호 열) 선택</label>
-                        <select id="smartPastAssetCol" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc; margin-bottom: 15px;"></select>
+                        <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">② 기준 키 (자산번호 또는 자산명 열) 선택</label>
+                        <select id="smartPastAssetCol" class="input-box" style="width:100%; padding:8px; border:2px solid #d32f2f; background:#fff3f3; margin-bottom: 15px; font-weight:bold;"></select>
 
                         <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">③ 가져올 데이터 (물가지수/구분) 열 선택</label>
-                        <select id="smartPastValCol" class="input-box" style="width:100%; padding:8px; border:2px solid #1C5691;"></select>
+                        <select id="smartPastValCol" class="input-box" style="width:100%; padding:8px; border:2px solid #1C5691; background:#f0f7ff; font-weight:bold;"></select>
                     </div>
                     <div style="text-align: right;">
                         <button type="button" class="btn-dark" style="background:#28a745; padding:10px 25px; border:none; font-weight:bold;" onclick="window.applySmartPastMapping()">⚡ 연동 적용하기</button>
@@ -1170,7 +1170,7 @@ window.updateSmartPastHeaders = function() {
         for(let i=0; i<maxCols; i++) {
             let letter = String.fromCharCode(65 + (i % 26));
             if (i >= 26) letter = String.fromCharCode(64 + Math.floor(i / 26)) + letter;
-            const optionHtml = `<option value="${i}">${letter} 열</option>`;
+            const optionHtml = `<option value="${i}">${letter} 열 (인덱스 ${i})</option>`;
             assetSelect.innerHTML += optionHtml;
             valSelect.innerHTML += optionHtml;
         }
@@ -1179,7 +1179,8 @@ window.updateSmartPastHeaders = function() {
         for(let r=0; r<Math.min(10, data.length); r++) {
             for(let c=0; c<data[r].length; c++) {
                 const cellStr = String(data[r][c]).replace(/\s/g,'');
-                if(foundAssetCol === -1 && (cellStr.includes('자산번호') || cellStr.includes('자산코드'))) foundAssetCol = c;
+                // 자산번호 또는 자산명 키워드 자동 감지
+                if(foundAssetCol === -1 && (cellStr.includes('자산번호') || cellStr.includes('자산코드') || cellStr.includes('자산명'))) foundAssetCol = c;
                 if(foundValCol === -1 && (cellStr.includes('최종구분') || cellStr.includes('과거구분') || cellStr.includes('평가결과') || cellStr.includes('물가지수'))) foundValCol = c;
             }
         }
@@ -1194,7 +1195,7 @@ window.updateSmartPastHeaders = function() {
             valSelect.innerHTML += optionHtml;
         });
 
-        const assetAuto = headers.find(h => String(h).includes('자산번호'));
+        const assetAuto = headers.find(h => String(h).includes('자산번호') || String(h).includes('자산명'));
         if (assetAuto) assetSelect.value = assetAuto;
         
         const valAuto = headers.find(h => String(h).includes('최종선택') || String(h).includes('과거구분'));
@@ -1212,7 +1213,12 @@ window.applySmartPastMapping = function() {
 
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
-    const curAssetNumIdx = Object.keys(wiz.mapped).indexOf('자산번호');
+    
+    // 사용자가 자산번호로 매핑했는지, 자산명으로 매핑했는지에 따라 웹 측 인덱스를 유동적으로 잡음
+    let curKeyIdx = Object.keys(wiz.mapped).indexOf('자산번호');
+    if (curKeyIdx === -1) curKeyIdx = Object.keys(wiz.mapped).indexOf('자산명');
+    if (curKeyIdx === -1) curKeyIdx = 2; // 기본값 C열(인덱스 2)
+
     const curPastClassIdx = Object.keys(wiz.mapped).length;
 
     if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
@@ -1237,11 +1243,11 @@ window.applySmartPastMapping = function() {
         const yearVal = String(curRow[wiz.mapped['취득년도']] || '');
         if (yearVal.includes('소계') || yearVal.includes('총계')) return;
 
-        const rawCurNum = String(curRow[curAssetNumIdx] || '').trim();
-        const normCurNum = normalizeKey(rawCurNum);
+        const rawCurKey = String(curRow[curKeyIdx] || '').trim();
+        const normCurKey = normalizeKey(rawCurKey);
 
-        if (normCurNum && pastMap[normCurNum] !== undefined) {
-            const matchedVal = pastMap[normCurNum];
+        if (normCurKey && pastMap[normCurKey] !== undefined) {
+            const matchedVal = pastMap[normCurKey];
             curRow[curPastClassIdx] = matchedVal;
             
             const finalIdx = curPastClassIdx + 4;
@@ -1254,7 +1260,7 @@ window.applySmartPastMapping = function() {
 
     document.getElementById('smartPastModal').style.display = 'none';
     if(typeof window.infRenderTable === 'function') window.infRenderTable();
-    alert(`✅ 스마트 과거 데이터 연동 완료!\n선택하신 열의 데이터가 총 ${matchCount}건 유연 매칭되었습니다.`);
+    alert(`✅ 자산명(또는 기준키) 기준 스마트 연동 완료!\n선택하신 열을 대조하여 총 ${matchCount}건이 유연 매칭되었습니다.`);
 };
 
 // ============================================================================
@@ -1477,7 +1483,7 @@ window.assignFinalClass = function() {
 
         let finalVal = "";
         
-        // ★ 우선순위 평가: 1.과거 -> 2.평가제외 -> 3.부보제외 -> 4.기본
+        // 우선순위 평가: 1.과거 -> 2.평가제외 -> 3.부보제외 -> 4.기본
         if (past) finalVal = past;
         else if (evalEx) finalVal = evalEx;
         else if (covEx) finalVal = covEx;
@@ -2232,3 +2238,4 @@ window.applyCurrentValue = function() {
     if(typeof window.infRenderTable === 'function') window.infRenderTable();
     alert(`✅ 잔가율 및 현재가액 산출 완료!\n- 총 ${applyCount}건의 현재가액이 계산되었습니다.`);
 };
+
