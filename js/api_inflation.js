@@ -1259,7 +1259,7 @@ window.applySmartPastMapping = function() {
     const valCol = document.getElementById('smartPastValCol').value;
     const webKeyIdx = document.getElementById('webKeySelect').value;
 
-    if (!pastData || !assetCol || !valCol || !webKeyIdx) return alert("모든 옵션을 선택해 주세요.");
+    if (!sheet || !assetCol || !valCol || !webKeyIdx) return alert("모든 옵션을 선택해 주세요.");
 
     // ★ 현재 사용자가 입력한 설정값을 메모리에 영구 보존
     window.pastMappingPreferences = {
@@ -1278,10 +1278,10 @@ window.applySmartPastMapping = function() {
     
     let matchCount = 0;
     
-    // ★ [버그 해결] 정규표현식 수정: 하이픈(-)을 맨 앞에 배치하여 범위 지정 오류 원천 차단
+    // ★ [버그 완벽 해결] 브라우저를 멈추게 만들었던 슬래시(/) 문법 에러 이스케이프(\/) 처리
     const normalizeKey = (str) => {
         if (!str) return '';
-        return String(str).toUpperCase().replace(/[-\s_/,.[\]()]/g, '');
+        return String(str).toUpperCase().replace(/[-\s_\/,.()[\]]/g, '');
     };
 
     const extractYear = (str) => {
@@ -1320,7 +1320,7 @@ window.applySmartPastMapping = function() {
         if (!targetVal) return;
 
         const normPrimary = normalizeKey(primaryVal);
-        if (normPrimary && !normPrimary.includes('자산번호')) {
+        if (normPrimary && !normPrimary.includes('자산번호') && !normPrimary.includes('자산명')) {
             mapPrimary[normPrimary] = targetVal;
         }
 
@@ -1377,7 +1377,6 @@ window.applySmartPastMapping = function() {
     if(typeof window.infRenderTable === 'function') window.infRenderTable();
     alert(`✅ 투트랙 스마트 매칭 완료!\n지정하신 조건에 따라 총 ${matchCount}건의 데이터가 성공적으로 매칭되었습니다.`);
 };
-
 
 // ============================================================================
 // [섹션 7] 자산 구분 일괄 지정 (기본/평가제외/부보제외 자동화)
