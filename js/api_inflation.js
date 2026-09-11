@@ -1259,9 +1259,6 @@ window.applySmartPastMapping = function() {
     const valCol = document.getElementById('smartPastValCol').value;
     const webKeyIdx = document.getElementById('webKeySelect').value;
 
-    // ★ [오류 원인 해결] 과거 데이터를 변수에 먼저 할당한 뒤에 검사하도록 순서 정상화
-    const pastData = window.tempPastParsed[sheet];
-
     if (!pastData || !assetCol || !valCol || !webKeyIdx) return alert("모든 옵션을 선택해 주세요.");
 
     // ★ 현재 사용자가 입력한 설정값을 메모리에 영구 보존
@@ -1272,23 +1269,19 @@ window.applySmartPastMapping = function() {
         valCol: valCol
     };
 
+    const pastData = window.tempPastParsed[sheet];
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
-    
-    // 명세서 열 위치 파악
-    const curAssetNumIdx = Object.keys(wiz.mapped).indexOf('자산번호');
-    const curAssetNameIdx = Object.keys(wiz.mapped).indexOf('자산명');
-    const curYearIdx = wiz.mapped['취득년도'];
     const curPastClassIdx = Object.keys(wiz.mapped).length;
 
     if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
     
     let matchCount = 0;
     
-    // ★ [매칭률 극대화] 공백, 하이픈, 언더바뿐만 아니라 슬래시(/), 콤마(,) 괄호까지 모두 제거하여 완벽한 문자열만 비교
+    // ★ [버그 해결] 정규표현식 수정: 하이픈(-)을 맨 앞에 배치하여 범위 지정 오류 원천 차단
     const normalizeKey = (str) => {
         if (!str) return '';
-        return String(str).toUpperCase().replace(/[-_\s/,.()[\]]/g, '');
+        return String(str).toUpperCase().replace(/[-\s_/,.[\]()]/g, '');
     };
 
     const extractYear = (str) => {
@@ -1302,7 +1295,6 @@ window.applySmartPastMapping = function() {
 
     const isArrayOfArrays = pastData.length > 0 && Array.isArray(pastData[0]);
     
-    // 과거 엑셀에서 자산명과 취득년도 열 위치 자동 탐색 (2번 주머니 생성용)
     let pastNameCol = null;
     let pastYearCol = null;
     
@@ -1320,21 +1312,18 @@ window.applySmartPastMapping = function() {
         pastYearCol = headers.find(h => String(h).includes('취득년도') || String(h).includes('취득일'));
     }
 
-    // 주머니(Map) 채우기
     pastData.forEach((row, idx) => {
-        if (isArrayOfArrays && idx === 0) return; // 헤더 스킵
+        if (isArrayOfArrays && idx === 0) return; 
 
         const primaryVal = String(row[assetCol] || '').trim();
         const targetVal = String(row[valCol] || '').trim();
         if (!targetVal) return;
 
-        // 1순위 데이터 저장
         const normPrimary = normalizeKey(primaryVal);
-        if (normPrimary && !normPrimary.includes('자산번호') && !normPrimary.includes('자산명')) {
+        if (normPrimary && !normPrimary.includes('자산번호')) {
             mapPrimary[normPrimary] = targetVal;
         }
 
-        // 2순위 데이터 저장 (자산명 탐지 실패 시 사용자가 선택한 기준 열을 자산명으로 간주)
         const nameVal = pastNameCol !== null ? String(row[pastNameCol] || '') : primaryVal; 
         const yearVal = pastYearCol !== null ? extractYear(row[pastYearCol]) : '';
         const normName = normalizeKey(nameVal);
@@ -1349,35 +1338,30 @@ window.applySmartPastMapping = function() {
         }
     });
 
-    // 현재 명세서 순차 매칭
     tData.raw.forEach((curRow, rIdx) => {
-        const yearVal = String(curRow[curYearIdx] || '');
+        const yearVal = String(curRow[wiz.mapped['취득년도']] || '');
         if (yearVal.includes('소계') || yearVal.includes('총계')) return;
 
-        // ★ 사용자가 UI에서 지정한 [웹 매칭 기준 열]의 값을 정확히 뜯어옵니다.
+        // ★ 사용자가 UI에서 지정한 [웹 매칭 기준 열]의 값을 정확히 추출
         const rawCurKey = String(curRow[webKeyIdx] || '').trim();
         const normCurKey = normalizeKey(rawCurKey);
-
+        
         const curYear = extractYear(yearVal);
-        const rawCurName = curAssetNameIdx !== -1 ? String(curRow[curAssetNameIdx] || '').trim() : '';
+        const rawCurName = String(curRow[wiz.mapped['자산명']] || '').trim();
         const normCurName = normalizeKey(rawCurName);
 
         let matchedVal = undefined;
 
-        // Step A: 사용자가 지정한 웹 1순위 키 <-> 엑셀 1순위 키 완벽 매칭
         if (normCurKey && mapPrimary[normCurKey] !== undefined) {
             matchedVal = mapPrimary[normCurKey];
         } 
-        // Step B: 번호가 누락되거나 다를 경우 [자산명 + 취득년도] 복합 키로 안전하게 우회 매칭
         else if (normCurName && curYear && mapNameYear[normCurName + '_' + curYear] !== undefined) {
             matchedVal = mapNameYear[normCurName + '_' + curYear];
         }
-        // Step C: 최후의 수단으로 자산명 단일 매칭
         else if (normCurName && mapNameYear[normCurName] !== undefined) {
             matchedVal = mapNameYear[normCurName];
         }
 
-        // 매칭 성공 시 값 반영
         if (matchedVal !== undefined) {
             curRow[curPastClassIdx] = matchedVal;
             
