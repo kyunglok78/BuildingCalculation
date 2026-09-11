@@ -1255,42 +1255,43 @@ window.updateSmartPastHeaders = function() {
 
 window.applySmartPastMapping = function() {
     const sheet = document.getElementById('smartPastSheet').value;
-    const assetCol = document.getElementById('smartPastAssetCol').value;
-    const valCol = document.getElementById('smartPastValCol').value;
-    const webKeyIdx = document.getElementById('webKeySelect').value;
+    const assetColStr = document.getElementById('smartPastAssetCol').value;
+    const valColStr = document.getElementById('smartPastValCol').value;
+    const webKeyIdxStr = document.getElementById('webKeySelect').value;
 
-    const pastData = window.tempPastParsed[sheet];
+    if (!sheet || !assetColStr || !valColStr || !webKeyIdxStr) return alert("모든 옵션을 선택해 주세요.");
 
-    if (!pastData || !assetCol || !valCol || !webKeyIdx) return alert("모든 옵션을 선택해 주세요.");
+    // 안전한 배열 인덱스 접근을 위해 문자열을 숫자로 강제 변환
+    const assetCol = parseInt(assetColStr, 10);
+    const valCol = parseInt(valColStr, 10);
+    const webKeyIdx = parseInt(webKeyIdxStr, 10);
 
+    // 사용자의 현재 설정값을 메모리에 영구 보존
     window.pastMappingPreferences = {
-        webKey: webKeyIdx,
+        webKey: webKeyIdxStr,
         sheet: sheet,
-        assetCol: assetCol,
-        valCol: valCol
+        assetCol: assetColStr,
+        valCol: valColStr
     };
 
+    const pastData = window.tempPastParsed[sheet];
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
-    
-    // ★ [치명적 버그 완벽 해결] 기둥(열) 위치를 단어장 순서가 아닌 실제 매핑된 좌표값으로 직접 꽂아줍니다!
-    const curAssetNumIdx = wiz.mapped['자산번호'] !== undefined ? wiz.mapped['자산번호'] : -1;
-    const curAssetNameIdx = wiz.mapped['자산명'] !== undefined ? wiz.mapped['자산명'] : -1;
-    const curYearIdx = wiz.mapped['취득년도'];
     const curPastClassIdx = Object.keys(wiz.mapped).length;
 
     if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
     
     let matchCount = 0;
+    let debugMapCount = 0; // 엑셀에서 정상적으로 읽어들인 데이터 건수 확인용
     
-    // 특수문자 완벽 무시 (이스케이프 처리 완료)
+    // ★ [초강력 딥클린 엔진] 영문 대문자화 후, 한글/영문/숫자를 제외한 '모든' 기호와 공백을 무조건 파괴합니다.
     const normalizeKey = (str) => {
-        if (!str) return '';
-        return String(str).toUpperCase().replace(/[-\s_\/,.()[\]]/g, '');
+        if (str === null || str === undefined) return '';
+        return String(str).toUpperCase().replace(/[^A-Z0-9가-힣]/g, '');
     };
 
     const extractYear = (str) => {
-        if (!str) return '';
+        if (str === null || str === undefined) return '';
         const match = String(str).match(/(19|20)\d{2}/);
         return match ? match[0] : '';
     };
@@ -1303,30 +1304,34 @@ window.applySmartPastMapping = function() {
     let pastNameCol = null;
     let pastYearCol = null;
     
+    // 과거 엑셀에서 자산명/취득년도 열 위치 자동 탐색
     if (isArrayOfArrays) {
         for(let r=0; r<Math.min(10, pastData.length); r++) {
             for(let c=0; c<pastData[r].length; c++) {
-                const cellStr = String(pastData[r][c]).replace(/\s/g,'');
+                const cellStr = normalizeKey(pastData[r][c]);
                 if(pastNameCol === null && (cellStr.includes('자산명') || cellStr.includes('품명'))) pastNameCol = c;
                 if(pastYearCol === null && (cellStr.includes('취득년도') || cellStr.includes('취득일'))) pastYearCol = c;
             }
         }
     } else {
         const headers = pastData.length > 0 ? Object.keys(pastData[0]) : [];
-        pastNameCol = headers.find(h => String(h).includes('자산명') || String(h).includes('품명'));
-        pastYearCol = headers.find(h => String(h).includes('취득년도') || String(h).includes('취득일'));
+        pastNameCol = headers.find(h => normalizeKey(h).includes('자산명') || normalizeKey(h).includes('품명'));
+        pastYearCol = headers.find(h => normalizeKey(h).includes('취득년도') || normalizeKey(h).includes('취득일'));
     }
 
+    // 1단계: 과거 엑셀 데이터 주머니(Map)에 담기
     pastData.forEach((row, idx) => {
-        if (isArrayOfArrays && idx === 0) return; 
+        if (isArrayOfArrays && idx === 0) return; // 엑셀 헤더 스킵
 
-        const primaryVal = String(row[assetCol] || '').trim();
-        const targetVal = String(row[valCol] || '').trim();
-        if (!targetVal) return;
+        const primaryVal = isArrayOfArrays ? String(row[assetCol] || '') : String(row[assetColStr] || '');
+        const targetVal = isArrayOfArrays ? String(row[valCol] || '') : String(row[valColStr] || '');
+        
+        if (!targetVal.trim()) return; // 가져올 값이 비어있으면 패스
 
         const normPrimary = normalizeKey(primaryVal);
         if (normPrimary && !normPrimary.includes('자산번호') && !normPrimary.includes('자산명')) {
-            mapPrimary[normPrimary] = targetVal;
+            mapPrimary[normPrimary] = targetVal.trim();
+            debugMapCount++;
         }
 
         const nameVal = pastNameCol !== null ? String(row[pastNameCol] || '') : primaryVal; 
@@ -1335,39 +1340,52 @@ window.applySmartPastMapping = function() {
 
         if (normName && !normName.includes('자산명')) {
             if (yearVal) {
-                mapNameYear[normName + '_' + yearVal] = targetVal;
+                mapNameYear[normName + '_' + yearVal] = targetVal.trim();
             }
             if (!mapNameYear[normName]) {
-                mapNameYear[normName] = targetVal;
+                mapNameYear[normName] = targetVal.trim();
             }
         }
     });
 
+    if (debugMapCount === 0) {
+        alert(`엑셀 파일에서 유효한 데이터를 읽지 못했습니다.\n선택하신 기준 열에 텍스트가 존재하는지 확인해주세요.`);
+        return;
+    }
+
+    // ★ [버그 해결] 웹 명세서의 기둥 위치를 단순 순서가 아닌 '실제 매핑된 고유 좌표값'으로 직접 지정
+    const curAssetNameIdx = wiz.mapped['자산명'] !== undefined ? parseInt(wiz.mapped['자산명'], 10) : -1;
+    const curYearIdx = wiz.mapped['취득년도'] !== undefined ? parseInt(wiz.mapped['취득년도'], 10) : -1;
+
+    // 2단계: 현재 웹 명세서 순회하며 매칭 시도
     tData.raw.forEach((curRow, rIdx) => {
-        const yearVal = String(curRow[curYearIdx] || '');
-        if (yearVal.includes('소계') || yearVal.includes('총계')) return;
+        const yearVal = curYearIdx !== -1 ? String(curRow[curYearIdx] || '') : '';
+        if (yearVal.includes('소계') || yearVal.includes('총계')) return; // 소계/총계 행은 패스
 
-        const rawCurKey = String(curRow[webKeyIdx] || '').trim();
+        // 파트장님이 선택한 웹 매칭 기준 열에서 텍스트 추출 후 딥클린
+        const rawCurKey = String(curRow[webKeyIdx] || '');
         const normCurKey = normalizeKey(rawCurKey);
-
-        const curYear = extractYear(yearVal);
         
-        // ★ 정확한 기둥 번호(curAssetNameIdx)로 자산명을 추출합니다.
-        const rawCurName = curAssetNameIdx !== -1 ? String(curRow[curAssetNameIdx] || '').trim() : '';
+        const curYear = extractYear(yearVal);
+        const rawCurName = curAssetNameIdx !== -1 ? String(curRow[curAssetNameIdx] || '') : '';
         const normCurName = normalizeKey(rawCurName);
 
         let matchedVal = undefined;
 
+        // Step A: 1순위 다이렉트 매칭
         if (normCurKey && mapPrimary[normCurKey] !== undefined) {
             matchedVal = mapPrimary[normCurKey];
         } 
+        // Step B: 번호가 없거나 다를 경우 [자산명 + 취득년도] 복합 키로 안전하게 우회 매칭
         else if (normCurName && curYear && mapNameYear[normCurName + '_' + curYear] !== undefined) {
             matchedVal = mapNameYear[normCurName + '_' + curYear];
         }
+        // Step C: 최후의 수단으로 자산명 단독 매칭
         else if (normCurName && mapNameYear[normCurName] !== undefined) {
             matchedVal = mapNameYear[normCurName];
         }
 
+        // 매칭 성공 시 값 주입 및 화면 동기화
         if (matchedVal !== undefined) {
             curRow[curPastClassIdx] = matchedVal;
             
@@ -1381,7 +1399,13 @@ window.applySmartPastMapping = function() {
 
     document.getElementById('smartPastModal').style.display = 'none';
     if(typeof window.infRenderTable === 'function') window.infRenderTable();
-    alert(`✅ 투트랙 스마트 매칭 완료!\n지정하신 조건에 따라 총 ${matchCount}건의 데이터가 성공적으로 매칭되었습니다.`);
+    
+    // 매칭 결과 알림
+    if (matchCount > 0) {
+        alert(`✅ 투트랙 스마트 매칭 완료!\n지정하신 조건에 따라 총 ${matchCount}건의 데이터가 성공적으로 매칭되었습니다.`);
+    } else {
+        alert(`⚠️ 매칭된 자산이 0건입니다.\n\n[엔진 진단 정보]\n- 엑셀에서 읽어들인 자산: ${debugMapCount}건\n- 웹과 엑셀의 텍스트가 일치하지 않아 매칭이 건너뛰어졌습니다.`);
+    }
 };
 
 // ============================================================================
