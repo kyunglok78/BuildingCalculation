@@ -1045,6 +1045,12 @@ document.addEventListener('keydown', function(e) {
 // [섹션 6] 과거 데이터 연동 매칭 알고리즘 (스마트 마법사 UI 동적 생성 및 투트랙 복합키 지원)
 // ============================================================================
 
+// ★ 사용자의 이전 팝업창 선택값을 영구적으로 기억하기 위한 저장소
+if (!window.pastMappingPreferences) {
+    window.pastMappingPreferences = { webKey: '', sheet: '', assetCol: '', valCol: '' };
+}
+window.tempPastParsed = {}; 
+
 document.addEventListener('DOMContentLoaded', () => {
     if (!document.getElementById('smartPastModal')) {
         const modalHtml = `
@@ -1055,19 +1061,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     <i class="fa-solid fa-xmark modal-close" style="cursor:pointer; font-size:18px;" onclick="document.getElementById('smartPastModal').style.display='none'"></i>
                 </div>
                 <div class="modal-body" style="padding: 25px; background:#f4f5f7;">
-                    <p style="font-size:13px; color:#555; margin-bottom:20px; line-height:1.5;">
-                        👉 <b>다중 키 순차 매칭 기술</b>이 적용되었습니다.<br>
-                        지정하신 기준 키(자산번호)로 먼저 매칭을 시도하며, 번호가 누락된 경우 <b>[자산명 + 취득년도]</b> 조합으로 자동 우회(Fallback) 매칭합니다.
+                    <p style="font-size:13px; color:#555; margin-bottom:15px; line-height:1.5;">
+                        👉 <b>[웹]과 [엑셀]의 기준을 1:1로 직접 짝지어주세요.</b> 한 번 세팅한 옵션은 팝업을 껐다 켜도 <b>그대로 유지</b>됩니다. (자산번호 누락 시, 자산명+취득년도로 자동 우회 탐색합니다.)
                     </p>
                     <div style="background:#fff; padding:15px; border:1px solid #ddd; border-radius:4px; margin-bottom:15px;">
-                        <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">① 불러올 시트(사업장) 선택</label>
+                        
+                        <label style="font-weight:bold; font-size:13px; color:#d32f2f; display:block; margin-bottom:5px;">① [웹 명세서] 매칭 기준 열 선택 (자산번호/자산명)</label>
+                        <select id="webKeySelect" class="input-box" style="width:100%; padding:8px; border:2px solid #d32f2f; background:#fff3f3; margin-bottom: 15px; font-weight:bold;"></select>
+
+                        <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">② [과거 엑셀] 불러올 시트(사업장) 선택</label>
                         <select id="smartPastSheet" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc; margin-bottom: 15px;" onchange="window.updateSmartPastHeaders()"></select>
 
-                        <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">② 1순위 기준 키 (자산번호 열 우선) 선택</label>
-                        <select id="smartPastAssetCol" class="input-box" style="width:100%; padding:8px; border:2px solid #d32f2f; background:#fff3f3; margin-bottom: 15px; font-weight:bold;"></select>
+                        <label style="font-weight:bold; font-size:13px; color:#1C5691; display:block; margin-bottom:5px;">③ [과거 엑셀] 1순위 매칭 기준 열 선택</label>
+                        <select id="smartPastAssetCol" class="input-box" style="width:100%; padding:8px; border:2px solid #1C5691; background:#f0f7ff; margin-bottom: 15px; font-weight:bold;"></select>
 
-                        <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">③ 가져올 데이터 (물가지수/과거구분) 열 선택</label>
-                        <select id="smartPastValCol" class="input-box" style="width:100%; padding:8px; border:2px solid #1C5691; background:#f0f7ff; font-weight:bold;"></select>
+                        <label style="font-weight:bold; font-size:13px; color:#28a745; display:block; margin-bottom:5px;">④ [과거 엑셀] 가져올 데이터(구분/물가지수) 열 선택</label>
+                        <select id="smartPastValCol" class="input-box" style="width:100%; padding:8px; border:2px solid #28a745; background:#f0fdf4; font-weight:bold;"></select>
                     </div>
                     <div style="text-align: right;">
                         <button type="button" class="btn-dark" style="background:#28a745; padding:10px 25px; border:none; font-weight:bold;" onclick="window.applySmartPastMapping()">⚡ 투트랙 연동 적용하기</button>
@@ -1081,8 +1090,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const pastInput = document.getElementById('infPastExcelFile');
     if(pastInput) pastInput.accept = ".xlsx, .xls, .csv, .kbproj";
 });
-
-window.tempPastParsed = {}; 
 
 window.infLoadPastData = function(event) {
     const file = event.target.files[0];
@@ -1148,6 +1155,37 @@ window.openSmartPastModal = function() {
     sheetSelect.innerHTML = '';
     sheets.forEach(s => sheetSelect.innerHTML += `<option value="${s}">${s}</option>`);
     
+    // ★ 1. 웹 매칭 기준 열 동적 세팅 (자산번호, 자산명 등 추출)
+    const webKeySel = document.getElementById('webKeySelect');
+    webKeySel.innerHTML = '';
+    const wiz = window.infState.wizard;
+    
+    let hasKeys = false;
+    for (const [key, idx] of Object.entries(wiz.mapped)) {
+        if (key.includes('자산')) {
+            webKeySel.innerHTML += `<option value="${idx}">${key}</option>`;
+            hasKeys = true;
+        }
+    }
+    // 자산 키워드가 전혀 없으면 전체 매핑 항목 노출
+    if (!hasKeys) {
+        for (const [key, idx] of Object.entries(wiz.mapped)) {
+            webKeySel.innerHTML += `<option value="${idx}">${key}</option>`;
+        }
+    }
+
+    // ★ 이전 선택 내역 복원 (웹 기준 열, 시트)
+    if (window.pastMappingPreferences.webKey !== "") {
+        webKeySel.value = window.pastMappingPreferences.webKey;
+    } else {
+        const defaultAssetNoIdx = wiz.mapped['자산번호'];
+        if (defaultAssetNoIdx !== undefined) webKeySel.value = defaultAssetNoIdx;
+    }
+
+    if (window.pastMappingPreferences.sheet && sheets.includes(window.pastMappingPreferences.sheet)) {
+        sheetSelect.value = window.pastMappingPreferences.sheet;
+    }
+
     window.updateSmartPastHeaders();
     document.getElementById('smartPastModal').style.display = 'flex';
 };
@@ -1201,50 +1239,61 @@ window.updateSmartPastHeaders = function() {
         const valAuto = headers.find(h => String(h).includes('최종선택') || String(h).includes('과거구분'));
         if (valAuto) valSelect.value = valAuto;
     }
+
+    // ★ 이전 선택 내역 복원 (엑셀 기준 열, 엑셀 데이터 열)
+    if (window.pastMappingPreferences.assetCol !== "") {
+        if ([...assetSelect.options].some(o => o.value === String(window.pastMappingPreferences.assetCol))) {
+            assetSelect.value = window.pastMappingPreferences.assetCol;
+        }
+    }
+    if (window.pastMappingPreferences.valCol !== "") {
+        if ([...valSelect.options].some(o => o.value === String(window.pastMappingPreferences.valCol))) {
+            valSelect.value = window.pastMappingPreferences.valCol;
+        }
+    }
 };
 
 window.applySmartPastMapping = function() {
     const sheet = document.getElementById('smartPastSheet').value;
     const assetCol = document.getElementById('smartPastAssetCol').value;
     const valCol = document.getElementById('smartPastValCol').value;
+    const webKeyIdx = document.getElementById('webKeySelect').value;
+
+    if (!pastData || !assetCol || !valCol || !webKeyIdx) return alert("모든 옵션을 선택해 주세요.");
+
+    // ★ 현재 사용자가 입력한 설정값을 메모리에 영구 보존
+    window.pastMappingPreferences = {
+        webKey: webKeyIdx,
+        sheet: sheet,
+        assetCol: assetCol,
+        valCol: valCol
+    };
 
     const pastData = window.tempPastParsed[sheet];
-    if (!pastData || !assetCol || !valCol) return alert("설정을 확인해 주세요.");
-
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
-    
-    // 명세서 열 위치 파악
-    const curAssetNumIdx = Object.keys(wiz.mapped).indexOf('자산번호');
-    const curAssetNameIdx = Object.keys(wiz.mapped).indexOf('자산명');
-    const curYearIdx = wiz.mapped['취득년도'];
     const curPastClassIdx = Object.keys(wiz.mapped).length;
 
     if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
     
     let matchCount = 0;
     
-    // 키워드 정규화 헬퍼 함수 (공백, 하이픈, 언더바 제거 및 대문자화)
     const normalizeKey = (str) => {
         if (!str) return '';
         return String(str).toUpperCase().replace(/[-_\s]/g, '');
     };
 
-    // 연도 추출 헬퍼 함수
     const extractYear = (str) => {
         if (!str) return '';
         const match = String(str).match(/(19|20)\d{2}/);
         return match ? match[0] : '';
     };
 
-    // 1번 주머니: 선택된 기준 열(자산번호) 단일 키 매핑
     const mapPrimary = {};
-    // 2번 주머니: [자산명_연도] 복합 키 매핑
     const mapNameYear = {};
 
     const isArrayOfArrays = pastData.length > 0 && Array.isArray(pastData[0]);
     
-    // 과거 엑셀에서 자산명과 취득년도 열 위치 자동 탐색 (2번 주머니 생성용)
     let pastNameCol = null;
     let pastYearCol = null;
     
@@ -1262,21 +1311,18 @@ window.applySmartPastMapping = function() {
         pastYearCol = headers.find(h => String(h).includes('취득년도') || String(h).includes('취득일'));
     }
 
-    // 주머니(Map) 채우기
     pastData.forEach((row, idx) => {
-        if (isArrayOfArrays && idx === 0) return; // 헤더 스킵
+        if (isArrayOfArrays && idx === 0) return; 
 
         const primaryVal = String(row[assetCol] || '').trim();
         const targetVal = String(row[valCol] || '').trim();
         if (!targetVal) return;
 
-        // 1순위 데이터 저장
         const normPrimary = normalizeKey(primaryVal);
         if (normPrimary && !normPrimary.includes('자산번호')) {
             mapPrimary[normPrimary] = targetVal;
         }
 
-        // 2순위 데이터 저장 (자산명 탐지 실패 시 사용자가 선택한 기준 열을 자산명으로 간주)
         const nameVal = pastNameCol !== null ? String(row[pastNameCol] || '') : primaryVal; 
         const yearVal = pastYearCol !== null ? extractYear(row[pastYearCol]) : '';
         const normName = normalizeKey(nameVal);
@@ -1291,38 +1337,34 @@ window.applySmartPastMapping = function() {
         }
     });
 
-    // 현재 명세서 순차 매칭 (Fallback Logic)
     tData.raw.forEach((curRow, rIdx) => {
-        const yearVal = String(curRow[curYearIdx] || '');
+        const yearVal = String(curRow[wiz.mapped['취득년도']] || '');
         if (yearVal.includes('소계') || yearVal.includes('총계')) return;
 
-        const rawCurNum = curAssetNumIdx !== -1 ? String(curRow[curAssetNumIdx] || '').trim() : '';
-        const rawCurName = curAssetNameIdx !== -1 ? String(curRow[curAssetNameIdx] || '').trim() : '';
+        // ★ 사용자가 UI에서 지정한 [웹 매칭 기준 열]의 값을 정확히 뜯어옵니다.
+        const rawCurKey = String(curRow[webKeyIdx] || '').trim();
+        const normCurKey = normalizeKey(rawCurKey);
+        
+        // 만약을 대비한 우회 매칭용 정보
         const curYear = extractYear(yearVal);
-
-        const normCurNum = normalizeKey(rawCurNum);
+        const rawCurName = String(curRow[wiz.mapped['자산명']] || '').trim();
         const normCurName = normalizeKey(rawCurName);
 
         let matchedVal = undefined;
 
-        // Step A: 1번 주머니에서 자산번호로 매칭 시도
-        if (normCurNum && mapPrimary[normCurNum] !== undefined) {
-            matchedVal = mapPrimary[normCurNum];
+        // Step A: 사용자가 지정한 웹 1순위 키 <-> 엑셀 1순위 키 완벽 매칭
+        if (normCurKey && mapPrimary[normCurKey] !== undefined) {
+            matchedVal = mapPrimary[normCurKey];
         } 
-        // Step B: 사용자가 팝업창에서 '자산명'을 Primary 키로 선택했을 경우를 대비
-        else if (normCurName && mapPrimary[normCurName] !== undefined) {
-            matchedVal = mapPrimary[normCurName];
-        }
-        // Step C: 2번 주머니에서 [자산명 + 취득년도] 복합 키로 안전한 우회 매칭
+        // Step B: 지정한 번호가 비어있거나 매칭 실패 시, [자산명 + 취득년도] 복합 키로 안전하게 우회
         else if (normCurName && curYear && mapNameYear[normCurName + '_' + curYear] !== undefined) {
             matchedVal = mapNameYear[normCurName + '_' + curYear];
         }
-        // Step D: 최후의 수단으로 자산명 단독 매칭
+        // Step C: 최후의 수단으로 자산명 단일 매칭
         else if (normCurName && mapNameYear[normCurName] !== undefined) {
             matchedVal = mapNameYear[normCurName];
         }
 
-        // 매칭 성공 시 값 반영
         if (matchedVal !== undefined) {
             curRow[curPastClassIdx] = matchedVal;
             
@@ -1336,7 +1378,7 @@ window.applySmartPastMapping = function() {
 
     document.getElementById('smartPastModal').style.display = 'none';
     if(typeof window.infRenderTable === 'function') window.infRenderTable();
-    alert(`✅ 다중 키 순차 매칭(자산번호 ➔ 자산명+연도) 완료!\n총 ${matchCount}건의 데이터가 성공적으로 유연 매칭되었습니다.`);
+    alert(`✅ 투트랙 스마트 매칭 완료!\n지정하신 조건에 따라 총 ${matchCount}건의 데이터가 성공적으로 매칭되었습니다.`);
 };
 
 // ============================================================================
