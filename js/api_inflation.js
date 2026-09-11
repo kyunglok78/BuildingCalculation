@@ -1042,34 +1042,35 @@ document.addEventListener('keydown', function(e) {
 });
 
 // ============================================================================
-// [섹션 6] 과거 데이터 연동 매칭 알고리즘 (스마트 마법사 UI 동적 생성 및 .kbproj 지원)
+// [섹션 6] 과거 데이터 연동 매칭 알고리즘 (스마트 마법사 UI 동적 생성 및 투트랙 복합키 지원)
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
     if (!document.getElementById('smartPastModal')) {
         const modalHtml = `
         <div class="modal-overlay" id="smartPastModal" style="display:none; z-index: 1050; justify-content: center; align-items: center;">
-            <div class="modal-content" style="width: 500px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+            <div class="modal-content" style="width: 550px; max-width: 95%; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
                 <div class="modal-header" style="background:#1C5691; color:white; padding:15px; display: flex; justify-content: space-between; align-items: center;">
                     <span style="font-weight:bold;"><i class="fa-solid fa-link"></i> 스마트 과거 데이터 연동 마법사</span>
                     <i class="fa-solid fa-xmark modal-close" style="cursor:pointer; font-size:18px;" onclick="document.getElementById('smartPastModal').style.display='none'"></i>
                 </div>
                 <div class="modal-body" style="padding: 25px; background:#f4f5f7;">
                     <p style="font-size:13px; color:#555; margin-bottom:20px; line-height:1.5;">
-                        👉 불러온 파일(.xlsx 또는 .kbproj)에서 매칭할 <b>시트명</b>과 <b>기준 키 열(자산번호 또는 자산명)</b>, 그리고 가져올 <b>데이터 열</b>을 직접 선택해 주세요.
+                        👉 <b>다중 키 순차 매칭 기술</b>이 적용되었습니다.<br>
+                        지정하신 기준 키(자산번호)로 먼저 매칭을 시도하며, 번호가 누락된 경우 <b>[자산명 + 취득년도]</b> 조합으로 자동 우회(Fallback) 매칭합니다.
                     </p>
                     <div style="background:#fff; padding:15px; border:1px solid #ddd; border-radius:4px; margin-bottom:15px;">
                         <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">① 불러올 시트(사업장) 선택</label>
                         <select id="smartPastSheet" class="input-box" style="width:100%; padding:8px; border:1px solid #ccc; margin-bottom: 15px;" onchange="window.updateSmartPastHeaders()"></select>
 
-                        <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">② 기준 키 (자산번호 또는 자산명 열) 선택</label>
+                        <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">② 1순위 기준 키 (자산번호 열 우선) 선택</label>
                         <select id="smartPastAssetCol" class="input-box" style="width:100%; padding:8px; border:2px solid #d32f2f; background:#fff3f3; margin-bottom: 15px; font-weight:bold;"></select>
 
-                        <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">③ 가져올 데이터 (물가지수/구분) 열 선택</label>
+                        <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">③ 가져올 데이터 (물가지수/과거구분) 열 선택</label>
                         <select id="smartPastValCol" class="input-box" style="width:100%; padding:8px; border:2px solid #1C5691; background:#f0f7ff; font-weight:bold;"></select>
                     </div>
                     <div style="text-align: right;">
-                        <button type="button" class="btn-dark" style="background:#28a745; padding:10px 25px; border:none; font-weight:bold;" onclick="window.applySmartPastMapping()">⚡ 연동 적용하기</button>
+                        <button type="button" class="btn-dark" style="background:#28a745; padding:10px 25px; border:none; font-weight:bold;" onclick="window.applySmartPastMapping()">⚡ 투트랙 연동 적용하기</button>
                     </div>
                 </div>
             </div>
@@ -1179,7 +1180,6 @@ window.updateSmartPastHeaders = function() {
         for(let r=0; r<Math.min(10, data.length); r++) {
             for(let c=0; c<data[r].length; c++) {
                 const cellStr = String(data[r][c]).replace(/\s/g,'');
-                // 자산번호 또는 자산명 키워드 자동 감지
                 if(foundAssetCol === -1 && (cellStr.includes('자산번호') || cellStr.includes('자산코드') || cellStr.includes('자산명'))) foundAssetCol = c;
                 if(foundValCol === -1 && (cellStr.includes('최종구분') || cellStr.includes('과거구분') || cellStr.includes('평가결과') || cellStr.includes('물가지수'))) foundValCol = c;
             }
@@ -1214,40 +1214,116 @@ window.applySmartPastMapping = function() {
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
     
-    // 사용자가 자산번호로 매핑했는지, 자산명으로 매핑했는지에 따라 웹 측 인덱스를 유동적으로 잡음
-    let curKeyIdx = Object.keys(wiz.mapped).indexOf('자산번호');
-    if (curKeyIdx === -1) curKeyIdx = Object.keys(wiz.mapped).indexOf('자산명');
-    if (curKeyIdx === -1) curKeyIdx = 2; // 기본값 C열(인덱스 2)
-
+    // 명세서 열 위치 파악
+    const curAssetNumIdx = Object.keys(wiz.mapped).indexOf('자산번호');
+    const curAssetNameIdx = Object.keys(wiz.mapped).indexOf('자산명');
+    const curYearIdx = wiz.mapped['취득년도'];
     const curPastClassIdx = Object.keys(wiz.mapped).length;
 
     if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
     
     let matchCount = 0;
     
+    // 키워드 정규화 헬퍼 함수 (공백, 하이픈, 언더바 제거 및 대문자화)
     const normalizeKey = (str) => {
         if (!str) return '';
         return String(str).toUpperCase().replace(/[-_\s]/g, '');
     };
 
-    const pastMap = {};
-    pastData.forEach(row => {
-        const rawNum = String(row[assetCol] || '').trim();
-        const normNum = normalizeKey(rawNum);
-        if (normNum) {
-            pastMap[normNum] = String(row[valCol] || '').trim();
+    // 연도 추출 헬퍼 함수
+    const extractYear = (str) => {
+        if (!str) return '';
+        const match = String(str).match(/(19|20)\d{2}/);
+        return match ? match[0] : '';
+    };
+
+    // 1번 주머니: 선택된 기준 열(자산번호) 단일 키 매핑
+    const mapPrimary = {};
+    // 2번 주머니: [자산명_연도] 복합 키 매핑
+    const mapNameYear = {};
+
+    const isArrayOfArrays = pastData.length > 0 && Array.isArray(pastData[0]);
+    
+    // 과거 엑셀에서 자산명과 취득년도 열 위치 자동 탐색 (2번 주머니 생성용)
+    let pastNameCol = null;
+    let pastYearCol = null;
+    
+    if (isArrayOfArrays) {
+        for(let r=0; r<Math.min(10, pastData.length); r++) {
+            for(let c=0; c<pastData[r].length; c++) {
+                const cellStr = String(pastData[r][c]).replace(/\s/g,'');
+                if(pastNameCol === null && (cellStr.includes('자산명') || cellStr.includes('품명'))) pastNameCol = c;
+                if(pastYearCol === null && (cellStr.includes('취득년도') || cellStr.includes('취득일'))) pastYearCol = c;
+            }
+        }
+    } else {
+        const headers = pastData.length > 0 ? Object.keys(pastData[0]) : [];
+        pastNameCol = headers.find(h => String(h).includes('자산명') || String(h).includes('품명'));
+        pastYearCol = headers.find(h => String(h).includes('취득년도') || String(h).includes('취득일'));
+    }
+
+    // 주머니(Map) 채우기
+    pastData.forEach((row, idx) => {
+        if (isArrayOfArrays && idx === 0) return; // 헤더 스킵
+
+        const primaryVal = String(row[assetCol] || '').trim();
+        const targetVal = String(row[valCol] || '').trim();
+        if (!targetVal) return;
+
+        // 1순위 데이터 저장
+        const normPrimary = normalizeKey(primaryVal);
+        if (normPrimary && !normPrimary.includes('자산번호')) {
+            mapPrimary[normPrimary] = targetVal;
+        }
+
+        // 2순위 데이터 저장 (자산명 탐지 실패 시 사용자가 선택한 기준 열을 자산명으로 간주)
+        const nameVal = pastNameCol !== null ? String(row[pastNameCol] || '') : primaryVal; 
+        const yearVal = pastYearCol !== null ? extractYear(row[pastYearCol]) : '';
+        const normName = normalizeKey(nameVal);
+
+        if (normName && !normName.includes('자산명')) {
+            if (yearVal) {
+                mapNameYear[normName + '_' + yearVal] = targetVal;
+            }
+            if (!mapNameYear[normName]) {
+                mapNameYear[normName] = targetVal;
+            }
         }
     });
 
+    // 현재 명세서 순차 매칭 (Fallback Logic)
     tData.raw.forEach((curRow, rIdx) => {
-        const yearVal = String(curRow[wiz.mapped['취득년도']] || '');
+        const yearVal = String(curRow[curYearIdx] || '');
         if (yearVal.includes('소계') || yearVal.includes('총계')) return;
 
-        const rawCurKey = String(curRow[curKeyIdx] || '').trim();
-        const normCurKey = normalizeKey(rawCurKey);
+        const rawCurNum = curAssetNumIdx !== -1 ? String(curRow[curAssetNumIdx] || '').trim() : '';
+        const rawCurName = curAssetNameIdx !== -1 ? String(curRow[curAssetNameIdx] || '').trim() : '';
+        const curYear = extractYear(yearVal);
 
-        if (normCurKey && pastMap[normCurKey] !== undefined) {
-            const matchedVal = pastMap[normCurKey];
+        const normCurNum = normalizeKey(rawCurNum);
+        const normCurName = normalizeKey(rawCurName);
+
+        let matchedVal = undefined;
+
+        // Step A: 1번 주머니에서 자산번호로 매칭 시도
+        if (normCurNum && mapPrimary[normCurNum] !== undefined) {
+            matchedVal = mapPrimary[normCurNum];
+        } 
+        // Step B: 사용자가 팝업창에서 '자산명'을 Primary 키로 선택했을 경우를 대비
+        else if (normCurName && mapPrimary[normCurName] !== undefined) {
+            matchedVal = mapPrimary[normCurName];
+        }
+        // Step C: 2번 주머니에서 [자산명 + 취득년도] 복합 키로 안전한 우회 매칭
+        else if (normCurName && curYear && mapNameYear[normCurName + '_' + curYear] !== undefined) {
+            matchedVal = mapNameYear[normCurName + '_' + curYear];
+        }
+        // Step D: 최후의 수단으로 자산명 단독 매칭
+        else if (normCurName && mapNameYear[normCurName] !== undefined) {
+            matchedVal = mapNameYear[normCurName];
+        }
+
+        // 매칭 성공 시 값 반영
+        if (matchedVal !== undefined) {
             curRow[curPastClassIdx] = matchedVal;
             
             const finalIdx = curPastClassIdx + 4;
@@ -1260,7 +1336,7 @@ window.applySmartPastMapping = function() {
 
     document.getElementById('smartPastModal').style.display = 'none';
     if(typeof window.infRenderTable === 'function') window.infRenderTable();
-    alert(`✅ 자산명(또는 기준키) 기준 스마트 연동 완료!\n선택하신 열을 대조하여 총 ${matchCount}건이 유연 매칭되었습니다.`);
+    alert(`✅ 다중 키 순차 매칭(자산번호 ➔ 자산명+연도) 완료!\n총 ${matchCount}건의 데이터가 성공적으로 유연 매칭되었습니다.`);
 };
 
 // ============================================================================
