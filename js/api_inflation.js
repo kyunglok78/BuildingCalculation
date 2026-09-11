@@ -1259,9 +1259,10 @@ window.applySmartPastMapping = function() {
     const valCol = document.getElementById('smartPastValCol').value;
     const webKeyIdx = document.getElementById('webKeySelect').value;
 
-    if (!sheet || !assetCol || !valCol || !webKeyIdx) return alert("모든 옵션을 선택해 주세요.");
+    const pastData = window.tempPastParsed[sheet];
 
-    // ★ 현재 사용자가 입력한 설정값을 메모리에 영구 보존
+    if (!pastData || !assetCol || !valCol || !webKeyIdx) return alert("모든 옵션을 선택해 주세요.");
+
     window.pastMappingPreferences = {
         webKey: webKeyIdx,
         sheet: sheet,
@@ -1269,16 +1270,20 @@ window.applySmartPastMapping = function() {
         valCol: valCol
     };
 
-    const pastData = window.tempPastParsed[sheet];
     const wiz = window.infState.wizard;
     const tData = window.infState.data[window.infState.activeTab];
+    
+    // ★ [치명적 버그 완벽 해결] 기둥(열) 위치를 단어장 순서가 아닌 실제 매핑된 좌표값으로 직접 꽂아줍니다!
+    const curAssetNumIdx = wiz.mapped['자산번호'] !== undefined ? wiz.mapped['자산번호'] : -1;
+    const curAssetNameIdx = wiz.mapped['자산명'] !== undefined ? wiz.mapped['자산명'] : -1;
+    const curYearIdx = wiz.mapped['취득년도'];
     const curPastClassIdx = Object.keys(wiz.mapped).length;
 
     if(typeof window.infSaveHistory === 'function') window.infSaveHistory();
     
     let matchCount = 0;
     
-    // ★ [버그 완벽 해결] 브라우저를 멈추게 만들었던 슬래시(/) 문법 에러 이스케이프(\/) 처리
+    // 특수문자 완벽 무시 (이스케이프 처리 완료)
     const normalizeKey = (str) => {
         if (!str) return '';
         return String(str).toUpperCase().replace(/[-\s_\/,.()[\]]/g, '');
@@ -1339,15 +1344,16 @@ window.applySmartPastMapping = function() {
     });
 
     tData.raw.forEach((curRow, rIdx) => {
-        const yearVal = String(curRow[wiz.mapped['취득년도']] || '');
+        const yearVal = String(curRow[curYearIdx] || '');
         if (yearVal.includes('소계') || yearVal.includes('총계')) return;
 
-        // ★ 사용자가 UI에서 지정한 [웹 매칭 기준 열]의 값을 정확히 추출
         const rawCurKey = String(curRow[webKeyIdx] || '').trim();
         const normCurKey = normalizeKey(rawCurKey);
-        
+
         const curYear = extractYear(yearVal);
-        const rawCurName = String(curRow[wiz.mapped['자산명']] || '').trim();
+        
+        // ★ 정확한 기둥 번호(curAssetNameIdx)로 자산명을 추출합니다.
+        const rawCurName = curAssetNameIdx !== -1 ? String(curRow[curAssetNameIdx] || '').trim() : '';
         const normCurName = normalizeKey(rawCurName);
 
         let matchedVal = undefined;
